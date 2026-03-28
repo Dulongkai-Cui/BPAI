@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BP问问 - 我的BPAI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#ffffff",
+              "outline": "#777777",
+              "on-primary": "#ffffff",
+              "primary-fixed-dim": "#aac7ff",
+              "tertiary": "#6f5575",
+              "surface-container-highest": "#e2e2e2",
+              "on-background": "#1b1b1b",
+              "inverse-surface": "#303030",
+              "surface-container-high": "#e8e8e8",
+              "on-error": "#ffffff",
+              "on-primary-fixed-variant": "#00458d",
+              "on-secondary-fixed": "#131c2b",
+              "secondary-container": "#dae2f9",
+              "on-surface-variant": "#474747",
+              "error-container": "#ffdad6",
+              "surface-container-lowest": "#ffffff",
+              "inverse-on-surface": "#f1f1f1",
+              "on-surface": "#1b1b1b",
+              "on-primary-fixed": "#001b3e",
+              "on-primary-container": "#00458d",
+              "secondary": "#565f71",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#bec6dc",
+              "primary-container": "#d6e3ff",
+              "on-error-container": "#93000a",
+              "primary-fixed": "#d6e3ff",
+              "surface-dim": "#dadada",
+              "primary": "#2a5ea7",
+              "surface-tint": "#2a5ea7",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed-variant": "#3e4759",
+              "inverse-primary": "#aac7ff",
+              "surface-container": "#eeeeee",
+              "outline-variant": "#c6c6c6",
+              "background": "#f9f9f9",
+              "tertiary-container": "#f9d8fd",
+              "surface": "#f9f9f9",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#3e4759",
+              "surface-variant": "#e2e2e2",
+              "surface-container-low": "#f3f3f3",
+              "tertiary-fixed": "#f9d8fd",
+              "on-tertiary-container": "#573e5c",
+              "tertiary-fixed-dim": "#dcbce0",
+              "on-tertiary-fixed": "#28132e",
+              "secondary-fixed": "#dae2f9"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body { font-family: 'Inter', sans-serif; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased overflow-hidden">
+<!-- TopNavBar Shell (Styled as SCREEN_64) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white border-b border-slate-200 shadow-sm">
+<div class="flex items-center gap-4">
+<span class="text-xl font-bold tracking-tight text-blue-700">我的BPAI</span>
+<nav class="hidden md:flex items-center space-x-6 ml-8 text-sm font-medium">
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">总览</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">文档档案室</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-full border border-slate-200 focus:ring-2 focus:ring-primary text-sm w-64 bg-slate-50" placeholder="搜索资源..." type="text"/>
+</div>
+<div class="flex items-center space-x-3">
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- SideNavBar Shell (Styled as SCREEN_64) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 py-4 flex flex-col bg-slate-50 border-r border-slate-200 z-40">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-black text-blue-600">总览控制台</h2>
+<p class="text-xs text-slate-500 mt-1">实时监控网络</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./全城实时地图.html">
+<span class="material-symbols-outlined">map</span>
+<span class="text-sm">全城实时地图</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./工程队状态.html">
+<span class="material-symbols-outlined">group_work</span>
+<span class="text-sm">工程队状态</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./预警中心.html">
+<span class="material-symbols-outlined">warning</span>
+<span class="text-sm">预警中心</span>
+</a>
+<!-- ACTIVE State for BP Ask -->
+<a class="flex items-center gap-3 px-3 py-2.5 bg-blue-50 text-blue-700 font-semibold border-r-4 border-blue-600 transition-transform translate-x-1" href="./BP问问.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<span class="text-sm">BP问问</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./设置.html">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm">设置</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs text-slate-500">系统稳定性</span>
+<span class="text-xs font-bold text-green-600">99.8%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-blue-600 h-full w-[99.8%]"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area (AI Chat Interface) -->
+<main class="ml-64 mt-16 h-[calc(100vh-64px)] flex overflow-hidden">
+<!-- Left Sidebar: History & Suggestions -->
+<section class="w-80 flex-shrink-0 border-r border-outline-variant bg-surface-container-low flex flex-col">
+<div class="p-6">
+<button class="w-full flex items-center justify-center gap-2 bg-primary text-on-primary py-3 rounded-xl font-semibold shadow-md hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">add</span>
+<span>开启新分析</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto px-4 space-y-6">
+<div>
+<h3 class="px-2 text-[10px] font-bold text-outline uppercase tracking-widest mb-3">常用操作</h3>
+<div class="space-y-2">
+<button class="w-full text-left p-3 rounded-lg hover:bg-white transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">description</span>
+<span class="text-sm font-medium text-on-surface">生成周报</span>
+</div>
+</button>
+<button class="w-full text-left p-3 rounded-lg hover:bg-white transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-error text-lg">error</span>
+<span class="text-sm font-medium text-on-surface">查看项目延期</span>
+</div>
+</button>
+<button class="w-full text-left p-3 rounded-lg hover:bg-white transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-tertiary text-lg">donut_small</span>
+<span class="text-sm font-medium text-on-surface">汇总资源使用率</span>
+</div>
+</button>
+</div>
+</div>
+<div>
+<h3 class="px-2 text-[10px] font-bold text-outline uppercase tracking-widest mb-3">历史记录</h3>
+<div class="space-y-1">
+<div class="p-3 bg-white rounded-lg shadow-sm flex items-center gap-3 cursor-pointer border border-blue-100">
+<span class="material-symbols-outlined text-blue-500 text-sm">chat_bubble</span>
+<span class="text-xs font-medium truncate">Q3 5G部署效率分析</span>
+</div>
+<div class="p-3 hover:bg-white/50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors">
+<span class="material-symbols-outlined text-slate-400 text-sm">chat_bubble</span>
+<span class="text-xs text-slate-600 truncate">7号区域带宽异常波动</span>
+</div>
+<div class="p-3 hover:bg-white/50 rounded-lg flex items-center gap-3 cursor-pointer transition-colors">
+<span class="material-symbols-outlined text-slate-400 text-sm">chat_bubble</span>
+<span class="text-xs text-slate-600 truncate">基站维护计划排期</span>
+</div>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-outline-variant">
+<div class="bg-surface-container-highest rounded-xl p-4">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<p class="text-xs font-bold">BPAI 引擎 v4.2</p>
+</div>
+<p class="text-[10px] text-on-surface-variant leading-relaxed">系统级数据接入已完成。当前监控 4,821 个活跃基站。</p>
+</div>
+</div>
+</section>
+<!-- Right Side: Main Chat Window -->
+<section class="flex-1 flex flex-col relative bg-white">
+<!-- Chat Header -->
+<div class="px-8 py-4 border-b border-outline-variant flex items-center justify-between bg-white/50 backdrop-blur-sm">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+</div>
+<div>
+<h1 class="text-base font-bold text-on-surface">BP问问 智能助手</h1>
+<p class="text-xs text-on-surface-variant flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        在线 | 正在处理实时网络数据
+                    </p>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="p-2 hover:bg-surface-container rounded-full text-outline transition-colors">
+<span class="material-symbols-outlined">ios_share</span>
+</button>
+<button class="p-2 hover:bg-surface-container rounded-full text-outline transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Messages Area -->
+<div class="flex-1 overflow-y-auto p-8 space-y-8">
+<!-- User Message -->
+<div class="flex justify-end items-start gap-4">
+<div class="max-w-2xl bg-secondary-container text-on-secondary-container p-4 rounded-2xl rounded-tr-none shadow-sm">
+<p class="text-sm leading-relaxed">请汇总北部区域目前的网络资源使用情况，并识别未来48小时内的潜在瓶颈。</p>
+</div>
+<div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-slate-600 text-sm">person</span>
+</div>
+</div>
+<!-- AI Message -->
+<div class="flex items-start gap-4">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 shadow-md">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div class="max-w-3xl space-y-6">
+<div class="bg-surface-container-low border border-outline-variant p-6 rounded-2xl rounded-tl-none shadow-sm">
+<p class="text-sm leading-relaxed mb-4">我已分析了北部扇区（N1-N12区）的实时遥测数据。总体资源使用率目前为 <span class="font-bold text-primary">74.2%</span>。</p>
+<!-- AI Generated Chart Component -->
+<div class="bg-white rounded-xl border border-outline-variant p-4 mb-4 shadow-sm">
+<div class="flex items-center justify-between mb-4">
+<h4 class="text-xs font-bold uppercase tracking-wider text-outline">流量分布 (过去24小时)</h4>
+<span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">运行稳定</span>
+</div>
+<div class="h-40 flex items-end justify-between gap-2 px-2">
+<div class="w-full bg-primary/20 rounded-t-sm h-1/2 relative group">
+<div class="absolute inset-0 bg-primary h-2/3 bottom-0 rounded-t-sm opacity-60"></div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-sm h-3/4 relative">
+<div class="absolute inset-0 bg-primary h-4/5 bottom-0 rounded-t-sm opacity-60"></div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-sm h-2/3 relative">
+<div class="absolute inset-0 bg-primary h-1/2 bottom-0 rounded-t-sm opacity-60"></div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-sm h-full relative">
+<div class="absolute inset-0 bg-primary h-5/6 bottom-0 rounded-t-sm opacity-80"></div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-sm h-5/6 relative">
+<div class="absolute inset-0 bg-primary h-3/4 bottom-0 rounded-t-sm opacity-60"></div>
+</div>
+<div class="w-full bg-primary/20 rounded-t-sm h-4/5 relative">
+<div class="absolute inset-0 bg-primary h-full bottom-0 rounded-t-sm opacity-90"></div>
+</div>
+</div>
+<div class="flex justify-between mt-2 px-1">
+<span class="text-[8px] text-outline">00:00</span>
+<span class="text-[8px] text-outline">08:00</span>
+<span class="text-[8px] text-outline">16:00</span>
+<span class="text-[8px] text-outline">23:59</span>
+</div>
+</div>
+<p class="text-sm leading-relaxed font-semibold text-error mb-2">识别到的瓶颈点：</p>
+<ul class="space-y-2 text-sm text-on-surface-variant">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-error text-xs mt-1">warning</span>
+<span><strong>N4区 (曼彻斯特中心枢纽):</strong> 预测明天当地体育赛事期间将出现激增。当前回传容量可能在 19:30 达到极限。</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-tertiary text-xs mt-1">info</span>
+<span><strong>N8区 (农村边缘地带):</strong> 午夜开始的 556 号节点例行维护可能导致非优先流量出现 5% 的丢包。</span>
+</li>
+</ul>
+</div>
+<!-- Action Cards -->
+<div class="grid grid-cols-2 gap-4">
+<button class="flex items-center gap-3 p-4 bg-white border border-outline-variant rounded-xl hover:shadow-md hover:border-primary transition-all text-left group">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined">auto_fix_high</span>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface">自动重路由流量</p>
+<p class="text-[10px] text-on-surface-variant">优化 N4 枢纽路径</p>
+</div>
+</button>
+<button class="flex items-center gap-3 p-4 bg-white border border-outline-variant rounded-xl hover:shadow-md hover:border-tertiary transition-all text-left group">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container flex items-center justify-center group-hover:bg-tertiary group-hover:text-on-tertiary transition-colors">
+<span class="material-symbols-outlined">notification_add</span>
+</div>
+<div>
+<p class="text-xs font-bold text-on-surface">通知工程团队</p>
+<p class="text-[10px] text-on-surface-variant">提醒维护小组关注</p>
+</div>
+</button>
+</div>
+</div>
+</div>
+<!-- AI Image Generation Preview -->
+<div class="flex items-start gap-4">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 shadow-md">
+<span class="material-symbols-outlined text-on-primary text-sm" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div class="max-w-xl">
+<div class="bg-surface-container-low border border-outline-variant p-4 rounded-2xl rounded-tl-none shadow-sm">
+<p class="text-sm mb-4">N4扇区信号干扰模式可视化：</p>
+<div class="rounded-xl overflow-hidden aspect-video relative group border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="abstract heat map showing network signal strength" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBARuP8k6eZrZTMQlDgY9_yip1p-v4yBhsbQuEE3lnPdmW8gEqS-4HmGwuAQesvW10MNDvCI8txd8yippZdE-Z5LlBVf8vIm4xT8OhO7Ra5uF8KZ-PyOOEO0kuIxtjeqBbS-D2Gtjoqu3SgwDO_8yIGOGamSgw9S7fdtw5asVrI4f26UI-jg2IPuUO2mv8UqnU-SCy9EaBnAbFIkhHnktT9AdhgocEaEfBg3aCtthhMZQoCjY5PHT-VNN5RYo3HpB19ZENQJ_3eaA"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+<button class="bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/30 transition-all">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Command Input Area -->
+<div class="p-8 pt-2 bg-gradient-to-t from-white via-white to-transparent">
+<div class="max-w-4xl mx-auto relative">
+<div class="absolute -top-12 left-0 right-0 flex justify-center gap-2 pointer-events-none">
+<span class="bg-surface-container-high text-[10px] text-outline px-3 py-1 rounded-full border border-outline-variant shadow-sm pointer-events-auto cursor-pointer hover:bg-white transition-colors">与Q2数据对比？</span>
+<span class="bg-surface-container-high text-[10px] text-outline px-3 py-1 rounded-full border border-outline-variant shadow-sm pointer-events-auto cursor-pointer hover:bg-white transition-colors">导出为 PDF</span>
+<span class="bg-surface-container-high text-[10px] text-outline px-3 py-1 rounded-full border border-outline-variant shadow-sm pointer-events-auto cursor-pointer hover:bg-white transition-colors">解释 N4 瓶颈原因</span>
+</div>
+<div class="bg-white border-2 border-primary-container shadow-xl rounded-2xl p-2 focus-within:border-primary transition-all">
+<div class="flex items-end gap-2 px-2 py-1">
+<button class="p-2 text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">attach_file</span>
+</button>
+<button class="p-2 text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">image</span>
+</button>
+<textarea class="flex-1 border-none focus:ring-0 text-sm py-2 resize-none max-h-32 min-h-[44px]" placeholder="向 BPAI 咨询您的网络状态..." rows="1"></textarea>
+<button class="bg-primary text-on-primary p-2.5 rounded-xl flex items-center justify-center shadow-lg hover:translate-y-[-1px] active:translate-y-[1px] transition-all">
+<span class="material-symbols-outlined">arrow_upward</span>
+</button>
+</div>
+</div>
+<p class="text-[10px] text-center text-outline mt-3">
+                    BPAI 可能会生成不准确的信息，请在处理关键工程任务时核实其回复。
+                </p>
+</div>
+</div>
+</section>
+</main>
+</body></html>

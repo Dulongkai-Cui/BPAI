@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>工程队办公室 - BPAI工程管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-bright": "#f9f9f9",
+              "on-error-container": "#93000a",
+              "surface-container-high": "#e8e8e8",
+              "on-surface": "#1b1b1b",
+              "on-primary": "#ffffff",
+              "surface-tint": "#2a5ea7",
+              "inverse-surface": "#303030",
+              "error": "#ba1a1a",
+              "primary": "#2a5ea7",
+              "tertiary-fixed-dim": "#dcbce0",
+              "primary-fixed-dim": "#aac7ff",
+              "on-primary-fixed-variant": "#00458d",
+              "primary-fixed": "#d6e3ff",
+              "on-surface-variant": "#474747",
+              "on-primary-fixed": "#001b3e",
+              "on-background": "#1b1b1b",
+              "error-container": "#ffdad6",
+              "on-secondary": "#ffffff",
+              "surface-container-low": "#f3f3f3",
+              "inverse-on-surface": "#f1f1f1",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary-fixed": "#131c2b",
+              "secondary-fixed-dim": "#bec6dc",
+              "secondary-container": "#dae2f9",
+              "tertiary": "#6f5575",
+              "surface-container-highest": "#e2e2e2",
+              "surface": "#f9f9f9",
+              "primary-container": "#d6e3ff",
+              "secondary-fixed": "#dae2f9",
+              "surface-variant": "#e2e2e2",
+              "on-error": "#ffffff",
+              "outline": "#777777",
+              "on-tertiary-container": "#573e5c",
+              "surface-container": "#eeeeee",
+              "secondary": "#565f71",
+              "outline-variant": "#c6c6c6",
+              "inverse-primary": "#aac7ff",
+              "tertiary-fixed": "#f9d8fd",
+              "surface-dim": "#dadada",
+              "on-tertiary-fixed": "#28132e",
+              "tertiary-container": "#f9d8fd",
+              "on-primary-container": "#00458d",
+              "background": "#f9f9f9",
+              "on-secondary-fixed-variant": "#3e4759",
+              "on-tertiary": "#ffffff",
+              "on-secondary-container": "#3e4759",
+              "on-tertiary-fixed-variant": "#573e5c"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-8">
+<h1 class="text-xl font-bold text-blue-700 dark:text-blue-400 tracking-tight">BPAI工程管理</h1>
+<nav class="hidden md:flex items-center gap-6 font-sans antialiased text-sm font-medium">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">总览</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 pb-2" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">文档档案馆</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-full border-none bg-surface-container text-sm focus:ring-2 focus:ring-primary/50 w-64" placeholder="搜索工程、文档..." type="text"/>
+</div>
+<button class="p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<img alt="管理员头像" class="w-8 h-8 rounded-full border-2 border-primary-container object-cover" data-alt="professional male portrait with confident expression in a clean corporate setting, soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAwTgy0J1aCgL5PVUL06X2cV3E737IvXYt2dkMhsrWAls4TZX2uK_nkPtGKaGRUEMecN1UJ5O-bFhLK8VZUJGh53gHIushrhUV7qruRaupSJEoGXWJ4h30CSo6_VkVcZl6KoRzaKi5d1W6OFuR05Oqcab2GXTviUK3KylDA0WmFtwQQJcq1zKWD0YN1N79e7xFq2evOPJzW68M_1nwY4lMSq_hTA0Q_NE6ZIpfeQ1GbbMqNfnrlG4KKWV0gnmdUY4JrM2xNSfs-eA"/>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 p-4 flex flex-col bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">项目中心</h2>
+<p class="text-xs text-slate-500">工程管理控制台</p>
+</div>
+<nav class="flex flex-col gap-2 font-sans text-sm">
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg px-4 py-3 font-semibold transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>部门总览</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span>工程队日志</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>工程队仓库</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="videocam">videocam</span>
+<span>现场施工监控</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-transform duration-200 hover:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
+<span>BP问问</span>
+</a>
+</nav>
+<div class="mt-auto p-4 bg-primary-container/30 rounded-xl">
+<p class="text-xs font-bold text-primary mb-1">系统状态</p>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+<span class="text-[10px] text-on-surface-variant">所有工程正常运行</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-16 p-8 min-h-screen">
+<div class="max-w-7xl mx-auto space-y-8">
+<!-- Header Section -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-extrabold tracking-tight text-on-surface">办公室工作台</h2>
+<p class="text-on-surface-variant mt-1">处理日常行政审批、查看最新公告及团队出勤</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-lg font-medium shadow-md hover:bg-primary/90 transition-all active:scale-95">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                        发起新申请
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Latest Notice (Span 8) -->
+<div class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">campaign</span>
+                            最新通知公告
+                        </h3>
+<a class="text-sm text-primary font-medium hover:underline" href="#">查看全部</a>
+</div>
+<div class="space-y-4">
+<div class="group flex gap-4 p-4 rounded-lg bg-surface-container-low hover:bg-secondary-container/30 transition-colors cursor-pointer border border-transparent hover:border-secondary-container">
+<div class="shrink-0 w-12 h-12 bg-white rounded-lg flex flex-col items-center justify-center border border-slate-200 shadow-sm text-xs font-bold text-on-surface-variant">
+<span class="text-primary">OCT</span>
+<span>24</span>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">关于加强秋季施工安全管理的紧急通知</h4>
+<p class="text-sm text-on-surface-variant mt-1 line-clamp-1">各工程队：鉴于近期多雨天气，请各项目经理务必落实防滑及临时用电安全措施...</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">arrow_forward_ios</span>
+</div>
+<div class="group flex gap-4 p-4 rounded-lg bg-surface-container-low hover:bg-secondary-container/30 transition-colors cursor-pointer border border-transparent hover:border-secondary-container">
+<div class="shrink-0 w-12 h-12 bg-white rounded-lg flex flex-col items-center justify-center border border-slate-200 shadow-sm text-xs font-bold text-on-surface-variant">
+<span class="text-primary">OCT</span>
+<span>22</span>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-on-surface group-hover:text-primary transition-colors">2024年第四季度行政办公用品申领开启</h4>
+<p class="text-sm text-on-surface-variant mt-1 line-clamp-1">本季度申领日期截止至本月底，请各部门助理统一在OA系统内提交汇总清单...</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">arrow_forward_ios</span>
+</div>
+</div>
+</div>
+<!-- Attendance Summary (Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+<h3 class="text-lg font-bold flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary">pending_actions</span>
+                        团队考勤概况
+                    </h3>
+<div class="flex-1 flex flex-col justify-between">
+<div class="flex justify-between items-center bg-blue-50/50 p-4 rounded-xl mb-4">
+<div>
+<p class="text-xs text-slate-500 font-medium">今日实到</p>
+<p class="text-2xl font-black text-primary">142/150</p>
+</div>
+<div class="w-16 h-16 relative">
+<svg class="w-full h-full" viewbox="0 0 36 36">
+<path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#E2E2E2" stroke-width="3"></path>
+<path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2a5ea7" stroke-dasharray="94.6, 100" stroke-width="3"></path>
+</svg>
+<span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold">95%</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="p-3 bg-surface-container-low rounded-lg text-center">
+<p class="text-xl font-bold text-amber-600">5</p>
+<p class="text-[10px] text-slate-500 font-bold">请假/调休</p>
+</div>
+<div class="p-3 bg-surface-container-low rounded-lg text-center">
+<p class="text-xl font-bold text-red-500">3</p>
+<p class="text-[10px] text-slate-500 font-bold">未打卡</p>
+</div>
+</div>
+<button class="w-full mt-6 py-2 border-2 border-primary text-primary font-bold rounded-lg hover:bg-primary hover:text-white transition-all text-sm">
+                            查看详细报表
+                        </button>
+</div>
+</div>
+<!-- Approval List (Span 8) -->
+<div class="col-span-12 lg:col-span-8 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+<div class="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
+<h3 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">assignment_turned_in</span>
+                            行政审批申请
+                        </h3>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full">待我处理 (4)</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container-lowest text-[10px] uppercase tracking-wider font-black text-slate-500">
+<tr>
+<th class="px-6 py-4">申请人</th>
+<th class="px-6 py-4">申请类型</th>
+<th class="px-6 py-4">申请时间</th>
+<th class="px-6 py-4">状态</th>
+<th class="px-6 py-4 text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+<tr class="hover:bg-slate-50 transition-colors group">
+<td class="px-6 py-4 flex items-center gap-3">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="portrait of a middle aged man in safety gear, engineering professional, natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKDmvx-7CyvLjbs-lzNW6ED18NYyh1G6loX3ErKUEJuiu2n7HJ9g9-mYSRim9Si_YpmP6_8K7mdSLLu0NrFCKVuo2YCshypqpqT243q04BmJFwF0tjHpVwcWszDRTWnUo4jOXP_IeK7qDVIRpPSAWrsE-KulQiIQ4Cdh7wu3wiqqHxi2Pii00EvxT6Qokx153M0t6oT6F2boCiz0LF_EvN8uTGdJKST9PxK9RsCCG8rf6k75k8BrCuV7sQmK3N3mHgG24VqUreJA"/>
+<span class="text-sm font-bold">张建国</span>
+</td>
+<td class="px-6 py-4 text-sm">物料紧急申领</td>
+<td class="px-6 py-4 text-sm text-slate-500">今天 09:24</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                            待审批
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary text-sm font-bold hover:underline">处理</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50 transition-colors group">
+<td class="px-6 py-4 flex items-center gap-3">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="portrait of a professional woman with a warm smile, business casual attire, minimalist background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADycGwO0V5u18pOHkvH5KbP2KlOVHyhegFJUGKNXUrrXkddJqr8SQiCmx2eFbMXtzTVNyRKBb4H5eXaEsoWUaJZX57SPl7As-jegwD9w_JGzDFb7TkAiwlN67DvsZ1hKEJ62e9ZYdJirtg-tacJlZL1Grrrb7ja4C541deJ3iTS-KImx74kyPQuSwdV_7NVVF8K3I_EbonBq_Tg6LK1KHlvo6hwm2A12weqeJ4t1HTglnUcGTmp5pOfH4R13UF-GR_ydEm_ieZyA"/>
+<span class="text-sm font-bold">李思敏</span>
+</td>
+<td class="px-6 py-4 text-sm">出差报销申请</td>
+<td class="px-6 py-4 text-sm text-slate-500">昨天 16:45</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                            待审批
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary text-sm font-bold hover:underline">处理</button>
+</td>
+</tr>
+<tr class="hover:bg-slate-50 transition-colors group">
+<td class="px-6 py-4 flex items-center gap-3">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="young male architect portrait in modern office setting, professional look, soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD33oAAh17T6YImTnKAL1yFpSW1i_tXDrLYOkhQOMwAqsngDPwop1eX_nRo8Xb0k5GSW3LGw8Q1U0Z8T5aUhAhofu7jV97Yc27afCbgAkY1L_aflpevv09QTkx_kB91ePl6zy6GfssfMdpBK1LagZ-Ii3MeJ9YR4SET-9M-sSuhnJkPRrR8OS3lzlLwToG4duMEL9CEjAf_RhCbordumd0YRawcmdKRVUrkt5kZAwzJWcRQVEM9xiWB50xhtangLZpmpW0vYe6mNw"/>
+<span class="text-sm font-bold">王志华</span>
+</td>
+<td class="px-6 py-4 text-sm">办公设备置换</td>
+<td class="px-6 py-4 text-sm text-slate-500">2024-10-23</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
+<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                            已通过
+                                        </span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="text-slate-400 text-sm font-bold hover:text-slate-600">详情</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Document Regulation Preview (Span 4) -->
+<div class="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+<h3 class="text-lg font-bold flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary">description</span>
+                        部门规章制度
+                    </h3>
+<div class="space-y-4">
+<div class="p-4 rounded-xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary-container/5 cursor-pointer transition-all group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-red-50 text-red-600 flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate group-hover:text-primary transition-colors">工程队行政手册_V3.0.pdf</h4>
+<p class="text-[10px] text-slate-500">2.4MB • 2024-09-12 更新</p>
+</div>
+</div>
+</div>
+<div class="p-4 rounded-xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary-container/5 cursor-pointer transition-all group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-blue-50 text-blue-600 flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined">article</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate group-hover:text-primary transition-colors">差旅费报销标准管理办法.docx</h4>
+<p class="text-[10px] text-slate-500">856KB • 2024-08-05 更新</p>
+</div>
+</div>
+</div>
+<div class="p-4 rounded-xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary-container/5 cursor-pointer transition-all group">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-green-50 text-green-600 flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined">description</span>
+</div>
+<div class="flex-1 min-w-0">
+<h4 class="text-sm font-bold truncate group-hover:text-primary transition-colors">施工现场5S管理考核细则.pdf</h4>
+<p class="text-[10px] text-slate-500">1.2MB • 2024-10-01 更新</p>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-6 flex items-center justify-center gap-2 text-sm font-bold text-on-surface-variant hover:text-primary transition-colors">
+                        查看制度知识库
+                        <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Team Visual (Asymmetric Layout Extra) -->
+<div class="relative overflow-hidden rounded-2xl h-64 shadow-lg group">
+<img alt="Team Engineering" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="construction team meeting around a blueprint on site, sunny day, depth of field, professional construction site ambiance" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAa2u8fvJbhS1x7Q-5s1-To6AlyVSxvp_VHl3haaXLuRNuXrsJvA_sAN6BlYNiyoIq6McLW4UKFLMtOogro_V5OblMgzxyPgIkjl7VsCfc01XmmbH0504GTF-dfzFVr08SEgPRmyv51u6cc9dhNgnS0ElW0QKYDuHmmt4hfrcXXzz_4zUjN9NS5jMKExZUO5Ljn8weLDLTLw5IC_eUJF_EID_nHXkj_Smb3fBBz92CzC7PnvKmcUnmdFEv7pqVpX9hD99Q6bjO_PA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent flex flex-col justify-end p-8">
+<div class="flex items-center gap-4">
+<div class="flex -space-x-2">
+<img alt="Avatar" class="w-8 h-8 rounded-full border-2 border-white" data-alt="team member profile 1" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGr60y1QVcY9ieI9XD7L_3tuxxsZaZdOU804o1hSXJsATicarIC9rYk99UvkbKOzkxDVmwwyjnaCIfhfqLqn2rH_jkAgR--4Fe0etD9Q5QrIPoP84UbgSPIsOjmWauxzEYNCqJHkuT9rZjmesF7joz5VRZhQMlIbDEtjBWkp3gw7jSGUJziMV_jb_0M9TjTE2Aejwl1c3WMJp_LT0tokdz_8bw8UGp5uJ5U9W1lt96PiTOTnwaqgiaYfGVY2RFCDOOlUH77ZX1ng"/>
+<img alt="Avatar" class="w-8 h-8 rounded-full border-2 border-white" data-alt="team member profile 2" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuAY6VfTCsFABNaaqlOtzIDc5vOvgkNg-_Lt5ZjFlrlAESssMewg_OQ5mThAyK_w6ng-EgeMA3U96TkGYZGUT2a8k6fo0FR_W26jEPfbdNdVAoK6GjKmEHSK0gHnPNbS30SwukiMd2_yKFQHolO8BzfD0Njl0J_QHzfiOsoitZdE5PaURjUCm7IOaSWwrcqa0FR30ihyIQpUeHWETe6IaQbwQNINWx3oBdTC3o9iVU4Apuny4V43yfhb-WBHMKyhg_Jdp4ZsmLUQ"/>
+<img alt="Avatar" class="w-8 h-8 rounded-full border-2 border-white" data-alt="team member profile 3" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlhpXixMyvc4t3vHyO8z_f78nCXOOA44rWBQdmeNoioM8J8rJt6YT8i50fwWPTI_G7QQfW4UgNaeoxQbobWz5Ou1ALNKP2CLKbMTPPzHygiSiThQrIhx7kQqFIwcC77R4TCYTaUQxOtzPMOTBFhv3fY6iR3g7A5sQiWhCCUFupSJU_ilY-3ZDeVRQoLljHktp3fuZd_L_iimxK2axSqUd10LTMxE5fqmNfq-5A3moEmmgoEWohPglnwsRPKpzNVv8YrEsbVoTwxQ"/>
+<div class="w-8 h-8 rounded-full border-2 border-white bg-slate-800 text-[10px] flex items-center justify-center text-white font-bold">+12</div>
+</div>
+<div>
+<p class="text-white font-bold">工程三队 - 卓越标兵</p>
+<p class="text-white/70 text-xs">连续三个月零事故施工，综合评分：9.8</p>
+</div>
+</div>
+</div>
+<div class="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-4 py-2 rounded-lg border border-white/20">
+<span class="text-white text-xs font-bold uppercase tracking-widest">年度最佳团队</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (Only on Mobile) -->
+<button class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-50">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</body></html>

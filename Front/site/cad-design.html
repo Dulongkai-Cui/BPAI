@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-bright": "#f9f9f9",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#e8e8e8",
+                        "on-surface": "#1b1b1b",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#2a5ea7",
+                        "inverse-surface": "#303030",
+                        "error": "#ba1a1a",
+                        "primary": "#2a5ea7",
+                        "tertiary-fixed-dim": "#dcbce0",
+                        "primary-fixed-dim": "#aac7ff",
+                        "on-primary-fixed-variant": "#00458d",
+                        "primary-fixed": "#d6e3ff",
+                        "on-surface-variant": "#474747",
+                        "on-primary-fixed": "#001b3e",
+                        "on-background": "#1b1b1b",
+                        "error-container": "#ffdad6",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f3f3f3",
+                        "inverse-on-surface": "#f1f1f1",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed": "#131c2b",
+                        "secondary-fixed-dim": "#bec6dc",
+                        "secondary-container": "#dae2f9",
+                        "tertiary": "#6f5575",
+                        "surface-container-highest": "#e2e2e2",
+                        "surface": "#f9f9f9",
+                        "primary-container": "#d6e3ff",
+                        "secondary-fixed": "#dae2f9",
+                        "surface-variant": "#e2e2e2",
+                        "on-error": "#ffffff",
+                        "outline": "#777777",
+                        "on-tertiary-container": "#573e5c",
+                        "surface-container": "#eeeeee",
+                        "secondary": "#565f71",
+                        "outline-variant": "#c6c6c6",
+                        "inverse-primary": "#aac7ff",
+                        "tertiary-fixed": "#f9d8fd",
+                        "surface-dim": "#dadada",
+                        "on-tertiary-fixed": "#28132e",
+                        "tertiary-container": "#f9d8fd",
+                        "on-primary-container": "#00458d",
+                        "background": "#f9f9f9",
+                        "on-secondary-fixed-variant": "#3e4759",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#3e4759",
+                        "on-tertiary-fixed-variant": "#573e5c"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .cad-preview-grid {
+            background-image: radial-gradient(rgba(71, 119, 194, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-700 tracking-tight">BPAI工程管理</span>
+<nav class="hidden md:flex items-center gap-6 text-sm font-medium">
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">总览</a>
+<a class="text-blue-600 border-b-2 border-blue-600 pb-2" href="#">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">文档档案馆</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-slate-100 border-none rounded-full text-xs w-64 focus:ring-2 focus:ring-primary/20" placeholder="搜索图纸或文件..." type="text"/>
+</div>
+<button class="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-600">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-600">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<img alt="管理员头像" class="w-8 h-8 rounded-full border border-slate-200" data-alt="Professional headshot of a construction project manager in a clean white background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8drT5Plkt2S_Yrbk4n0x-VqaUtHbQO7Um7Sf1XXaJBmZQkQ_yjvD24e0n84odkPIxtSaWz6EBhQOL7Ew5iqRhobp4JkH5PRvyxrSYA8DJpH4STlmEIFGvvW6nLrtqBXi9U1mSDvfAGpu7RZhuLQrzn-8dxPhAsWuXJPFi0EzH007T2KU9SwH0F4idVhqrkvPDJML1eenFDXxhvrWLeznsIDvXqfNOL3WY4IkgDEdke9k4S15x4ZQIVaMLw__yrt2iVxLDlXvI7w"/>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 p-4 flex flex-col bg-slate-50 border-r border-slate-200">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-semibold text-slate-900">项目中心</h2>
+<p class="text-xs text-slate-500">工程管理控制台</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 bg-blue-50 text-blue-700 rounded-lg px-4 py-3 font-semibold transition-all" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm">部门总览</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 px-4 py-3 hover:bg-slate-100 hover:translate-x-1 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">event_note</span>
+<span class="text-sm">工程队日志</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 px-4 py-3 hover:bg-slate-100 hover:translate-x-1 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="text-sm">工程队仓库</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 px-4 py-3 hover:bg-slate-100 hover:translate-x-1 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">videocam</span>
+<span class="text-sm">现场施工监控</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 px-4 py-3 hover:bg-slate-100 hover:translate-x-1 rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="text-sm">BP问问</span>
+</a>
+</nav>
+<div class="mt-auto p-4 bg-primary-container rounded-xl">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary" data-weight="fill">verified</span>
+<span class="text-xs font-bold text-on-primary-container">AI 审核已就绪</span>
+</div>
+<p class="text-[10px] text-on-primary-container/80 leading-relaxed">当前有 3 份图纸待专家终审，预计耗时 15 分钟。</p>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen bg-surface p-6">
+<div class="max-w-7xl mx-auto space-y-6">
+<!-- Page Header -->
+<div class="flex justify-between items-end mb-2">
+<div>
+<nav class="flex text-xs text-slate-400 mb-2 gap-2">
+<span>工程队</span>
+<span>/</span>
+<span class="text-primary font-medium">设计院子页面</span>
+</nav>
+<h1 class="text-2xl font-bold text-on-surface tracking-tight">CAD 设计与图纸管理</h1>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 bg-white border border-outline-variant rounded-lg text-sm font-medium hover:bg-slate-50 transition-all">
+<span class="material-symbols-outlined text-sm">upload_file</span>
+                        上传新版本
+                    </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium hover:opacity-90 shadow-sm transition-all">
+<span class="material-symbols-outlined text-sm">history_edu</span>
+                        发起设计变更
+                    </button>
+</div>
+</div>
+<!-- Dashboard Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Left: CAD Preview (7/12) -->
+<div class="col-span-12 lg:col-span-8 space-y-6">
+<!-- CAD Online Preview Window -->
+<div class="bg-slate-900 rounded-xl overflow-hidden shadow-xl border border-slate-800 flex flex-col h-[600px]">
+<div class="px-4 py-3 bg-slate-800 flex justify-between items-center border-b border-slate-700">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-blue-400">architecture</span>
+<span class="text-xs font-mono text-slate-300">A1-ZONE-FLOOR-PLAN_V2.4.dwg</span>
+<span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] rounded uppercase font-bold tracking-wider">PREVIEW MODE</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 hover:bg-slate-700 rounded text-slate-400"><span class="material-symbols-outlined text-sm">zoom_in</span></button>
+<button class="p-1.5 hover:bg-slate-700 rounded text-slate-400"><span class="material-symbols-outlined text-sm">zoom_out</span></button>
+<button class="p-1.5 hover:bg-slate-700 rounded text-slate-400"><span class="material-symbols-outlined text-sm">layers</span></button>
+<div class="h-4 w-px bg-slate-700 mx-1"></div>
+<button class="p-1.5 hover:bg-slate-700 rounded text-slate-400"><span class="material-symbols-outlined text-sm">fullscreen</span></button>
+</div>
+</div>
+<div class="flex-1 relative cad-preview-grid flex items-center justify-center p-8 overflow-hidden">
+<!-- Simulated Complex Wireframe -->
+<img alt="CAD预览" class="w-full h-full object-contain opacity-80 mix-blend-screen" data-alt="Complex technical blue and white CAD wireframe drawing of a building floor plan with precise measurements and architectural details on a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmTWsSN8FvmV3M94zzeKpD3f9rm3b6cmot7cr7iBuCbWUGHDMoZloYPYTiP7WD6Kx1kk1CNW2ifpXsv4rmzg-Hm4s1V5OgpQB-IiMvGTLHctfcSveuhCXDrcUTmrH1FBDr_cWJA9Lv9aizubmwwA3ueFhS0DjEjDvLD9FEoxUJVOBdXzdfgWTuNckjQXkmfIwE5hB6oldHPLnVU8O7elxQ0D9newSQIdIsdip9tImaJpdu5nYmHSBW47WgqLS7TeyhAP44IITe0g"/>
+<!-- Annotation Overlays -->
+<div class="absolute top-1/4 left-1/3 group cursor-pointer">
+<div class="w-6 h-6 bg-yellow-500/20 border-2 border-yellow-500 rounded-full animate-pulse flex items-center justify-center">
+<span class="text-[10px] font-bold text-yellow-500">1</span>
+</div>
+<div class="hidden group-hover:block absolute top-8 left-0 w-48 bg-white p-2 rounded shadow-lg text-[10px] border border-slate-200 z-10">
+<span class="font-bold text-slate-900 block mb-1">专家批注 #1</span>
+                                    此处管道布局与承重梁冲突，建议向西偏移 150mm。
+                                </div>
+</div>
+</div>
+</div>
+<!-- Version Management List (Asymmetric Layout) -->
+<div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">history</span>
+                                图纸版本管理列表
+                            </h3>
+<button class="text-xs text-primary font-medium hover:underline">查看全部历史</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm">
+<thead>
+<tr class="text-slate-400 border-b border-slate-100">
+<th class="pb-3 font-medium">文件名</th>
+<th class="pb-3 font-medium">版本号</th>
+<th class="pb-3 font-medium">更新日期</th>
+<th class="pb-3 font-medium">状态</th>
+<th class="pb-3 font-medium text-right">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-50">
+<tr class="group hover:bg-slate-50/50">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-blue-500">description</span>
+<span class="font-medium text-slate-700">A1-ZONE-FLOOR-PLAN</span>
+</div>
+</td>
+<td class="py-4 text-slate-500">v2.4.0 (当前)</td>
+<td class="py-4 text-slate-500">2023-11-24 14:20</td>
+<td class="py-4">
+<span class="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full font-bold">已核准</span>
+</td>
+<td class="py-4 text-right">
+<button class="p-1 hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-1 hover:text-primary transition-colors ml-2"><span class="material-symbols-outlined text-sm">more_vert</span></button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400">description</span>
+<span class="font-medium text-slate-700">A1-ZONE-SECTION-B</span>
+</div>
+</td>
+<td class="py-4 text-slate-500">v1.1.2</td>
+<td class="py-4 text-slate-500">2023-11-22 09:15</td>
+<td class="py-4">
+<span class="px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded-full font-bold">审核中</span>
+</td>
+<td class="py-4 text-right">
+<button class="p-1 hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-1 hover:text-primary transition-colors ml-2"><span class="material-symbols-outlined text-sm">more_vert</span></button>
+</td>
+</tr>
+<tr class="group hover:bg-slate-50/50">
+<td class="py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400">description</span>
+<span class="font-medium text-slate-700">ELEC-MAIN-CIRCUIT</span>
+</div>
+</td>
+<td class="py-4 text-slate-500">v3.0.0</td>
+<td class="py-4 text-slate-500">2023-11-20 16:45</td>
+<td class="py-4">
+<span class="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded-full font-bold">历史存根</span>
+</td>
+<td class="py-4 text-right">
+<button class="p-1 hover:text-primary transition-colors"><span class="material-symbols-outlined text-sm">download</span></button>
+<button class="p-1 hover:text-primary transition-colors ml-2"><span class="material-symbols-outlined text-sm">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Right Sidebar: Process & Comments (4/12) -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Design Change Workflow Tracking -->
+<div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+<h3 class="text-sm font-bold text-slate-900 mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">account_tree</span>
+                            设计变更流程跟踪
+                        </h3>
+<div class="relative space-y-8">
+<div class="absolute left-[11px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+<!-- Step 1 (Done) -->
+<div class="relative flex gap-4">
+<div class="z-10 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white ring-4 ring-white">
+<span class="material-symbols-outlined text-xs">check</span>
+</div>
+<div>
+<p class="text-sm font-bold text-slate-800">变更申请提交</p>
+<p class="text-[10px] text-slate-400">由 施工一队-张工 提交于 11-22</p>
+<div class="mt-2 p-2 bg-slate-50 rounded border border-slate-100 text-[11px] text-slate-600">
+                                        原因：承重结构实测与原设计偏差 20mm
+                                    </div>
+</div>
+</div>
+<!-- Step 2 (Active) -->
+<div class="relative flex gap-4">
+<div class="z-10 w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white ring-4 ring-white">
+<div class="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
+</div>
+<div>
+<p class="text-sm font-bold text-slate-800">设计院初步审核</p>
+<p class="text-[10px] text-primary font-medium">进行中 - 预计今日 18:00 前完成</p>
+<div class="mt-3 flex gap-2">
+<img alt="专家" class="w-6 h-6 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWsVNePfue0GgJGnAxQkmfiYGZoTa7yPGD473W7Ht_kI8d5rAVikXuUbuvBvfSJO2IlDTvbszmE7m-iwLZex7IkvD-bF5zzG4CcJJfkeLc5jfJK9hwAYGZ37EbfZM8k5Fxpon5HgeI-WtDDn0H9kMbAjpbGFQqjZWm1mX5o501a7UjCbMDmta74kO5fiF5LXT9vc12FGEfI2GF-mRbtnpINn3aQ3tmBLoOFlOTYdXUx4Ddys2T0LoV5lAUg5n3oabiRGs4zk60bg"/>
+<div class="flex-1 h-2 bg-slate-100 rounded-full mt-2 overflow-hidden">
+<div class="w-2/3 h-full bg-primary"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 3 (Pending) -->
+<div class="relative flex gap-4">
+<div class="z-10 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 ring-4 ring-white">
+<span class="material-symbols-outlined text-xs">lock</span>
+</div>
+<div>
+<p class="text-sm font-bold text-slate-400">专家委员会会签</p>
+<p class="text-[10px] text-slate-400 italic">待上一步骤完成</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Expert Feedback Area -->
+<div class="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-200">
+<div class="px-6 py-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+<h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">forum</span>
+                                专家批注反馈区
+                            </h3>
+<span class="text-[10px] font-bold px-1.5 py-0.5 bg-tertiary/10 text-tertiary rounded">3 NEW</span>
+</div>
+<div class="p-6 space-y-6">
+<!-- Feedback Card 1 -->
+<div class="space-y-3">
+<div class="flex items-center gap-2">
+<img alt="李总工" class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border border-indigo-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJkvziG9N-OtcLh9rgFgEqafGarTraq-51kSD0wgdZIO0mTyLmBQkFL-148kiexCnxxrNeNJ2mCO9ZY6EPdGvf-FahR8lY8FAJr03cpBgfbAsH-YCWcdLQ-H6yXWTweei5_J_RL12QBU01VqExryfjvnL9wAgyTE42f9UbIXBPzClINaScxkmUDX3izk2daX-qnOPp0kUmY4REfOn4zI4n0hmTTtjtRFvvrsRMNVX6wHHt8iwJuTllopKsUTZCkaXqJA89oOQuUw"/>
+<div>
+<p class="text-[11px] font-bold text-slate-800">李华 (结构专家)</p>
+<p class="text-[9px] text-slate-400">10分钟前 · 针对 A1-ZONE</p>
+</div>
+</div>
+<p class="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-lg border-l-4 border-primary">
+                                    图纸中预埋件位置与消防排烟管冲突。请注意查看我标记的第1处红圈位置。
+                                </p>
+</div>
+<!-- Feedback Card 2 -->
+<div class="space-y-3">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-700 font-bold border border-orange-200">
+                                        王
+                                    </div>
+<div>
+<p class="text-[11px] font-bold text-slate-800">王志强 (机电总监)</p>
+<p class="text-[9px] text-slate-400">2小时前 · 针对 ELEC-MAIN</p>
+</div>
+</div>
+<p class="text-xs text-slate-600 leading-relaxed">
+                                    强电间散热风道尺寸建议扩大 15%，现有尺寸在夏季满负荷运行时可能存在过热风险。
+                                </p>
+</div>
+</div>
+<div class="p-4 bg-slate-50 border-t border-slate-100">
+<div class="relative">
+<textarea class="w-full text-xs border-slate-200 rounded-lg focus:ring-primary focus:border-primary bg-white" placeholder="输入您的回复或追加新批注..." rows="2"></textarea>
+<button class="absolute bottom-2 right-2 p-1.5 bg-primary text-white rounded-md shadow hover:opacity-90">
+<span class="material-symbols-outlined text-sm">send</span>
+</button>
+</div>
+</div>
+</div>
+<!-- CAD Tool Palette Card -->
+<div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-5 shadow-lg">
+<h4 class="text-xs font-bold text-slate-300 mb-4 uppercase tracking-widest">Tool Palette</h4>
+<div class="grid grid-cols-4 gap-2">
+<button class="aspect-square bg-slate-700/50 rounded flex flex-col items-center justify-center hover:bg-primary transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">edit</span>
+<span class="text-[8px] mt-1 text-slate-500 group-hover:text-white">Draw</span>
+</button>
+<button class="aspect-square bg-slate-700/50 rounded flex flex-col items-center justify-center hover:bg-primary transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">straighten</span>
+<span class="text-[8px] mt-1 text-slate-500 group-hover:text-white">Measure</span>
+</button>
+<button class="aspect-square bg-slate-700/50 rounded flex flex-col items-center justify-center hover:bg-primary transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">comment</span>
+<span class="text-[8px] mt-1 text-slate-500 group-hover:text-white">Note</span>
+</button>
+<button class="aspect-square bg-slate-700/50 rounded flex flex-col items-center justify-center hover:bg-primary transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-white">share</span>
+<span class="text-[8px] mt-1 text-slate-500 group-hover:text-white">Share</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB (Only for Home/Dashboard context) -->
+<!-- Suppressed on Details/Transactional page -->
+</body></html>

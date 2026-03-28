@@ -1,0 +1,20 @@
+# Local tooling
+.git
+.idea
+.venv
+
+# Legacy prototype assets are not needed for the image build context
+AI_Dev_Memo
+Front/前端模板
+Front/错误截屏
+
+# Node artifacts
+node_modules
+frontend/node_modules
+frontend/.next
+frontend/.env.local
+npm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db

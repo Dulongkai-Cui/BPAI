@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#f9d8fd",
+                        "surface-variant": "#e2e2e2",
+                        "tertiary-fixed-dim": "#dcbce0",
+                        "surface-tint": "#2a5ea7",
+                        "tertiary-container": "#f9d8fd",
+                        "secondary-fixed": "#dae2f9",
+                        "tertiary": "#6f5575",
+                        "surface-container-high": "#e8e8e8",
+                        "on-secondary-fixed-variant": "#3e4759",
+                        "outline-variant": "#c6c6c6",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#eeeeee",
+                        "on-background": "#1b1b1b",
+                        "on-secondary-container": "#3e4759",
+                        "primary-fixed-dim": "#aac7ff",
+                        "secondary-container": "#dae2f9",
+                        "primary-fixed": "#d6e3ff",
+                        "on-tertiary-container": "#573e5c",
+                        "on-surface-variant": "#474747",
+                        "on-secondary-fixed": "#131c2b",
+                        "on-primary-fixed": "#001b3e",
+                        "on-surface": "#1b1b1b",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#bec6dc",
+                        "outline": "#777777",
+                        "primary-container": "#d6e3ff",
+                        "inverse-surface": "#303030",
+                        "inverse-primary": "#aac7ff",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#573e5c",
+                        "surface-container-low": "#f3f3f3",
+                        "primary": "#2a5ea7",
+                        "background": "#f9f9f9",
+                        "surface-bright": "#f9f9f9",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-tertiary-fixed": "#28132e",
+                        "surface-dim": "#dadada",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#565f71",
+                        "on-primary-container": "#00458d",
+                        "surface": "#f9f9f9",
+                        "on-primary-fixed-variant": "#00458d",
+                        "on-error": "#ffffff"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-700 dark:text-blue-300 tracking-tighter">我的BPAI</span>
+<nav class="hidden md:flex items-center gap-6 font-sans text-sm font-medium tracking-tight">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">总览</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">工单</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-2" href="#">文档档案室</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-slate-100 dark:bg-slate-800 border-none rounded-full text-sm focus:ring-2 focus:ring-primary/20 w-64" placeholder="搜索文档或动态..." type="text"/>
+</div>
+<button class="p-2 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-slate-200 object-cover" data-alt="professional headshot of a smiling asian male engineer in a clean modern office setting with soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuANfq2JVtIGILkWDw2sYJl2I5bMQRDDF2W0aRKFDwEIfzaK5HtMfVYX2zVkr1SYqLGkXyLY8B2GeSCx3RamgkRXmmqM3iXWsl_oo2_5g2B5cFYJjJAIcBNKZ_vKi9CqB3e0RlpHQEVlPwL9xjqcwufcru8ZRZMrgblfHVN7EPeMp8vGwV4xGBjWjG8rYR4LXHwCBuzS_OXHbY-G2-8ByXRnxOw3lI7IN6coXwD5MIAz8nsGfhwscVKmCra21_3eUR8bcVpHgZmKKA"/>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 bottom-0 w-64 flex flex-col p-4 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200">文档中心</h2>
+<p class="text-xs text-slate-500">管理您的所有文件</p>
+</div>
+<nav class="flex flex-col gap-1 font-sans text-sm font-normal">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">description</span>
+<span>我的文档</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">table_chart</span>
+<span>我的表格</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">architecture</span>
+<span>我的CAD</span>
+</a>
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg px-4 py-2.5 font-semibold transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span>合作空间</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">smart_toy</span>
+<span>BP问问</span>
+</a>
+</nav>
+<div class="mt-auto p-4 bg-primary-container/30 rounded-xl border border-primary-container">
+<div class="flex items-center gap-3 mb-2">
+<span class="material-symbols-outlined text-primary">cloud_done</span>
+<span class="text-xs font-bold text-primary">存储空间</span>
+</div>
+<div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary w-[72%] h-full"></div>
+</div>
+<p class="text-[10px] mt-2 text-slate-500 text-right">已使用 7.2GB / 10GB</p>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="max-w-7xl mx-auto p-8">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
+<div>
+<h1 class="text-3xl font-extrabold tracking-tight text-on-surface mb-2">合作空间</h1>
+<p class="text-secondary max-w-xl">团队协作的实时枢纽。在这里查看最新的动态记录、共享文件夹以及待处理的讨论内容。</p>
+</div>
+<div class="flex items-center -space-x-3 overflow-hidden">
+<img alt="Member 1" class="inline-block h-10 w-10 rounded-full ring-2 ring-white" data-alt="close-up portrait of a female software developer with glasses in a vibrant creative studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBXYST4lJfm4m24RhbARAXS0natDDZXPZLKmhggv6f6tqK6H0RT0nHXNA21T2zC3y6dlf47VR-LqUUTn6WvRyingvSzhr3kT1eGPY4_uBb7u0tX_i09z9orzkTWjcij51cvs0vp8pmjrRHqhLji50lYU6ygvlV3OJ641N6fjgW-dTz8-imcTL7KcnqotxTdirhI-Qk8VdVsIst2B7Oh6Sr7UyDhy4_rILoFPVPUZ8Qy08PxpoQz-6huiJb4CBdeGBdmySWjPdBiw"/>
+<img alt="Member 2" class="inline-block h-10 w-10 rounded-full ring-2 ring-white" data-alt="portrait of a young man with a beard wearing a denim shirt in a bright airy workspace" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4ZTje8F6bM6EyvpjTNhsbeoXCUtGCQKUiBNziQY9cA5LPVInXt3efcDWIdzvoznG_OGP-iH6A_wbFUrdb1BafrQIi3Qff5GnRdUvMoZVKv52l0ZNDxHAxj5yrDzyItVUc4UmswWn8kMyrZnJwNt5K-yknXIu_ChEJy1gBZCyq30zN99CjIELQVXQdMtNVqkS-m3zueHhdaxxfaLGGh-Ff59BH0wUJPBvN2Q7IfgZiLofOxBr1B2uyWav99n6Tnp5dNB_HSq9Now"/>
+<img alt="Member 3" class="inline-block h-10 w-10 rounded-full ring-2 ring-white" data-alt="middle-aged woman with professional attire and a warm smile in a corporate boardroom background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHACEhLmNbp0rqsO3Vpz86hi-JxTxD9_8VQ6T4OW932b3UG6c6GK2bXSQm6UsRVuou2nuM5JQNgH2AXSMVBcUY0w4e87GjcPZ4--4rJU5cItp4eAnH4K-YnFQEhOVtZPeOdkMWP8JzgvT7yJ2Vlg8ByAhSTFnDc9XqESEEaoG8T4RKt0waTsRWZOJHOLz0LJxKkhwPPhNQnDb20HfE_CLrajXxAA6uHhHMvvyaHz7iXAqYtdvK7QJEjVuJ2pWn174Fuv0zgarRFQ"/>
+<img alt="Member 4" class="inline-block h-10 w-10 rounded-full ring-2 ring-white" data-alt="young professional male in casual wear sitting at a desk with blurred monitors in the background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBc-CbSa-VzgmEYywFWqSVtexAr90Hty7p2A_OpzXVuzAIQT5v9d77muLQkfOwh7cLonbv7vD3C45f17qup7cxi0P73TAonDvu7wG2esKOGw_SAC0LI4A7FLAjn1jF_DGeUWQmuT8n-s_nSTBwqDl2x9xQqfdvZ6kjE1No0uEkG--ip6bQMqCRTfmGiMaKrfEnG6I0svIUZB-y3twKJq8m4r67lyjVfr3yoMD80IGeYttIINlZrhjk1q1OBgFLcrLiFXct9sAh14Q"/>
+<div class="flex items-center justify-center h-10 w-10 rounded-full ring-2 ring-white bg-slate-200 text-xs font-bold text-slate-600">+12</div>
+<button class="ml-6 flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg font-medium shadow-lg shadow-primary/20 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">person_add</span>
+<span>邀请成员</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Shared Folders (Large Area) -->
+<div class="col-span-12 lg:col-span-8 space-y-6">
+<section class="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/30">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-bold text-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-amber-500" style="font-variation-settings: 'FILL' 1;">folder_shared</span>
+                                共享文件夹
+                            </h3>
+<button class="text-primary text-sm font-medium hover:underline">查看全部</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+<!-- Folder Card 1 -->
+<div class="group p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl">folder</span>
+</div>
+<button class="text-slate-300 hover:text-slate-600">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<h4 class="font-semibold text-slate-800">2024 重点工程图纸</h4>
+<p class="text-xs text-slate-500 mt-1">124 个文件 · 3.2 GB</p>
+<div class="mt-4 flex -space-x-1.5 overflow-hidden">
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of a team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLR9H7PyCOlBClTvLijzED3ZlvpPL9TIhh6vHq_2iXn7d-tL0lHz7Kri9T1U4XuSZIWCbDWDjJMBeWDhOkpyNE8JjT8ZEiION4Zhubwf0L4ejQjCofL_Vfh8rRlVRXMgV2rVQQvX_Jl8viNyVS6KF0-WsoLtnJ2XWGECroJQ84Zdo7v1-ETPUdBNzZwkl9qjbsp-OihpPxc8XA_lZzU88ZsDoe7vWnoVyfa-AJOhC3U4sdHNYNcK7h3Hi9dQJI4fFm4J4p8SnPGQ"/>
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of another team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPcqNZeQV8WNtNAJrEWg3X3PsdJx32FdYlX_4Vyrf8WjT-LZpv26v6ZZad1MtLvtsuXzfJxpWZ1u8rSiaE9UQdxhSUcWkBXiBuX5e2m-0964EYgu6eScps0D11vcVq-7ihyDiVxpjy-plwPMOPS4k2p65g17mTbn3Ubok_jkAXMzyrp8jkZ5Mg9hTDUzyFlYy2TLZixA-Qnz6onlZxE_qDx_vAAh6Sku1Ylr3breqfWU-9GtoJezoWhNa8OvHLVOaCDSxyeNg47A"/>
+</div>
+</div>
+<!-- Folder Card 2 -->
+<div class="group p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl">folder</span>
+</div>
+<button class="text-slate-300 hover:text-slate-600">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<h4 class="font-semibold text-slate-800">财务结算报表</h4>
+<p class="text-xs text-slate-500 mt-1">45 个文件 · 1.1 GB</p>
+<div class="mt-4 flex -space-x-1.5 overflow-hidden">
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of a team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJv1mUhR_pX7k8XaPUL-gzXEc9BDZ9Z7VjLiZAG_0vx_y_cJ13MxwsaAX59aQ-WFJee5-xjUVF7CMU_0cwnU3LTrryfkf6i1hl4jUxxTBu4B0cuv0aThS4HTxyprnoLFfNSDJRaiIC-cE8FaN4kiyHsa9xLQ1hHGEe01mDmHH5UDfOhxYjkSfTsteYVk1FRJZFwHPYAECg344A8fgL_Mv3Ztnzd0h4kEc6U2zn4-DaV4EpmOxCTZz9Qv4u0vFMEejG7GC3Vkw40A"/>
+</div>
+</div>
+<!-- Folder Card 3 -->
+<div class="group p-4 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all cursor-pointer">
+<div class="flex justify-between items-start mb-4">
+<div class="w-12 h-12 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl">folder</span>
+</div>
+<button class="text-slate-300 hover:text-slate-600">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<h4 class="font-semibold text-slate-800">法律合规文档</h4>
+<p class="text-xs text-slate-500 mt-1">18 个文件 · 450 MB</p>
+<div class="mt-4 flex -space-x-1.5 overflow-hidden">
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of a team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIiGvX_TZAqO--1hKznAr1n_UR9qMWR8sjuVyeNN8yvzFVlCm9GXlf0XGqixRw6_oCExty03UEX0K3_016TL8ApiYj9AR9oy8wbTgjVQ0ZbzJQKTWWR7MSU9EIUCO8zHD1NZ4g-p_UMGIyI23Q0c9rHUy7bNBIY1Npy9GLXTl6IOWfmXKowjrZVc9CA2MHJoKLdhYjZDvdHAQsehkSyMCfeWP7MhVneGXa_HJT5ljcJtRpVJlqJRWt8vXVod82Nf-pIUrINNzECg"/>
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of another team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNtuFWoqC4yBuJaG2pfodVeLA9GdfPow6tR_XGZBax3nh2syK2W1H9Qs9HJ6q0zTZc_EGDbJms0tH5mfOXX6Zp6s60TJJ3UyxzGkXk0gi6OTiZsNLyr334hevEYSjMYGKanUSQ4V7P1fNIJp-RGKQLphWHN0lFlghCgNbnVOE_gNc7s03aRvsrHw1iU5sS3cz4SRKpSSq_ftQ1hhKQ4iqNRZc1uL0C8gfiWFpggfu4N6HLBZMgRlUVbojwK26eoDDTQxQEkTSJ1Q"/>
+<img alt="user" class="h-6 w-6 rounded-full border border-white" data-alt="avatar of a third team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIPycXAXMOMZyEAyPfynQJXZLvDX3cjVfsqqazAkGARJlZGjiTtViH6aOpXnKJT_8Ct1r1mMlWCXLi87nuWWeh485HfFQZgKkLNJxDaGAvsMwC_fHTNT9TQvOL0XVmF-nr5O1FO7FFdw-NO7Ti9iGjUfwD4Z2cm_rzm8gzBApQgR8Vz81-lVUT0pYF_kwgbE8c1kn-_Ywyj8xT5K4T0uzhdL63fbQw8CAJKwcxjYr3_faIcQ7pyIqlaxeqHc5NJLBcS7_Eo3OMDw"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Recent Activity Stream -->
+<section class="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/30">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-bold text-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">dynamic_feed</span>
+                                团队动态
+                            </h3>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">全部动态</span>
+<span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-medium">仅文件</span>
+</div>
+</div>
+<div class="space-y-6">
+<!-- Activity Item 1 -->
+<div class="flex gap-4">
+<div class="relative">
+<img alt="User" class="w-10 h-10 rounded-full object-cover" data-alt="profile photo of a young professional woman in a bright modern office" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmihnzj1B38v3hhqcwFthJIo-4QOYAggWYIpQLGsw-c68oliBkcvlaixNxTlVXZRsShmIfj0qypeibvRA0tAnQtwSzmsmDX7BlBFA6btgb6meU6FSRPf_zuyiXSlXpbRBex1QE2R9wT38725jNfZHiJNIblF-Wgh68As-rxN7sIeyd6lo6l7yuRfa3cViI8uI-tDim6NIjB7JtCon01Q3UjWUzaJD_Ttgoyh1orgHS9PnCvZTdS5iix1ndJqV27w_wHa1UzLWKXw"/>
+<div class="absolute -bottom-1 -right-1 bg-blue-500 text-white rounded-full p-0.5 border-2 border-white">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">edit</span>
+</div>
+</div>
+<div class="flex-1 border-b border-slate-50 pb-4">
+<p class="text-sm">
+<span class="font-bold text-slate-900">李明</span>
+<span class="text-slate-500">编辑了</span>
+<span class="font-medium text-blue-600 underline decoration-blue-200">2024第一季度施工方案.pdf</span>
+</p>
+<p class="text-xs text-slate-400 mt-1">20分钟前 · 档案室/工程队</p>
+</div>
+</div>
+<!-- Activity Item 2 -->
+<div class="flex gap-4">
+<div class="relative">
+<img alt="User" class="w-10 h-10 rounded-full object-cover" data-alt="portrait of a confident male executive in a sleek tech workspace" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwb0PCm2PqcYpg4r375AnRtno_SnaOXIl8iNUO3660KSw2ZOS4yZSNuqmq8INKhFkAKV6_PNpA5is3eGi-j3VG3Sk3a8qdgf-Ipmo8Xz_JfjTSPCTgGU9DV1477CLy8fhA3KcAdT82mGaT5QNE9p-YZIRWEhhHUihiYDWO_bQiVBf94M_hBIMohuXL9E6IElrDdTxvgg5gg6c70gK8esJgQ2VS9MNeK2xrW-IR90A-Z_YpuVhUj7kC6H1LTuFqOz2lMP81SVibJw"/>
+<div class="absolute -bottom-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 border-2 border-white">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">upload_file</span>
+</div>
+</div>
+<div class="flex-1 border-b border-slate-50 pb-4">
+<p class="text-sm">
+<span class="font-bold text-slate-900">张小雨</span>
+<span class="text-slate-500">上传了 3 个新文件到</span>
+<span class="font-medium text-blue-600 underline decoration-blue-200">现场实勘图库</span>
+</p>
+<p class="text-xs text-slate-400 mt-1">1小时前 · 合作空间/项目A</p>
+<div class="mt-3 flex gap-2">
+<div class="w-16 h-12 bg-slate-100 rounded border border-slate-200 overflow-hidden relative group">
+<div class="absolute inset-0 bg-slate-900/10 group-hover:bg-transparent transition-colors"></div>
+</div>
+<div class="w-16 h-12 bg-slate-100 rounded border border-slate-200 overflow-hidden relative group">
+<div class="absolute inset-0 bg-slate-900/10 group-hover:bg-transparent transition-colors"></div>
+</div>
+<div class="w-16 h-12 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-[10px] text-slate-400 font-bold">+1</div>
+</div>
+</div>
+</div>
+<!-- Activity Item 3 -->
+<div class="flex gap-4">
+<div class="relative">
+<img alt="User" class="w-10 h-10 rounded-full object-cover" data-alt="professional portrait of a senior architect in a high-tech studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgafiPxwqc35yu4BsGBP7Q3kNlZoHqy6Ew5s-nLltT2d796HQqUbdaXlQpfnzbEq7ODtvoe59oaqFFnna3tFiyEh1OFcXG2gmoh2N0unLsiAolzk8IUrsdO4z5yyCW6ghbbhKA-Rw4jAAlparmOp9mz9q4SGRl576hGToU3oFeN2Axy8LnHpaCAMLZcG0C4jtVHuKNgJI21fr0QcS-WsXilCPPH1b_4vmt7bWKc3AkQfDK-4xvvMU4r4J5YbJClctTwWo5O21VlA"/>
+<div class="absolute -bottom-1 -right-1 bg-amber-500 text-white rounded-full p-0.5 border-2 border-white">
+<span class="material-symbols-outlined text-[10px]" style="font-variation-settings: 'FILL' 1;">share</span>
+</div>
+</div>
+<div class="flex-1">
+<p class="text-sm">
+<span class="font-bold text-slate-900">王工</span>
+<span class="text-slate-500">将</span>
+<span class="font-medium text-blue-600 underline decoration-blue-200">施工节点.dwg</span>
+<span class="text-slate-500">共享给了</span>
+<span class="font-bold text-slate-900">设计二组</span>
+</p>
+<p class="text-xs text-slate-400 mt-1">3小时前</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Sidebar Content (Recent Comments & Active Members) -->
+<div class="col-span-12 lg:col-span-4 space-y-6">
+<!-- Recent Comments -->
+<section class="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/30">
+<h3 class="font-bold text-lg mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">forum</span>
+                            最近讨论
+                        </h3>
+<div class="space-y-4">
+<!-- Comment 1 -->
+<div class="p-3 bg-tertiary-container/20 rounded-xl border border-tertiary-container/30">
+<div class="flex items-center gap-2 mb-2">
+<img alt="User" class="w-5 h-5 rounded-full" data-alt="small thumbnail avatar of a team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAUf6WWvdrJz3IACaxUBoVWTU6rl7gX4AMKRVuSf4NKH-iETGfb0wX38rkJDDZeIPic5y56xDeKbEFOzq-g8hS6b3f3z2Y9ZcQGqm-vw7y0JLpoG-ECqZ9BnEQjoMrUNWOQOZl9lo7OfNny4RZncnfWS6z3AukYMoBQqwWBRluIoc397Vb9lTOehC_g9nTL5UTYiZcaxiryUQGo40h1Jf2znWymtrVpT32Lc-G3WS58Dn59D27LMdslU2eFArr9NjAZrBmNRPUnCA"/>
+<span class="text-xs font-bold text-tertiary">赵立</span>
+<span class="text-[10px] text-slate-400 ml-auto">刚刚</span>
+</div>
+<p class="text-xs text-slate-700 leading-relaxed italic">"这里的承重结构参数似乎需要重新核对一下，BP问问给出的参考值有点偏高。"</p>
+<div class="mt-2 text-[10px] text-slate-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">link</span>
+<span>来自：02-主梁配筋图.dwg</span>
+</div>
+</div>
+<!-- Comment 2 -->
+<div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+<div class="flex items-center gap-2 mb-2">
+<img alt="User" class="w-5 h-5 rounded-full" data-alt="small thumbnail avatar of a team member" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvBhXy7c3BUYjfKZW5cdIIf9CpbkRqs2qyzmvQCB1e4t34U3DFZhXP6pkkw-jn710An8bJPS2tV-3YechleJ8XbrCORKgDhEF5sCpxdg4tLpiX3JnEMMjGJBXdB-ib-wZPj4aVL1Px_LAVxbzFEcYY6cwYlWPqBVqnE0AY-3m-G18bjAWBfO493CfcrTKvKNNn39uZ8CxBtSEcc_s338b6bLrr2kUwAu39TsaKJtYf2J5c7ABDNAFBI4-fP5__wgYIkV3x9EwI0A"/>
+<span class="text-xs font-bold text-slate-700">孙晓梅</span>
+<span class="text-[10px] text-slate-400 ml-auto">2小时前</span>
+</div>
+<p class="text-xs text-slate-700 leading-relaxed">"明早的周会大家记得把最新的进度表上传到共享文件夹。"</p>
+<div class="mt-2 text-[10px] text-slate-400 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">group</span>
+<span>在 合作空间群聊 中</span>
+</div>
+</div>
+</div>
+<button class="w-full mt-6 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors">查看所有评论</button>
+</section>
+<!-- Active Members List -->
+<section class="bg-surface-container-lowest rounded-2xl p-6 border border-outline-variant/30">
+<div class="flex items-center justify-between mb-6">
+<h3 class="font-bold text-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-emerald-500">online_prediction</span>
+                                在线成员
+                            </h3>
+<span class="text-xs font-bold px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full">5</span>
+</div>
+<ul class="space-y-4">
+<li class="flex items-center gap-3">
+<div class="relative">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="team member portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAidkl4AXtYWaMI7LdvMbktA5W2DhV_lLI2xgXyduLBmNqFbzevBVx5GZ97ojWZhpoSisKz3FmtpIq3fgQUV5hlQpFqzyeIzLSpR5krw3pk8FfQhDI3wtrUn4mc6TpACH8AHLofP6JUeGzM2F_jauwyeFpK57W2j_wNG2emTGPWaO6-ogJuFmgcN6z3IC1ynQUX9ZAN2otyLY80OGqTnpEuuQQzwQrlHNs4SvoK3GhqlwKwUcaptt4N8lnEi_MXr6AH2tsO7dKDHA"/>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+</div>
+<div>
+<p class="text-sm font-semibold text-slate-900 leading-none">沈冰 (You)</p>
+<p class="text-[10px] text-slate-400 mt-1">当前活跃：正在编辑表格</p>
+</div>
+</li>
+<li class="flex items-center gap-3">
+<div class="relative">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="team member portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpaTF9Wuvk-zLEG6o5z3y5z1gdVBX2Fcf5RKIxe0_33xGs67fuL6GOfkIfGVDObS_UXJ7-EZ6tqvvYCpa4mRJ8bcITsCPm4KLLs-MGgJEiUTRC9t9U5GR3uiAeZoGeOyQWxbMEtJDp_9MSwYvyd4L9aIWGqiBXMFOL2kQmHvxt5eg9o7Sl6EHB-e7M_ieKoYgQyWQka200OmAAeJTm-XYdF3kQQO3xveiRy0wj3v2hM4jDf3_oT3WyUqdXxfUeFNCkEvSu4bECAw"/>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+</div>
+<div>
+<p class="text-sm font-semibold text-slate-900 leading-none">赵立</p>
+<p class="text-[10px] text-slate-400 mt-1">当前活跃：浏览共享文件夹</p>
+</div>
+</li>
+<li class="flex items-center gap-3">
+<div class="relative">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="team member portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzcrWgztPjoHLnz480KTsdBXykKxz7v77u1DNCAN4QLjvxguKtXzYa1JySMPSe_H1Kjx6RMxc6hvwDoW9nBjXqpxapEr4G9Q5cKy3fR8R6zTZBjxK2P_nCgWBKZQecoytuc91M10TcxERU_IROhDF7sxz-H7F3KVzMjJ2ErBEivf1dob2RF3DquUCc_Nhau6CTZ3-AFKJFSVsbsAy2XmPYW4S4aPQaKlMxf-eGQe7TXJEixbkACGWLj4bfudHCpxwe76qcUxWScw"/>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+</div>
+<div>
+<p class="text-sm font-semibold text-slate-900 leading-none">张小雨</p>
+<p class="text-[10px] text-slate-400 mt-1">当前活跃：在BP问问中咨询</p>
+</div>
+</li>
+<li class="flex items-center gap-3 opacity-60">
+<div class="relative">
+<img alt="User" class="w-8 h-8 rounded-full" data-alt="team member portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCq9sCEN3VeQw7X2FKzJ1QR91QR9RGVHG7eLAZ6NPzV_ryb5n7HJSWgLHuJChstU9Wrc72A5nA-TOeg7nhUVZSOpf8WbElR-r8Z9vPwhPdX4PS6sxp08fAGJZY_tIOa6Yx1O7RwFR1f9bsyMChGImME0ubbsQQtIYFmK3JRALkXb1O8N_JsCyx6NfM36Z5cpaYJKcPL4ycPdRNUX9kLAKcIDq98lQ84Qvq1fP2j90UqO2zTb5J-xKrVqy55G98_PlFhT0lgt2F_9Q"/>
+<div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-slate-300 border-2 border-white rounded-full"></div>
+</div>
+<div>
+<p class="text-sm font-semibold text-slate-900 leading-none">李明</p>
+<p class="text-[10px] text-slate-400 mt-1">离线 · 15分钟前活跃</p>
+</div>
+</li>
+</ul>
+</section>
+<!-- Quick Workspace Access -->
+<div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white overflow-hidden relative group">
+<div class="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+<span class="material-symbols-outlined text-[120px]">smart_toy</span>
+</div>
+<h4 class="font-bold text-lg mb-2 relative z-10">BP 问问 协作版</h4>
+<p class="text-blue-100 text-xs leading-relaxed mb-4 relative z-10">让 AI 协助团队分析复杂的工程文档，支持多成员实时提问与追溯。</p>
+<button class="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-xs font-bold border border-white/30 transition-all relative z-10">立即开启讨论</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB for quick actions -->
+<div class="fixed bottom-8 right-8 flex flex-col gap-4">
+<button class="w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+</body></html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#28132e",
+              "on-secondary-container": "#3e4759",
+              "tertiary": "#6f5575",
+              "surface-container-low": "#f3f3f3",
+              "on-primary-fixed-variant": "#00458d",
+              "inverse-surface": "#303030",
+              "surface-dim": "#dadada",
+              "surface-tint": "#2a5ea7",
+              "on-surface-variant": "#474747",
+              "surface-container": "#eeeeee",
+              "primary-fixed-dim": "#aac7ff",
+              "outline": "#777777",
+              "tertiary-fixed-dim": "#dcbce0",
+              "primary": "#2a5ea7",
+              "tertiary-fixed": "#f9d8fd",
+              "on-primary-container": "#00458d",
+              "secondary-fixed-dim": "#bec6dc",
+              "on-tertiary-container": "#573e5c",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed": "#131c2b",
+              "on-background": "#1b1b1b",
+              "secondary-fixed": "#dae2f9",
+              "inverse-on-surface": "#f1f1f1",
+              "on-surface": "#1b1b1b",
+              "error-container": "#ffdad6",
+              "surface-container-high": "#e8e8e8",
+              "on-error": "#ffffff",
+              "on-tertiary": "#ffffff",
+              "on-error-container": "#93000a",
+              "surface": "#f9f9f9",
+              "secondary-container": "#dae2f9",
+              "inverse-primary": "#aac7ff",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "on-secondary": "#ffffff",
+              "background": "#f9f9f9",
+              "tertiary-container": "#f9d8fd",
+              "surface-container-highest": "#e2e2e2",
+              "outline-variant": "#c6c6c6",
+              "primary-container": "#d6e3ff",
+              "primary-fixed": "#d6e3ff",
+              "on-primary-fixed": "#001b3e",
+              "secondary": "#565f71",
+              "on-primary": "#ffffff",
+              "on-secondary-fixed-variant": "#3e4759",
+              "surface-container-lowest": "#ffffff",
+              "error": "#ba1a1a",
+              "surface-variant": "#e2e2e2"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+        }
+        .hex-grid {
+            background-image: radial-gradient(circle at 2px 2px, rgba(59, 130, 246, 0.15) 1px, transparent 0);
+            background-size: 32px 32px;
+        }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #60a5fa, transparent);
+            width: 100%;
+            position: absolute;
+            z-index: 10;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body class="bg-blue-950 font-body m-0 p-0 min-h-screen flex items-center justify-center overflow-hidden">
+<!-- Background Layer: Low Poly City Map -->
+<div class="fixed inset-0 z-0 overflow-hidden">
+<img alt="City Map Background" class="w-full h-full object-cover opacity-40 scale-105 blur-sm" data-alt="abstract low-poly 3D wireframe city map in deep navy blue tones with glowing data nodes and cyan light trails" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAnV3kMD3KvH_RVRnqde5H40Z6v8aF8l823GdGgxNScIyUYQfmtxhOWKqbYYfHfqgAVxcUYLG1-WElDpPzj6zC2MoG8_lJAs7VUwD3FnE8ems8z29zn8Q-529DQzEF4a-5OOdcQRoDs5PlnAJIs5wtZqePsTYMxb5XB3bgtEHxsJZv7EQQLD60l_tid5fVxXniGU3Lrk7GNBHt15OtnZd0VttG5Anhrt7JxI2OlmPI5RPbBvUZAIQQDMOywZdhRvWUk53gMH0Icg"/>
+<div class="absolute inset-0 bg-gradient-to-t from-blue-950 via-blue-950/40 to-blue-900/60 mix-blend-multiply"></div>
+<div class="absolute inset-0 hex-grid"></div>
+</div>
+<!-- Scanning Line Effect Overlay -->
+<div class="fixed inset-0 pointer-events-none z-10">
+<div class="scan-line top-1/4"></div>
+<div class="scan-line top-3/4"></div>
+</div>
+<!-- Main Login Canvas -->
+<main class="relative z-20 w-full max-w-md px-6">
+<!-- Header Brand Indicator (Suppressed Nav Shell as per instructions) -->
+<div class="flex flex-col items-center mb-8">
+<div class="w-16 h-16 rounded-xl bg-primary flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(42,94,167,0.5)] border border-blue-400/30">
+<span class="material-symbols-outlined text-white text-4xl" data-icon="grid_view" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+</div>
+<h1 class="text-white text-2xl font-black tracking-[0.2em] uppercase">电信工程BPAI</h1>
+</div>
+<!-- Glassmorphism Card -->
+<div class="glass-panel rounded-2xl p-8 border-t border-blue-400/30">
+<!-- Form Title Section -->
+<div class="mb-8 text-center">
+<h2 class="text-blue-400 font-headline text-2xl font-bold tracking-wider mb-1">电信工程BPAI 系统登录</h2>
+<p class="text-slate-400 text-xs tracking-widest uppercase font-semibold">电信工程BPAI v1.0</p>
+</div>
+<!-- Login Form -->
+<form action="#" class="space-y-6">
+<!-- Username Input -->
+<div class="space-y-2">
+<label class="block text-slate-300 text-xs font-bold uppercase tracking-tighter" for="username">用户名</label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-500 group-focus-within:text-blue-400 transition-colors" data-icon="person">person</span>
+</div>
+<input class="w-full bg-slate-900/50 border-slate-700/50 text-white pl-12 pr-4 py-3 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-slate-600" id="username" placeholder="COMMAND_OFFICER_01" type="text"/>
+</div>
+</div>
+<!-- Password Input -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="block text-slate-300 text-xs font-bold uppercase tracking-tighter" for="password">密码</label>
+<a class="text-[10px] text-blue-500 hover:text-blue-400 transition-colors uppercase font-bold" href="#">忘记密钥?</a>
+</div>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-500 group-focus-within:text-blue-400 transition-colors" data-icon="key">key</span>
+</div>
+<input class="w-full bg-slate-900/50 border-slate-700/50 text-white pl-12 pr-4 py-3 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-slate-600" id="password" placeholder="••••••••••••" type="password"/>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-primary hover:bg-blue-600 text-white font-black py-4 rounded-lg shadow-[0_4px_20px_rgba(42,94,167,0.4)] transition-all active:scale-[0.98] uppercase tracking-widest text-sm flex items-center justify-center gap-2 group" type="submit">
+                    进入指挥中心
+                    <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</form>
+<!-- Status Indicator -->
+<div class="mt-8 pt-6 border-t border-slate-800 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+</div>
+<span class="text-slate-400 text-[10px] font-bold tracking-widest uppercase">正在验证身份...</span>
+</div>
+<div class="text-slate-500 text-[10px] font-mono">
+                    IP: 192.168.1.144
+                </div>
+</div>
+</div>
+<!-- Footer Protocol Links -->
+<footer class="mt-12 flex justify-between items-center px-4">
+<span class="text-slate-500 text-[10px] font-mono uppercase tracking-tighter">© 2024 电信工程BPAI // ENGI-MGMT-SYS</span>
+<div class="flex gap-4">
+<a class="text-slate-500 hover:text-blue-400 text-[10px] font-bold uppercase transition-colors" href="#">Privacy Protocol</a>
+<a class="text-slate-500 hover:text-blue-400 text-[10px] font-bold uppercase transition-colors" href="#">System Logs</a>
+</div>
+</footer>
+</main>
+<!-- Visual Edge Decor -->
+<div class="fixed top-8 left-8 border-l border-t border-blue-500/30 w-12 h-12"></div>
+<div class="fixed top-8 right-8 border-r border-t border-blue-500/30 w-12 h-12"></div>
+<div class="fixed bottom-8 left-8 border-l border-b border-blue-500/30 w-12 h-12"></div>
+<div class="fixed bottom-8 right-8 border-r border-b border-blue-500/30 w-12 h-12"></div>
+<!-- UI Hud Elements (Right Side Decorative) -->
+<div class="hidden lg:block fixed right-12 top-1/2 -translate-y-1/2 space-y-8 opacity-40">
+<div class="text-right">
+<div class="text-[10px] text-blue-400 font-black mb-1">NETWORK_STRENGTH</div>
+<div class="flex gap-1 justify-end">
+<div class="w-1 h-3 bg-blue-500"></div>
+<div class="w-1 h-3 bg-blue-500"></div>
+<div class="w-1 h-3 bg-blue-500"></div>
+<div class="w-1 h-3 bg-blue-500/30"></div>
+</div>
+</div>
+<div class="text-right">
+<div class="text-[10px] text-blue-400 font-black mb-1">LATENCY</div>
+<div class="text-xs text-white font-mono">14ms</div>
+</div>
+<div class="text-right">
+<div class="text-[10px] text-blue-400 font-black mb-1">ENCRYPTION</div>
+<div class="text-xs text-white font-mono">AES-256</div>
+</div>
+</div>
+</body></html>

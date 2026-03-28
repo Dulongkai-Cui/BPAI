@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#f9d8fd",
+                        "surface-variant": "#e2e2e2",
+                        "tertiary-fixed-dim": "#dcbce0",
+                        "surface-tint": "#2a5ea7",
+                        "tertiary-container": "#f9d8fd",
+                        "secondary-fixed": "#dae2f9",
+                        "tertiary": "#6f5575",
+                        "surface-container-high": "#e8e8e8",
+                        "on-secondary-fixed-variant": "#3e4759",
+                        "outline-variant": "#c6c6c6",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#eeeeee",
+                        "on-background": "#1b1b1b",
+                        "on-secondary-container": "#3e4759",
+                        "primary-fixed-dim": "#aac7ff",
+                        "secondary-container": "#dae2f9",
+                        "primary-fixed": "#d6e3ff",
+                        "on-tertiary-container": "#573e5c",
+                        "on-surface-variant": "#474747",
+                        "on-secondary-fixed": "#131c2b",
+                        "on-primary-fixed": "#001b3e",
+                        "on-surface": "#1b1b1b",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#bec6dc",
+                        "outline": "#777777",
+                        "primary-container": "#d6e3ff",
+                        "inverse-surface": "#303030",
+                        "inverse-primary": "#aac7ff",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#573e5c",
+                        "surface-container-low": "#f3f3f3",
+                        "primary": "#2a5ea7",
+                        "background": "#f9f9f9",
+                        "surface-bright": "#f9f9f9",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-tertiary-fixed": "#28132e",
+                        "surface-dim": "#dadada",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#565f71",
+                        "on-primary-container": "#00458d",
+                        "surface": "#f9f9f9",
+                        "on-primary-fixed-variant": "#00458d",
+                        "on-error": "#ffffff"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopNavBar (Shared Component) -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-700 dark:text-blue-300 tracking-tighter">我的BPAI</span>
+<div class="hidden md:flex items-center gap-6 font-sans text-sm font-medium tracking-tight">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">总览</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">工单</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-2" href="#">文档档案室</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors duration-200" href="#">AI宿舍</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined text-slate-600" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined text-slate-600" data-icon="settings">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-slate-200">
+<img alt="User Avatar" data-alt="professional corporate headshot of a middle-aged male architect with glasses in a modern office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCT2MIQVgWKxA7MaHomx3Vb3d8fZGsrG2jdMadUh1i0DPS9Wd3xcKrbfMJtQNxbw3ZurIoKbnRfWLWzIpDE-soHzQJrOu4dH9ZBRuvDdrjchv96GK2As61kw7amoMQXrDCd82V3AAl5QvwocJwYm-TOpsjHXBg-SGsYb3pXljLBBS3lizpXGqpCqOrYDJubATgN9rQ5muM-8uzRUOXFTrdhMS8n-Zh2D5RzhJSCAEop8yRurU0ffoauiuTNQvuK7B--3hHPXBqL8w"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-16 bottom-0 w-64 flex flex-col p-4 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 font-sans text-sm font-normal">
+<div class="mb-8 px-4">
+<h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200">文档中心</h2>
+<p class="text-xs text-slate-500">管理您的所有文件</p>
+</div>
+<div class="space-y-1">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span>我的文档</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="table_chart">table_chart</span>
+<span>我的表格</span>
+</a>
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg px-4 py-2.5 font-semibold hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="architecture">architecture</span>
+<span>我的CAD</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span>合作空间</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="smart_toy">smart_toy</span>
+<span>BP问问</span>
+</a>
+</div>
+<div class="mt-auto p-4 bg-primary-container/30 rounded-xl border border-primary-container/50">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="cloud_done">cloud_done</span>
+<span class="text-xs font-semibold text-primary">存储空间</span>
+</div>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+<div class="bg-primary h-1.5 rounded-full" style="width: 65%"></div>
+</div>
+<p class="text-[10px] text-slate-500">已使用 12.4 GB / 20 GB</p>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 mt-16 p-4 h-[calc(100vh-64px)] overflow-hidden flex flex-col gap-4">
+<!-- Toolbar & Breadcrumbs -->
+<header class="flex items-center justify-between bg-white px-6 py-3 rounded-lg shadow-sm border border-slate-200">
+<div class="flex items-center gap-4">
+<div class="flex items-center text-xs text-slate-500">
+<span>文档档案室</span>
+<span class="material-symbols-outlined text-sm mx-1" data-icon="chevron_right">chevron_right</span>
+<span class="text-slate-900 font-medium">南桥大桥-结构设计图-V2.1.dwg</span>
+</div>
+<span class="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold">LIVE</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex border-r border-slate-200 pr-4 mr-2 gap-1">
+<button class="p-2 hover:bg-slate-100 rounded-lg transition-colors group" title="选择">
+<span class="material-symbols-outlined text-slate-600 group-hover:text-primary" data-icon="near_me">near_me</span>
+</button>
+<button class="p-2 hover:bg-slate-100 rounded-lg transition-colors group" title="测量">
+<span class="material-symbols-outlined text-slate-600 group-hover:text-primary" data-icon="straighten">straighten</span>
+</button>
+<button class="p-2 hover:bg-slate-100 rounded-lg transition-colors group" title="缩放">
+<span class="material-symbols-outlined text-slate-600 group-hover:text-primary" data-icon="zoom_in">zoom_in</span>
+</button>
+<button class="p-2 hover:bg-slate-100 rounded-lg transition-colors group" title="标注">
+<span class="material-symbols-outlined text-slate-600 group-hover:text-primary" data-icon="add_comment">add_comment</span>
+</button>
+<button class="p-2 hover:bg-slate-100 rounded-lg transition-colors group" title="打印">
+<span class="material-symbols-outlined text-slate-600 group-hover:text-primary" data-icon="print">print</span>
+</button>
+</div>
+<button class="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-shadow shadow-md">
+<span class="material-symbols-outlined text-sm" data-icon="share">share</span>
+                    分享图纸
+                </button>
+</div>
+</header>
+<!-- CAD Workbench Layout -->
+<div class="flex-1 flex gap-4 overflow-hidden">
+<!-- Left Panel: Layers & History -->
+<aside class="w-72 flex flex-col gap-4 overflow-y-auto">
+<!-- Layer Management -->
+<section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+<div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+<h3 class="text-xs font-bold text-slate-700 flex items-center gap-2 uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm" data-icon="layers">layers</span>
+                            图层管理
+                        </h3>
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+</button>
+</div>
+<div class="p-2 space-y-1">
+<div class="flex items-center justify-between p-2 bg-blue-50/50 rounded-lg border border-blue-100">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="visibility" data-weight="fill" style="font-variation-settings: 'FILL' 1;">visibility</span>
+<span class="text-sm font-medium text-slate-700">结构层</span>
+</div>
+<div class="w-3 h-3 rounded-full bg-blue-500"></div>
+</div>
+<div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-slate-600 text-sm" data-icon="visibility">visibility</span>
+<span class="text-sm text-slate-600">管线层</span>
+</div>
+<div class="w-3 h-3 rounded-full bg-red-400"></div>
+</div>
+<div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-slate-600 text-sm" data-icon="visibility">visibility</span>
+<span class="text-sm text-slate-600">标注层</span>
+</div>
+<div class="w-3 h-3 rounded-full bg-green-400"></div>
+</div>
+<div class="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors group opacity-50">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-slate-400 text-sm" data-icon="visibility_off">visibility_off</span>
+<span class="text-sm text-slate-600">底图层</span>
+</div>
+<div class="w-3 h-3 rounded-full bg-slate-300"></div>
+</div>
+</div>
+</section>
+<!-- Version History -->
+<section class="bg-white rounded-xl border border-slate-200 shadow-sm flex-1 flex flex-col overflow-hidden">
+<div class="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+<h3 class="text-xs font-bold text-slate-700 flex items-center gap-2 uppercase tracking-wider">
+<span class="material-symbols-outlined text-sm" data-icon="history">history</span>
+                            版本记录
+                        </h3>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4">
+<div class="relative pl-6 border-l-2 border-primary pb-4">
+<div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-primary"></div>
+<div class="flex justify-between items-start">
+<span class="text-xs font-bold text-primary">V2.1 (当前)</span>
+<span class="text-[10px] text-slate-400">2小时前</span>
+</div>
+<p class="text-[11px] text-slate-600 mt-1 leading-relaxed">优化了桥墩支撑部分的受力结构参数，修正了坐标系偏置问题。</p>
+<div class="flex items-center gap-2 mt-2">
+<div class="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold">CL</div>
+<span class="text-[10px] text-slate-500">修改人: 陈工</span>
+</div>
+</div>
+<div class="relative pl-6 border-l-2 border-slate-200 pb-4">
+<div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-slate-200"></div>
+<div class="flex justify-between items-start">
+<span class="text-xs font-bold text-slate-700">V2.0</span>
+<span class="text-[10px] text-slate-400">昨日 14:30</span>
+</div>
+<p class="text-[11px] text-slate-500 mt-1 leading-relaxed">导入初始测绘数据，建立初步空间模型。</p>
+</div>
+<div class="relative pl-6 border-l-2 border-slate-200">
+<div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-slate-200"></div>
+<div class="flex justify-between items-start">
+<span class="text-xs font-bold text-slate-700">V1.0</span>
+<span class="text-[10px] text-slate-400">2023-10-12</span>
+</div>
+<p class="text-[11px] text-slate-500 mt-1 leading-relaxed">项目立项基础底图。</p>
+</div>
+</div>
+</section>
+</aside>
+<!-- CAD Viewport -->
+<div class="flex-1 relative bg-[#121212] rounded-xl overflow-hidden shadow-inner border border-slate-800">
+<!-- CAD Grid Overlay (CSS Pattern) -->
+<div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 40px 40px;"></div>
+<!-- Main Drawing Image -->
+<div class="absolute inset-0 flex items-center justify-center p-8">
+<img alt="CAD Engineering Drawing" class="max-w-full max-h-full object-contain filter invert opacity-90 transition-transform duration-500 hover:scale-105 cursor-crosshair" data-alt="detailed blueprint of a structural bridge engineering design with complex white wireframe lines and technical annotations on a dark architectural background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAywizbx11ohaamPDiiudMl4Kg5QQCKhypbxBtWUy6jBOMVNM8pXXzTXAUpYkSW9lp7dS1owMjnN2lWB2kb6sEmhBfKfrs5WKJEXKL55s8S4HwFtFSTuazvSFxA6oOCITlMuK1Ell-2pblOV_VT-UgEdOCoyVSta5AgpuXs5jmeIN1BwhL0_hg-egLJb9tTu9NJV_USn6nATe7IV4RJZFmCcOqNnFnkdCHxwwNf43nHHfj6Nle2M32TAGznmeDnf4PPdTD84Q9wHA"/>
+</div>
+<!-- CAD HUD Elements -->
+<div class="absolute bottom-6 left-6 flex flex-col gap-2">
+<div class="bg-black/50 backdrop-blur-md text-white text-[10px] font-mono px-3 py-1.5 rounded-lg border border-white/10">
+                        X: 450.231   Y: -12.984   Z: 0.000
+                    </div>
+<div class="flex gap-2">
+<button class="bg-slate-800/80 hover:bg-primary px-3 py-1.5 rounded-lg text-white text-[10px] font-medium transition-colors">
+                            ORTHO: ON
+                        </button>
+<button class="bg-slate-800/80 hover:bg-primary px-3 py-1.5 rounded-lg text-white text-[10px] font-medium transition-colors">
+                            SNAP: 5mm
+                        </button>
+</div>
+</div>
+<div class="absolute top-6 right-6 flex flex-col gap-3">
+<div class="bg-slate-900/90 rounded-xl border border-white/10 p-1 flex flex-col gap-1 shadow-2xl">
+<button class="w-10 h-10 flex items-center justify-center text-white hover:bg-primary rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<div class="h-px bg-white/10 mx-2"></div>
+<button class="w-10 h-10 flex items-center justify-center text-white hover:bg-primary rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<div class="h-px bg-white/10 mx-2"></div>
+<button class="w-10 h-10 flex items-center justify-center text-white hover:bg-primary rounded-lg transition-colors">
+<span class="material-symbols-outlined" data-icon="crop_free">crop_free</span>
+</button>
+</div>
+<div class="bg-slate-900/90 rounded-xl border border-white/10 p-2 flex flex-col items-center shadow-2xl">
+<div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-[10px] text-white font-bold mb-1">
+                            N
+                        </div>
+<div class="w-12 h-12 relative">
+<div class="absolute inset-0 border border-white/20 rounded-full"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-1 bg-primary rounded-full rotate-45"></div>
+</div>
+</div>
+</div>
+<!-- Annotation Overlay Example -->
+<div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none group">
+<div class="relative">
+<div class="w-4 h-4 bg-primary rounded-full animate-pulse"></div>
+<div class="absolute top-6 left-6 w-48 bg-white p-3 rounded-lg shadow-xl border border-slate-200 pointer-events-auto">
+<div class="flex items-center gap-2 mb-1">
+<img alt="User" class="w-4 h-4 rounded-full" data-alt="close-up profile photo of a young professional engineer with a focus on structural details" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDN1VrquTJqcrlmgcZTIgSV8Pc_c_OnCJfJpjcfY-PvUYQL_RNwG2F0ANhveU7vM7ataIPvcDY4T4FzsCzJUIC3oDifuYB0p5XtAkId6gIRuOSsp0dqYO6KNHzcmgwrbgYkQ0krua7Ot1mEpu8MJmu2MNfHBu90a1bcyKe7R0ykbJ72LABaSkgte_EVK7fli5FRx1W3xcmjwc4Sy6U6-qMlrJ8fceqJiixN5lbGubKkDqG16vPwsbP01xJu_3sc1UdnBgd6LT-TyQ"/>
+<span class="text-[10px] font-bold text-slate-800">王经理</span>
+</div>
+<p class="text-[10px] text-slate-600">此处的支撑点间距需要再次核实，根据新的地质勘察报告，可能需要增加 20cm。</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: Comments & Properties -->
+<aside class="w-80 flex flex-col gap-4">
+<section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+<div class="flex border-b border-slate-100">
+<button class="flex-1 py-3 text-[10px] font-bold text-primary border-b-2 border-primary uppercase tracking-widest">属性</button>
+<button class="flex-1 py-3 text-[10px] font-bold text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors">讨论 (4)</button>
+</div>
+<div class="p-4 space-y-6 flex-1 overflow-y-auto">
+<div>
+<h4 class="text-[10px] font-bold text-slate-400 uppercase mb-3">图纸详情</h4>
+<div class="space-y-3">
+<div class="flex justify-between items-center">
+<span class="text-xs text-slate-500">文件名</span>
+<span class="text-xs font-medium text-slate-800">NQ-STR-01.dwg</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-xs text-slate-500">图纸比例</span>
+<span class="text-xs font-medium text-slate-800">1 : 100</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-xs text-slate-500">单位 system</span>
+<span class="text-xs font-medium text-slate-800">Millimeters</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="text-xs text-slate-500">空间模式</span>
+<span class="text-xs font-medium text-slate-800">2D Model Space</span>
+</div>
+</div>
+</div>
+<div>
+<h4 class="text-[10px] font-bold text-slate-400 uppercase mb-3">所选对象</h4>
+<div class="p-3 bg-slate-50 rounded-lg border border-slate-100 italic text-slate-400 text-xs text-center">
+                                未选择任何对象
+                            </div>
+</div>
+<div>
+<h4 class="text-[10px] font-bold text-slate-400 uppercase mb-3">快速工具</h4>
+<div class="grid grid-cols-2 gap-2">
+<button class="flex flex-col items-center gap-1 p-3 border border-slate-200 rounded-lg hover:border-primary hover:bg-blue-50 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary" data-icon="architecture">architecture</span>
+<span class="text-[10px] font-medium text-slate-600">多段线</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-3 border border-slate-200 rounded-lg hover:border-primary hover:bg-blue-50 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary" data-icon="format_shapes">format_shapes</span>
+<span class="text-[10px] font-medium text-slate-600">块管理</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-3 border border-slate-200 rounded-lg hover:border-primary hover:bg-blue-50 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary" data-icon="history_edu">history_edu</span>
+<span class="text-[10px] font-medium text-slate-600">修订云线</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-3 border border-slate-200 rounded-lg hover:border-primary hover:bg-blue-50 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-[10px] font-medium text-slate-600">AI纠错</span>
+</button>
+</div>
+</div>
+</div>
+<div class="p-4 border-t border-slate-100 bg-slate-50/50">
+<button class="w-full py-2.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors shadow-lg shadow-slate-200">
+                            导出 PDF / DWG
+                        </button>
+</div>
+</section>
+</aside>
+</div>
+</main>
+</body></html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "error-container": "#ffdad6",
+              "tertiary-fixed": "#f9d8fd",
+              "surface-variant": "#e2e2e2",
+              "tertiary-fixed-dim": "#dcbce0",
+              "surface-tint": "#2a5ea7",
+              "tertiary-container": "#f9d8fd",
+              "secondary-fixed": "#dae2f9",
+              "tertiary": "#6f5575",
+              "surface-container-high": "#e8e8e8",
+              "on-secondary-fixed-variant": "#3e4759",
+              "outline-variant": "#c6c6c6",
+              "on-tertiary": "#ffffff",
+              "surface-container": "#eeeeee",
+              "on-background": "#1b1b1b",
+              "on-secondary-container": "#3e4759",
+              "primary-fixed-dim": "#aac7ff",
+              "secondary-container": "#dae2f9",
+              "primary-fixed": "#d6e3ff",
+              "on-tertiary-container": "#573e5c",
+              "on-surface-variant": "#474747",
+              "on-secondary-fixed": "#131c2b",
+              "on-primary-fixed": "#001b3e",
+              "on-surface": "#1b1b1b",
+              "error": "#ba1a1a",
+              "on-primary": "#ffffff",
+              "on-error-container": "#93000a",
+              "secondary-fixed-dim": "#bec6dc",
+              "outline": "#777777",
+              "primary-container": "#d6e3ff",
+              "inverse-surface": "#303030",
+              "inverse-primary": "#aac7ff",
+              "inverse-on-surface": "#f1f1f1",
+              "on-secondary": "#ffffff",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "surface-container-low": "#f3f3f3",
+              "primary": "#2a5ea7",
+              "background": "#f9f9f9",
+              "surface-bright": "#f9f9f9",
+              "surface-container-highest": "#e2e2e2",
+              "on-tertiary-fixed": "#28132e",
+              "surface-dim": "#dadada",
+              "surface-container-lowest": "#ffffff",
+              "secondary": "#565f71",
+              "on-primary-container": "#00458d",
+              "surface": "#f9f9f9",
+              "on-primary-fixed-variant": "#00458d",
+              "on-error": "#ffffff"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-shadow { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-700 dark:text-blue-300 tracking-tighter">我的BPAI</span>
+<nav class="hidden md:flex gap-6 items-center h-16">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 font-sans text-sm font-medium tracking-tight h-full flex items-center transition-colors duration-200" href="#">总览</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 font-sans text-sm font-medium tracking-tight h-full flex items-center transition-colors duration-200" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 font-sans text-sm font-medium tracking-tight h-full flex items-center transition-colors duration-200" href="#">工单</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 font-sans text-sm font-medium tracking-tight h-full flex items-center" href="#">文档档案室</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 font-sans text-sm font-medium tracking-tight h-full flex items-center transition-colors duration-200" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
+<input class="pl-9 pr-4 py-1.5 bg-slate-100 dark:bg-slate-800 border-none rounded-full text-xs focus:ring-2 focus:ring-blue-500 w-48 lg:w-64" placeholder="搜索资源..." type="text"/>
+</div>
+<button class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<img alt="User Avatar" class="w-8 h-8 rounded-full border border-slate-200 shadow-sm ml-2" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxlVTM7N7OUP7q_m4UyYS2asEeuu-cTTlpDNZI9QYtl5roitRnWlw-QCWInRpsJazlxR1ENGM8aC6IE0WEiJBC3fupvkdumAU0DgEhq4pCuMIKsyb84HgtUGXdsmRCFY1I6ApJETOYGjq8v-h7AkA98D-hYFyLWwhvFme_IpYECv8Lv7umwguW7-o4unMmVZr-AFAuof38XMGLDLrCuaLt36QssR5VP9eySzN4PtFYNyU7GTT4hGRI-auOTFOH3x99qMqT4dCyww"/>
+</div>
+</header>
+<div class="flex pt-16 h-screen overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 bottom-0 w-64 flex flex-col p-4 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flat no shadows overflow-y-auto">
+<div class="mb-8 px-4 py-2">
+<div class="flex items-center gap-3 mb-1">
+<span class="text-lg font-semibold text-slate-800 dark:text-slate-200 font-sans">文档中心</span>
+</div>
+<p class="text-xs text-slate-500 dark:text-slate-400">管理您的所有文件</p>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all font-sans text-sm font-normal group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-200" data-icon="description">description</span>
+<span>我的文档</span>
+</a>
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg px-4 py-2.5 font-semibold font-sans text-sm" href="#">
+<span class="material-symbols-outlined" data-icon="table_chart">table_chart</span>
+<span>我的表格</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all font-sans text-sm font-normal group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-200" data-icon="architecture">architecture</span>
+<span>我的CAD</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all font-sans text-sm font-normal group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-200" data-icon="group">group</span>
+<span>合作空间</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-2.5 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-lg transition-all font-sans text-sm font-normal group" href="#">
+<span class="material-symbols-outlined group-hover:translate-x-1 duration-200" data-icon="smart_toy">smart_toy</span>
+<span>BP问问</span>
+</a>
+</nav>
+<div class="mt-auto p-4 bg-primary-container/30 rounded-xl border border-primary-container/50">
+<p class="text-[10px] font-bold text-primary mb-1 uppercase tracking-widest">Storage Status</p>
+<div class="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+<div class="bg-primary h-1.5 rounded-full" style="width: 65%"></div>
+</div>
+<p class="text-xs text-on-surface-variant font-medium">12.4 GB / 20 GB Used</p>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 overflow-y-auto bg-slate-50">
+<div class="p-8 max-w-7xl mx-auto">
+<!-- Page Header & Hero Section -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<nav class="flex mb-2 text-xs text-slate-500 gap-2 items-center">
+<span>文档档案室</span>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span class="text-primary font-medium">我的表格</span>
+</nav>
+<h1 class="text-3xl font-extrabold text-on-surface tracking-tight mb-2">项目材料管理系统</h1>
+<p class="text-on-surface-variant max-w-2xl">实时追踪项目材料消耗与预算对比。集成自动化库存预警与多维度数据透视分析。</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-medium shadow-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span>
+<span>新建表格</span>
+</button>
+</div>
+</div>
+<!-- Spreadsheet Interface Container -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+<!-- Toolbar -->
+<div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded border border-slate-200 transition-all">
+<span class="material-symbols-outlined text-lg">filter_alt</span>
+<span>筛选</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded border border-slate-200 transition-all">
+<span class="material-symbols-outlined text-lg">sort</span>
+<span>排序</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded border border-slate-200 transition-all">
+<span class="material-symbols-outlined text-lg">view_column</span>
+<span>列配置</span>
+</button>
+<div class="h-6 w-px bg-slate-200 mx-2"></div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded border border-slate-200 transition-all">
+<span class="material-symbols-outlined text-lg">file_download</span>
+<span>导出</span>
+</button>
+</div>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-sm">search</span>
+<input class="pl-9 pr-4 py-1.5 bg-slate-50 border-slate-200 rounded text-sm focus:ring-1 focus:ring-primary w-full md:w-64" placeholder="在表格中搜索..." type="text"/>
+</div>
+</div>
+<!-- Table UI -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50/50 border-b border-slate-200">
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-12 text-center">
+<input class="rounded border-slate-300 text-primary focus:ring-primary" type="checkbox"/>
+</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">工程编号</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">材料类型</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">预算 (¥)</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">已耗 (¥)</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">进度</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">库存状态</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">操作</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+<!-- Row 1 -->
+<tr class="hover:bg-slate-50/80 transition-colors group">
+<td class="px-6 py-4 text-center">
+<input class="rounded border-slate-300 text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="px-6 py-4 whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">BP</div>
+<span class="font-semibold text-slate-700">BP-2024-001</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">高强度钢材</span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">1,200,000.00</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">845,200.00</td>
+<td class="px-6 py-4 w-40">
+<div class="w-full bg-slate-100 rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 70.4%"></div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-xs font-medium text-green-600">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span>库存充足</span>
+</div>
+</td>
+<td class="px-6 py-4 text-center">
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50/80 transition-colors group">
+<td class="px-6 py-4 text-center">
+<input class="rounded border-slate-300 text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="px-6 py-4 whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-amber-100 flex items-center justify-center text-amber-600 font-bold text-[10px]">BP</div>
+<span class="font-semibold text-slate-700">BP-2024-004</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">纳米绝缘材料</span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">450,000.00</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">412,000.00</td>
+<td class="px-6 py-4">
+<div class="w-full bg-slate-100 rounded-full h-1.5">
+<div class="bg-error h-1.5 rounded-full" style="width: 91.5%"></div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-xs font-medium text-error">
+<span class="w-2 h-2 rounded-full bg-error animate-pulse"></span>
+<span>库存预警</span>
+</div>
+</td>
+<td class="px-6 py-4 text-center">
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50/80 transition-colors group">
+<td class="px-6 py-4 text-center">
+<input class="rounded border-slate-300 text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="px-6 py-4 whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-teal-100 flex items-center justify-center text-teal-600 font-bold text-[10px]">BP</div>
+<span class="font-semibold text-slate-700">BP-2023-112</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">光伏板组件</span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">2,800,000.00</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">1,100,000.00</td>
+<td class="px-6 py-4">
+<div class="w-full bg-slate-100 rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 39.2%"></div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-xs font-medium text-secondary">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span>采购中</span>
+</div>
+</td>
+<td class="px-6 py-4 text-center">
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-slate-50/80 transition-colors group">
+<td class="px-6 py-4 text-center">
+<input class="rounded border-slate-300 text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="px-6 py-4 whitespace-nowrap">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-[10px]">BP</div>
+<span class="font-semibold text-slate-700">BP-2024-009</span>
+</div>
+</td>
+<td class="px-6 py-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">智能温控感应器</span>
+</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">150,000.00</td>
+<td class="px-6 py-4 text-right font-mono text-sm text-slate-700">45,000.00</td>
+<td class="px-6 py-4">
+<div class="w-full bg-slate-100 rounded-full h-1.5">
+<div class="bg-primary h-1.5 rounded-full" style="width: 30%"></div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-1.5 text-xs font-medium text-green-600">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<span>库存充足</span>
+</div>
+</td>
+<td class="px-6 py-4 text-center">
+<button class="text-slate-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Footer / Pagination -->
+<div class="p-4 bg-slate-50/50 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+<p class="text-xs text-slate-500">显示第 1-4 条，共 156 条记录</p>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1 border border-slate-200 rounded text-xs hover:bg-white transition-colors disabled:opacity-50" disabled="">上一页</button>
+<button class="px-3 py-1 bg-primary text-white rounded text-xs font-medium">1</button>
+<button class="px-3 py-1 border border-slate-200 rounded text-xs hover:bg-white transition-colors">2</button>
+<button class="px-3 py-1 border border-slate-200 rounded text-xs hover:bg-white transition-colors">3</button>
+<span class="text-xs text-slate-400">...</span>
+<button class="px-3 py-1 border border-slate-200 rounded text-xs hover:bg-white transition-colors">39</button>
+<button class="px-3 py-1 border border-slate-200 rounded text-xs hover:bg-white transition-colors">下一页</button>
+</div>
+</div>
+</div>
+<!-- Secondary Widgets Bento Style -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold text-slate-500 uppercase tracking-wider">总预算使用率</span>
+<span class="material-symbols-outlined text-primary">pie_chart</span>
+</div>
+<h3 class="text-2xl font-bold text-on-surface">62.8%</h3>
+</div>
+<div class="mt-4">
+<div class="flex justify-between text-xs mb-1">
+<span class="text-slate-500">剩余: ¥1.2M</span>
+<span class="text-slate-700 font-bold">已用: ¥2.1M</span>
+</div>
+<div class="w-full bg-slate-100 rounded-full h-2">
+<div class="bg-primary h-2 rounded-full" style="width: 62.8%"></div>
+</div>
+</div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold text-slate-500 uppercase tracking-wider">活跃项目</span>
+<span class="material-symbols-outlined text-secondary">trending_up</span>
+</div>
+<h3 class="text-2xl font-bold text-on-surface">24</h3>
+</div>
+<div class="mt-4 text-xs text-slate-500">
+                            较上月 <span class="text-green-600 font-bold">+3</span> 个新项目进入材料采购阶段
+                        </div>
+</div>
+<div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+<div class="mb-4">
+<div class="flex items-center justify-between mb-4">
+<span class="text-sm font-bold text-slate-500 uppercase tracking-wider">库存预警</span>
+<span class="material-symbols-outlined text-error">warning</span>
+</div>
+<div class="flex gap-2">
+<div class="flex-1 px-3 py-2 bg-error-container rounded-lg">
+<p class="text-[10px] text-on-error-container font-bold uppercase opacity-70">关键物资</p>
+<p class="text-lg font-bold text-on-error-container">08</p>
+</div>
+<div class="flex-1 px-3 py-2 bg-slate-100 rounded-lg">
+<p class="text-[10px] text-slate-500 font-bold uppercase">常规缺货</p>
+<p class="text-lg font-bold text-slate-700">12</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Decorative Asset -->
+<div class="mt-12 rounded-2xl overflow-hidden relative h-48 group">
+<img class="w-full h-full object-cover grayscale opacity-30 group-hover:opacity-40 transition-opacity duration-700" data-alt="Modern construction site with architectural plans and heavy machinery under soft morning sunlight with high-tech overlays" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQ1aa1ER_1MJmm8ZK6Scxw9qO3drwH28QdN4QRFsA1nxOkqk3XHR6U9CxmsarILl0BsekgSg0GZW1UgJG1Dojze1T1KaGJnNwzInJ7TqVLwxJgC1vV6J7kmlEiaza7ML3l94Opvtvpa6GhFBJfZD6jsve11J-RlMMIESH_3Mi4LufEVyLaN1JC5OfnrTQI6w-eBPPGPVBArh9rD4Dj06lPy6eNYcGmZ_8_glEme_b2nJ5AXpqiMuhLJTea96wSe3kJ-TDjcm7JXw"/>
+<div class="absolute inset-0 bg-gradient-to-r from-slate-900/60 to-transparent flex items-center px-12">
+<div class="max-w-md">
+<h4 class="text-xl font-bold text-white mb-2">BP智能核算引擎</h4>
+<p class="text-slate-300 text-sm">通过AI分析历史采购价格走势，为您提供最佳的采购时机建议。点击开启智能分析模块。</p>
+<button class="mt-4 text-xs font-bold text-white flex items-center gap-2 group/btn">
+                                立即查看 
+                                <span class="material-symbols-outlined text-sm group-hover/btn:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed-variant": "#573e5c",
+              "on-primary": "#ffffff",
+              "on-primary-fixed": "#001b3e",
+              "surface-container-low": "#f3f3f3",
+              "on-primary-fixed-variant": "#00458d",
+              "on-background": "#1b1b1b",
+              "surface-variant": "#e2e2e2",
+              "secondary-fixed-dim": "#bec6dc",
+              "on-tertiary-container": "#573e5c",
+              "on-secondary-container": "#3e4759",
+              "tertiary-fixed-dim": "#dcbce0",
+              "surface-dim": "#dadada",
+              "outline-variant": "#c6c6c6",
+              "inverse-primary": "#aac7ff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "secondary-fixed": "#dae2f9",
+              "tertiary": "#6f5575",
+              "tertiary-container": "#f9d8fd",
+              "surface-container-highest": "#e2e2e2",
+              "on-tertiary-fixed": "#28132e",
+              "surface-tint": "#2a5ea7",
+              "primary-fixed-dim": "#aac7ff",
+              "inverse-on-surface": "#f1f1f1",
+              "tertiary-fixed": "#f9d8fd",
+              "on-secondary-fixed-variant": "#3e4759",
+              "surface-bright": "#f9f9f9",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-error-container": "#93000a",
+              "on-primary-container": "#00458d",
+              "on-error": "#ffffff",
+              "secondary": "#565f71",
+              "error": "#ba1a1a",
+              "on-secondary-fixed": "#131c2b",
+              "surface-container-high": "#e8e8e8",
+              "secondary-container": "#dae2f9",
+              "primary-container": "#d6e3ff",
+              "background": "#f9f9f9",
+              "on-surface": "#1b1b1b",
+              "primary-fixed": "#d6e3ff",
+              "outline": "#777777",
+              "on-surface-variant": "#474747",
+              "surface-container": "#eeeeee",
+              "inverse-surface": "#303030",
+              "surface": "#f9f9f9",
+              "primary": "#2a5ea7"
+            },
+            fontFamily: {
+              "headline": ["Inter", "sans-serif"],
+              "body": ["Inter", "sans-serif"],
+              "label": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-40 flex justify-between items-center px-6 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm dark:shadow-none border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-600 dark:text-blue-400 tracking-tighter">我的BPAI</span>
+<nav class="hidden md:flex items-center gap-6 font-sans text-sm font-medium tracking-tight">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">总览</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 pb-1" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">工单</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">文档档案馆</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-slate-400">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container rounded-full border-none text-sm focus:ring-2 focus:ring-primary/20 w-64" placeholder="搜索资源或日志..." type="text"/>
+</div>
+<button class="p-2 rounded-full hover:bg-slate-50 transition-colors"><span class="material-symbols-outlined text-slate-600">notifications</span></button>
+<button class="p-2 rounded-full hover:bg-slate-50 transition-colors"><span class="material-symbols-outlined text-slate-600">settings</span></button>
+<img alt="管理员头像" class="w-8 h-8 rounded-full border border-slate-200" data-alt="professional corporate headshot of a facility manager in a clean modern office setting with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDknDelBA8XFUQO3ob6ImSbqmVK8n6dCSmxXeieeMlh_ls_UeaDTYILpsXAavmwUs3oSeYdWTk2nH_Aco8bbNvsqzED24Red-5od8NHNNZN979gAweULL4fQwSSXgWqD6SXOp_QuQmeguhWr3MCZo5TAwHNdZR7F1E2Ol4CHqTRT6pIj28xryJXDXYnww-VBkDk878xSiT3DiDyTkoEi-0UMncUN6sHcP3eaZil7WmNHg_2wqAdcPVX3xVmtzjXsgp_MIb6A5Szkg"/>
+</div>
+</header>
+<div class="flex">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col pt-20 pb-6 w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 z-30">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm">construction</span>
+</div>
+<span class="text-lg font-bold text-slate-800 dark:text-slate-100">基地管理</span>
+</div>
+<p class="text-xs text-slate-500 uppercase tracking-widest font-semibold">工程队调度中心</p>
+</div>
+<nav class="flex-1 px-3 space-y-1 font-sans text-sm">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>部门总览</span>
+</a>
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold rounded-lg px-4 py-3" href="#">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span>工程队日志</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span>工程队仓库</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="videocam">videocam</span>
+<span>现场施工监控</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+<span>BP问问</span>
+</a>
+</nav>
+<div class="px-6 mt-auto">
+<div class="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+<p class="text-xs font-bold text-slate-400 mb-2 uppercase tracking-tighter">今日排班</p>
+<div class="flex -space-x-2">
+<img alt="Worker A" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900" data-alt="professional avatar of a technician in work safety gear" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXfKc_j2BKBb65ebqqP8LzckLJl8XE5JLZTVZr67hfyBNoPAJh7lY-OZdWH6YY9dNBLx5Ainh97DMcm-T1RgfzfJV1yED8I2PouoxnSU2IZpielIFe043wA3J3vbw1GxdcEpWRMkbobc8REl7whwBdJI7PK4nfkBMVT_ivzBTL7qhEDfrIzmkLq85mq2l1prUPKO_HQvR5dK21CJxtpnOo1iFyEHOeDz9D6zWfHNP7iRiqR6o91Xi7rtsZ6ahOhltAiJ_C521pJA"/>
+<img alt="Worker B" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900" data-alt="professional avatar of an electrical engineer wearing a hard hat" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPA82M7QxD9Gbf2z3EXQu3LcwXoHNAWtj6Jg-95b_JRKVzUEgQrRsHD61eXmTs-oUte2eu_gy_PdqQ96ru1RjkZxpO7OYoPjkwCNTzAgk_nvsl3EiH5IfT4UPNB-4K2bAKEpLJD_oKMEQN_neASVXh0od4dm9rM-f_m32t6xEY-D_A4NRcJEE-hiVfspPSGHV_9ZUQhScYWtyJMcI9KVSVRwMMCkQ3M8LV0GHTYafcHTzWlskxinPutPcVNJXF_CFpCexkjqEpzA"/>
+<div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] font-bold">+12</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 flex-1 p-8">
+<div class="max-w-5xl mx-auto">
+<header class="mb-10 flex justify-between items-end">
+<div>
+<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">工程队日志</h1>
+<p class="text-slate-500 font-medium">实时同步现场作业动态与资源流动详情</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 flex items-center gap-2 hover:bg-slate-50 shadow-sm transition-all">
+<span class="material-symbols-outlined text-sm">filter_list</span> 筛选
+                        </button>
+<button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 shadow-md shadow-primary/20 transition-all">
+<span class="material-symbols-outlined text-sm">add</span> 新建日志
+                        </button>
+</div>
+</header>
+<!-- Status Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+<div class="col-span-1 p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+<span class="material-symbols-outlined">bolt</span>
+</div>
+<span class="text-xs font-bold text-green-500 bg-green-50 px-2 py-1 rounded-full">进行中</span>
+</div>
+<div>
+<p class="text-slate-500 text-sm font-medium">当前施工节点</p>
+<h3 class="text-2xl font-bold text-slate-900">芙蓉区 4B 节点</h3>
+</div>
+</div>
+<div class="col-span-1 p-6 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-orange-50 text-orange-600 rounded-lg">
+<span class="material-symbols-outlined">inventory</span>
+</div>
+</div>
+<div>
+<p class="text-slate-500 text-sm font-medium">物料消耗 (当日)</p>
+<h3 class="text-2xl font-bold text-slate-900">10kV 电缆 500m</h3>
+</div>
+</div>
+<div class="col-span-1 p-6 bg-primary text-white rounded-2xl shadow-lg shadow-primary/20 flex flex-col justify-between relative overflow-hidden">
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-white/20 rounded-lg">
+<span class="material-symbols-outlined">health_and_safety</span>
+</div>
+</div>
+<p class="text-white/80 text-sm font-medium">安全运行天数</p>
+<h3 class="text-3xl font-black">1,248 天</h3>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-10">
+<span class="material-symbols-outlined text-9xl">verified_user</span>
+</div>
+</div>
+</div>
+<!-- Timeline Section -->
+<div class="relative pl-8">
+<!-- Timeline Line -->
+<div class="absolute left-3 top-0 bottom-0 w-px bg-slate-200"></div>
+<!-- Logs -->
+<div class="space-y-8">
+<!-- Log Item 1 -->
+<div class="relative">
+<div class="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-white border-4 border-primary"></div>
+<div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
+<div class="text-sm font-bold text-slate-400 w-16 pt-1">08:30</div>
+<div class="flex-1">
+<h4 class="font-bold text-slate-800 mb-1 flex items-center gap-2">
+                                        班前安全早会
+                                        <span class="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] rounded uppercase font-bold">每日例行</span>
+</h4>
+<p class="text-slate-600 text-sm">全员签到完成。重点强调了芙蓉区4B节点的高空作业安全规范及熔接设备维护。</p>
+<div class="mt-3 flex gap-2">
+<div class="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded text-[11px] text-slate-500 border border-slate-100">
+<span class="material-symbols-outlined text-xs">group</span> 18人参与
+                                        </div>
+<div class="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded text-[11px] text-slate-500 border border-slate-100">
+<span class="material-symbols-outlined text-xs">check_circle</span> 0异常
+                                        </div>
+</div>
+</div>
+</div>
+</div>
+<!-- Log Item 2 -->
+<div class="relative">
+<div class="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-white border-4 border-green-500"></div>
+<div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
+<div class="text-sm font-bold text-slate-400 w-16 pt-1">10:15</div>
+<div class="flex-1">
+<h4 class="font-bold text-slate-800 mb-1">芙蓉区 4B 节点主干光缆熔接完成</h4>
+<p class="text-slate-600 text-sm">完成测试，损耗均值控制在0.02dB以内，符合一级交付标准。</p>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="h-24 rounded-lg bg-slate-100 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="technician in safety vest using high-precision fiber optic fusion splicer in an urban utility setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlw-kIzBg3W86jC0NUWRzUoGgqhps_0BSS0MoSUa2BAvRZ18bwEF9ZW4sRzJObwy6RS5HZVi8X_E37uIdkokHU7C3JEV0qdhxonB6tw4wiMCRa08d4F9AwWFh2tdn0X9BvpU6vmZ-JlQR0qzH-EHneBgqqxs5FI1afh0K5NyGyg1PO-kqFeMpnBj7tsreCSfeYljtz6tv_mReVzOn9LrBVg86LVFH1xwiTSIuwRn54dGKp-MXVxI8Iuae7S-IYawjrBi7Kk4RZIQ"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-all"></div>
+</div>
+<div class="h-24 rounded-lg bg-slate-100 overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="close up screen of an OTDR optical fiber tester showing a clean signal graph with minimal loss" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZj55qR28a649Yso0QgZG-qx3tfTEmQkReWX7V3_h00LxibfcILq1lBO0gvjw6jl8xiko7xnbGK19YvFfSkbU8sqt9mG8MbMqiwSVezO0EU-_H2VoVLhISdjKey6l91eoNWm3rIJLHJ_gscLNo2QGRwHopSVxYMxocI9tRdQpn7qeiGzBhQG4D-2K3_K_9kncNuZpiEV1LvyzqK9NQ18LzwDuAf1g0lHafKAkd5pDiyqsA-RtSMstO3wVQggk7htcCvUEtPEByBA"/>
+<div class="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-all"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Log Item 3 -->
+<div class="relative">
+<div class="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-white border-4 border-orange-400"></div>
+<div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
+<div class="text-sm font-bold text-slate-400 w-16 pt-1">13:45</div>
+<div class="flex-1">
+<h4 class="font-bold text-slate-800 mb-1">应急抢修车 湘A·88888 归还</h4>
+<p class="text-slate-600 text-sm">车辆已入库，油位85%，已完成基础清洁，状态正常，可随时待命。</p>
+<div class="mt-2 text-xs font-mono bg-amber-50 text-amber-700 px-3 py-1.5 rounded-md inline-block">
+                                        经办人：王大伟 (调度员)
+                                    </div>
+</div>
+</div>
+</div>
+<!-- Log Item 4 -->
+<div class="relative">
+<div class="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-white border-4 border-purple-500"></div>
+<div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-4 transition-all hover:shadow-md">
+<div class="text-sm font-bold text-slate-400 w-16 pt-1">15:20</div>
+<div class="flex-1">
+<h4 class="font-bold text-slate-800 mb-1">A队领取 10kV电力电缆 500m</h4>
+<p class="text-slate-600 text-sm">出库用于明晨“高新路南段”紧急扩容工程。物料单号：RE-20231024-09。</p>
+<div class="mt-3 flex items-center gap-4 text-xs text-slate-400">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">local_shipping</span> 仓储部</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">history</span> 库存剩余: 2,400m</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Log Item 5 -->
+<div class="relative">
+<div class="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-white border-4 border-blue-400"></div>
+<div class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm flex items-start gap-4 transition-all hover:shadow-md border-l-4 border-l-blue-400">
+<div class="text-sm font-bold text-slate-400 w-16 pt-1">17:00</div>
+<div class="flex-1">
+<h4 class="font-bold text-slate-800 mb-1">施工现场安全巡检，未发现违章</h4>
+<p class="text-slate-600 text-sm">巡检覆盖所有正在作业点位。对防护具穿戴、临时用电接线进行了专项抽查，全部合格。</p>
+<div class="mt-3 py-2 px-3 bg-green-50 rounded-lg flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-green-600 text-sm">verified</span>
+<span class="text-xs font-bold text-green-700">安全合规</span>
+</div>
+<span class="text-[10px] text-green-600 font-medium">巡检人：赵志强 (安全员)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Footer Load More -->
+<div class="mt-12 text-center">
+<button class="px-6 py-2 border border-slate-200 rounded-full text-sm font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors">
+                        查看历史日志
+                    </button>
+</div>
+</div>
+</main>
+</div>
+</body></html>

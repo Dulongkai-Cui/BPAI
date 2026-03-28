@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#3e4759",
+              "tertiary-container": "#f9d8fd",
+              "surface": "#f9f9f9",
+              "secondary-container": "#dae2f9",
+              "background": "#f9f9f9",
+              "outline-variant": "#c6c6c6",
+              "on-primary": "#ffffff",
+              "on-surface": "#1b1b1b",
+              "on-error": "#ffffff",
+              "surface-variant": "#e2e2e2",
+              "inverse-primary": "#aac7ff",
+              "on-tertiary-fixed": "#28132e",
+              "on-primary-fixed-variant": "#00458d",
+              "primary-container": "#d6e3ff",
+              "on-background": "#1b1b1b",
+              "primary-fixed-dim": "#aac7ff",
+              "primary": "#2a5ea7",
+              "on-secondary": "#ffffff",
+              "tertiary-fixed-dim": "#dcbce0",
+              "surface-container-low": "#f3f3f3",
+              "surface-container-highest": "#e2e2e2",
+              "outline": "#777777",
+              "on-error-container": "#93000a",
+              "surface-tint": "#2a5ea7",
+              "error-container": "#ffdad6",
+              "surface-dim": "#dadada",
+              "secondary": "#565f71",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "secondary-fixed-dim": "#bec6dc",
+              "primary-fixed": "#d6e3ff",
+              "secondary-fixed": "#dae2f9",
+              "surface-container-lowest": "#ffffff",
+              "inverse-surface": "#303030",
+              "on-secondary-fixed": "#131c2b",
+              "surface-container": "#eeeeee",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-container": "#3e4759",
+              "tertiary-fixed": "#f9d8fd",
+              "on-primary-fixed": "#001b3e",
+              "inverse-on-surface": "#f1f1f1",
+              "on-tertiary": "#ffffff",
+              "surface-container-high": "#e8e8e8",
+              "on-surface-variant": "#474747",
+              "on-primary-container": "#00458d",
+              "tertiary": "#6f5575",
+              "on-tertiary-container": "#573e5c",
+              "error": "#ba1a1a"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center space-x-8">
+<span class="text-xl font-bold text-blue-700 dark:text-blue-500 tracking-tight">BPAI系统</span>
+<nav class="hidden md:flex items-center space-x-6 text-sm">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">总览</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">工程队</a>
+<a class="text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-600 pb-1" href="#">工单</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">文档档案馆</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<div class="relative group">
+<span class="material-symbols-outlined text-outline p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-all duration-200 ease-in-out active:scale-95">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</div>
+<span class="material-symbols-outlined text-outline p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg cursor-pointer transition-all duration-200 ease-in-out active:scale-95">settings</span>
+<div class="h-8 w-8 rounded-full bg-primary-container overflow-hidden border border-outline-variant">
+<img alt="User Profile" data-alt="professional corporate headshot of a friendly business manager in a minimalist studio setting with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4kWgq-sKlDayxBicjmsXqRzRtTOPjdH8icjYQv1puv8M7F7WhY9HTHHzPincz8snSYQiDvACw2u-Xr-fR7FOSQEN-UWZWZM88xiTV8YyzVDcc5unttHu2nGSJAjXc_8roLsPugTUJ4Gf8b6Jo8-CZGO2i-s2fEta2U5eLvqoJpfLuJy3L4_MFRQ3PgiSOm1XuZc7PKIo1OqVhHtZR-obVPd-L2WxbRS3orOOnNbEA4it3Y4FPs_pWCP-1V7VoVxeBBgXhvnwRKA"/>
+</div>
+</div>
+</header>
+<div class="flex pt-16">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col p-4 space-y-2">
+<div class="px-4 py-4 mb-2">
+<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200">工单中心</h2>
+<p class="text-xs text-slate-500 dark:text-slate-400">工单管理与AI助手</p>
+</div>
+<a class="flex items-center space-x-3 text-slate-500 dark:text-slate-500 px-4 py-3 opacity-80 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">list_alt</span>
+<span class="text-sm font-medium">全部工单</span>
+</a>
+<a class="flex items-center space-x-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-xl px-4 py-3 hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">pending_actions</span>
+<span class="text-sm font-medium">正在跟进</span>
+</a>
+<a class="flex items-center space-x-3 text-slate-500 dark:text-slate-500 px-4 py-3 opacity-80 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">task_alt</span>
+<span class="text-sm font-medium">已完成归档</span>
+</a>
+<a class="flex items-center space-x-3 text-slate-500 dark:text-slate-500 px-4 py-3 opacity-80 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">warning</span>
+<span class="text-sm font-medium">异常工单</span>
+</a>
+<div class="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800">
+<a class="flex items-center space-x-3 text-slate-500 dark:text-slate-500 px-4 py-3 opacity-80 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 rounded-xl hover:translate-x-1 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="text-sm font-medium">BP问问</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 flex-1 p-8 bg-surface">
+<div class="max-w-6xl mx-auto">
+<header class="mb-8 flex justify-between items-end">
+<div>
+<h1 class="text-2xl font-extrabold text-on-surface tracking-tight mb-2">正在跟进的工单</h1>
+<p class="text-on-surface-variant">当前共有 <span class="text-primary font-bold">12</span> 个任务处于活跃状态，涉及 4 个施工队。</p>
+</div>
+<div class="flex space-x-3">
+<button class="bg-primary text-on-primary px-4 py-2 rounded-xl text-sm font-medium flex items-center space-x-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">add</span>
+<span>新建工单</span>
+</button>
+</div>
+</header>
+<!-- Status Tabs / Filter Chips -->
+<div class="flex space-x-4 mb-6">
+<span class="px-4 py-1.5 bg-primary-container text-on-primary-container rounded-full text-xs font-semibold">全部跟进中</span>
+<span class="px-4 py-1.5 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-medium hover:bg-surface-variant cursor-pointer">施工中 (7)</span>
+<span class="px-4 py-1.5 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-medium hover:bg-surface-variant cursor-pointer">待验收 (3)</span>
+<span class="px-4 py-1.5 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-medium hover:bg-surface-variant cursor-pointer">流转中 (2)</span>
+</div>
+<!-- Bento Grid for Active Work Orders -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Work Order Card 1: Processing -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center space-x-2 mb-1">
+<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">施工中</span>
+<span class="text-xs text-outline font-mono">#WO-20231024-001</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface group-hover:text-primary transition-colors">核心机房空调系统扩容</h3>
+</div>
+<button class="text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<!-- Progress Section -->
+<div class="mb-6">
+<div class="flex justify-between text-xs mb-2">
+<span class="text-on-surface-variant">施工进度</span>
+<span class="font-bold text-primary">65%</span>
+</div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-sm mb-6">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-lg" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">负责人</p>
+<p class="font-semibold text-on-surface">张建设</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-lg">event</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">预计完成</p>
+<p class="font-semibold text-on-surface">2023-11-05</p>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/20">
+<div class="flex -space-x-2">
+<img alt="team" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="close-up portrait of a professional engineer wearing a safety helmet and reflective vest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9uGgGBiwwqeCrb_Lb0thEV-uAQjbbTN6rOfJt1sfjJfUOdqpnaAfgaplhIZXWnoDiEfsZ-xES4csx1cmXsJk0UJVVgwJjinZ7c5Gk5xjS7lU_ZendIAYiX7vIknzVFTF2ePvti3VqXoeScfqIYIScOFVAqPbvAsCS61UpHB5SLUu-MLLoBOoO4wrFREM-w-EFYdmMP2B-sShT2cCSussS-sWmPIFKhonASE3y7ZwQ9q16RwVR4V5oThiXZXHsw0XkLl3bQaUXnw"/>
+<img alt="team" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="professional architect portrait in a modern design office environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCT0YtUE0pGMhKtNRXd3en6VGDCmVlbHaGbP8e1YKRTY_PdkKhm9WaVFRHeWsOjoMVCNqWNjzPl_VAo3BmrVz5_6YDUBljhjyEpcs-DHdA1_4QHZghZMrL-Doyf2vZN31_KyS7vdJQq4_mnvqALcoZ-A9rxr6qtia6iaqM-MBIXyKb2Xn3Fbqp1YnYYVMkD4ilME87Uhhn4yWgsjJbjk4pjWHnIm2L71aiUrEPplOdoKIch6GKmrN-0-9WGYp67bNvOz5qQqDDdnw"/>
+<div class="w-7 h-7 rounded-full bg-surface-container border-2 border-surface-container-lowest flex items-center justify-center text-[10px] font-bold text-outline">+3</div>
+</div>
+<button class="text-primary text-xs font-bold flex items-center hover:underline">
+                                查看详情 <span class="material-symbols-outlined text-sm ml-1">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Work Order Card 2: Pending Acceptance -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center space-x-2 mb-1">
+<span class="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded uppercase">待验收</span>
+<span class="text-xs text-outline font-mono">#WO-20231022-042</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface group-hover:text-primary transition-colors">A3办公楼外墙亮化调试</h3>
+</div>
+<button class="text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="mb-6">
+<div class="flex justify-between text-xs mb-2">
+<span class="text-on-surface-variant">验收准备度</span>
+<span class="font-bold text-amber-600">95%</span>
+</div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
+<div class="bg-amber-500 h-full rounded-full" style="width: 95%"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-sm mb-6">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-lg" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">负责人</p>
+<p class="font-semibold text-on-surface">李工</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-lg">event</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">验收排期</p>
+<p class="font-semibold text-on-surface">2023-10-28</p>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/20">
+<div class="flex items-center text-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-sm mr-1 text-green-600">check_circle</span>
+                                预检已通过
+                            </div>
+<button class="bg-primary-container text-on-primary-container px-3 py-1.5 rounded-lg text-xs font-bold hover:brightness-95 transition-all">
+                                立即验收
+                            </button>
+</div>
+</div>
+<!-- Work Order Card 3: Transferring/Routing -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group lg:col-span-2">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+<div class="flex-1">
+<div class="flex items-center space-x-2 mb-1">
+<span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded uppercase">流转中</span>
+<span class="text-xs text-outline font-mono">#WO-20231024-089</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface group-hover:text-primary transition-colors">宿舍区5G信号基站迁移方案审批</h3>
+<p class="text-xs text-on-surface-variant mt-2">待审核环节：<span class="font-semibold">AI宿舍管理办</span> (当前停留 18小时)</p>
+</div>
+<div class="flex-shrink-0 flex items-center space-x-8">
+<div class="flex flex-col items-center">
+<div class="flex items-center space-x-2 text-primary">
+<div class="w-8 h-8 rounded-full border-2 border-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-sm">edit</span>
+</div>
+<div class="w-12 h-[2px] bg-primary"></div>
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-sm">visibility</span>
+</div>
+<div class="w-12 h-[2px] bg-outline-variant"></div>
+<div class="w-8 h-8 rounded-full border-2 border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-outline text-sm">task</span>
+</div>
+</div>
+<div class="flex justify-between w-full px-1 mt-1 text-[10px] text-outline font-medium">
+<span>起草</span>
+<span>审核</span>
+<span>执行</span>
+</div>
+</div>
+<div class="border-l border-outline-variant h-12 hidden md:block"></div>
+<div class="flex flex-col text-right">
+<p class="text-[10px] text-outline leading-none mb-1">当前节点负责人</p>
+<p class="font-bold text-on-surface">王志远 (主管)</p>
+<button class="mt-2 text-xs font-bold text-primary hover:text-primary-container">催办</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Work Order Card 4: Construction -->
+<div class="bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center space-x-2 mb-1">
+<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase">施工中</span>
+<span class="text-xs text-outline font-mono">#WO-20231023-112</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface group-hover:text-primary transition-colors">地下车库监控探头增设</h3>
+</div>
+<button class="text-outline hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="mb-6">
+<div class="flex justify-between text-xs mb-2">
+<span class="text-on-surface-variant">施工进度</span>
+<span class="font-bold text-primary">20%</span>
+</div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 20%"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 text-sm mb-6">
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-lg" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">负责人</p>
+<p class="font-semibold text-on-surface">赵强</p>
+</div>
+</div>
+<div class="flex items-center space-x-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-lg">event</span>
+</div>
+<div>
+<p class="text-[10px] text-outline leading-none mb-1">预计完成</p>
+<p class="font-semibold text-on-surface">2023-11-12</p>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between pt-4 border-t border-outline-variant/20">
+<div class="flex items-center space-x-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-[10px] font-semibold text-error">物料运输延迟</span>
+</div>
+<button class="text-primary text-xs font-bold flex items-center hover:underline">
+                                查看详情 <span class="material-symbols-outlined text-sm ml-1">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Floating Action Button (FAB) - Suppressed as per instructions for 'Details/Transactional' or focused lists if relevant, but as this is a high level Dashboard list, we keep the primary 'Add' action in the header above. -->
+</body></html>

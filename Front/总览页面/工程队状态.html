@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>我的BPAI - 工程队状态</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#ffffff",
+              "outline": "#777777",
+              "on-primary": "#ffffff",
+              "primary-fixed-dim": "#aac7ff",
+              "tertiary": "#6f5575",
+              "surface-container-highest": "#e2e2e2",
+              "on-background": "#1b1b1b",
+              "inverse-surface": "#303030",
+              "surface-container-high": "#e8e8e8",
+              "on-error": "#ffffff",
+              "on-primary-fixed-variant": "#00458d",
+              "on-secondary-fixed": "#131c2b",
+              "secondary-container": "#dae2f9",
+              "on-surface-variant": "#474747",
+              "error-container": "#ffdad6",
+              "surface-container-lowest": "#ffffff",
+              "inverse-on-surface": "#f1f1f1",
+              "on-surface": "#1b1b1b",
+              "on-primary-fixed": "#001b3e",
+              "on-primary-container": "#00458d",
+              "secondary": "#565f71",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#bec6dc",
+              "primary-container": "#d6e3ff",
+              "on-error-container": "#93000a",
+              "primary-fixed": "#d6e3ff",
+              "surface-dim": "#dadada",
+              "primary": "#2a5ea7",
+              "surface-tint": "#2a5ea7",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed-variant": "#3e4759",
+              "inverse-primary": "#aac7ff",
+              "surface-container": "#eeeeee",
+              "outline-variant": "#c6c6c6",
+              "background": "#f9f9f9",
+              "tertiary-container": "#f9d8fd",
+              "surface": "#f9f9f9",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#3e4759",
+              "surface-variant": "#e2e2e2",
+              "surface-container-low": "#f3f3f3",
+              "tertiary-fixed": "#f9d8fd",
+              "on-tertiary-container": "#573e5c",
+              "tertiary-fixed-dim": "#dcbce0",
+              "on-tertiary-fixed": "#28132e",
+              "secondary-fixed": "#dae2f9"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="font-inter antialiased text-on-surface">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center px-6 h-16 w-full fixed top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+<div class="flex items-center gap-4">
+<span class="text-xl font-bold tracking-tight text-blue-700">我的BPAI</span>
+<nav class="hidden md:flex items-center space-x-6 ml-8 text-sm font-medium">
+<a class="text-blue-600 border-b-2 border-blue-600 pb-1" href="#">总览</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">文档档案室</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-full border border-slate-200 focus:ring-2 focus:ring-primary text-sm w-64 bg-slate-50" placeholder="搜索资源..." type="text"/>
+</div>
+<div class="flex items-center space-x-3">
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 py-4 flex flex-col bg-slate-50 border-r border-slate-200 z-40">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-black text-blue-600">总览控制台</h2>
+<p class="text-xs text-slate-500 mt-1">实时监控网络</p>
+</div>
+<nav class="flex-1 px-3 space-y-1 text-sm">
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./全城实时地图.html">
+<span class="material-symbols-outlined">map</span>
+<span>全城实时地图</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 bg-blue-50 text-blue-700 font-semibold border-r-4 border-blue-600 transition-transform translate-x-1" href="./工程队状态.html">
+<span class="material-symbols-outlined">group_work</span>
+<span>工程队状态</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./预警中心.html">
+<span class="material-symbols-outlined">warning</span>
+<span>预警中心</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./BP问问.html">
+<span class="material-symbols-outlined">psychology</span>
+<span>BP问问</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600" href="./设置.html">
+<span class="material-symbols-outlined">settings</span>
+<span>设置</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs text-slate-500">系统稳定性</span>
+<span class="text-xs font-bold text-green-600">99.8%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-blue-600 h-full w-[99.8%]"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-24 px-8 pb-12 min-h-screen">
+<div class="max-w-7xl mx-auto">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">工程队运行状态</h1>
+<p class="text-slate-500 mt-1">实时负载均衡与各区域节点运行健康度分析。</p>
+</div>
+<div class="flex gap-2 bg-slate-200/50 rounded-lg p-1">
+<button class="px-4 py-1.5 text-xs font-bold bg-white shadow-sm rounded-md text-blue-600">全部团队</button>
+<button class="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors">现场运维</button>
+<button class="px-4 py-1.5 text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors">核心工程</button>
+</div>
+</div>
+<!-- Bento Grid of Team Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Team Card 1: North Regional Hub (Green) -->
+<div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+<span class="material-symbols-outlined">apartment</span>
+</div>
+<div>
+<h3 class="font-bold text-lg text-slate-800">北部区域中心</h3>
+<p class="text-xs text-slate-500">西雅图, 华盛顿州</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-full tracking-wider">运行良好</span>
+</div>
+<div class="h-32 w-full mb-6 rounded-xl overflow-hidden grayscale opacity-70 border border-slate-100">
+<img class="w-full h-full object-cover" data-alt="clean minimal city map layout of Seattle with blue markers and simplified street lines" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyqiulWACEn-FTALD4yGmY2BDfV0mR4_fyDWfbc5YfnReVppSQu1dFKLTNXIEsgPKeRM4gduutSVmzZbtsjEmQAdUGvYUTQxAmH_zfqU9i4dxXhoYus3bP64iYMNBG03AFWg4ijYTCIMUcwALhPaggAO_iX8-dBQDT-dM7U1teAo57mALTllljHig_SUCEbQ3bv_puybf3LBSnY5F3BMkU3OTCosPXwcmWfDz7FGSXyilFtim4Vktx16sUH2dVKhq0St5nSle3mA"/>
+</div>
+<div class="space-y-4 flex-grow">
+<div>
+<div class="flex justify-between text-xs font-semibold mb-1">
+<span>人员负载</span>
+<span>64%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full">
+<div class="bg-blue-600 h-2 rounded-full" style="width: 64%"></div>
+</div>
+</div>
+<div class="bg-slate-50 rounded-lg p-3 border border-slate-100">
+<p class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-tight">当前任务</p>
+<p class="text-sm font-medium text-slate-800">5G 节点维护 - 4B 区块</p>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400 text-sm mt-0.5">history</span>
+<p class="text-xs text-slate-500 italic">"站点检查于 09:12 PST 完成。所有收发器处于正常参数范围内。"</p>
+</div>
+</div>
+<!-- Team Card 2: East Coast Matrix (Yellow) -->
+<div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+<span class="material-symbols-outlined">hub</span>
+</div>
+<div>
+<h3 class="font-bold text-lg text-slate-800">东海岸矩阵</h3>
+<p class="text-xs text-slate-500">纽约, 纽约州</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold uppercase rounded-full tracking-wider">预警</span>
+</div>
+<div class="h-32 w-full mb-6 rounded-xl overflow-hidden grayscale opacity-70 border border-slate-100">
+<img class="w-full h-full object-cover" data-alt="modern bridge and city architecture of New York Manhattan skyline in muted tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7eO9sklz0l6rgiXnI84hDJNIMVI1OZbq4UNyRAmtQRLskAq2d4yOyQdIwQhyPcv8kCOxW2NgzCIQax8wliLJ7tbvhPBewczOhaYkn76Sx3SAmYLOEldMV3vzr3YhxOM4EEPCEVEalTVygWghlNfrtvnYmL-ANk1CDXrO5_kqWhdCWVkkA-Cs0TDFZ-eLoXuvjvG5FP35atWWdLuhMAbqOmwxljQQ1_oVGp4DlXFDWWVbJjx0ptVjVPEVavY1h7fUA-PaiyeDfvw"/>
+</div>
+<div class="space-y-4 flex-grow">
+<div>
+<div class="flex justify-between text-xs font-semibold mb-1">
+<span>人员负载</span>
+<span>89%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full">
+<div class="bg-amber-500 h-2 rounded-full" style="width: 89%"></div>
+</div>
+</div>
+<div class="bg-slate-50 rounded-lg p-3 border border-slate-100">
+<p class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-tight">当前任务</p>
+<p class="text-sm font-medium text-slate-800">紧急光纤修复 - 布朗克斯电网</p>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400 text-sm mt-0.5">history</span>
+<p class="text-xs text-slate-500 italic">"检测到过载。请求为晚班增派 2 名现场技术人员。"</p>
+</div>
+</div>
+<!-- Team Card 3: Central Data Core (Red) -->
+<div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
+<span class="material-symbols-outlined">dns</span>
+</div>
+<div>
+<h3 class="font-bold text-lg text-slate-800">中央数据核心</h3>
+<p class="text-xs text-slate-500">芝加哥, 伊利诺伊州</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-red-100 text-red-700 text-[10px] font-bold uppercase rounded-full tracking-wider">危急</span>
+</div>
+<div class="h-32 w-full mb-6 rounded-xl overflow-hidden grayscale opacity-70 border border-slate-100">
+<img class="w-full h-full object-cover" data-alt="industrial architectural details of Chicago with steel and glass in a professional photography style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJ9n6uUQCHhTRYAW3f7-4cdTQeD8JISqoVoAJDrIzJ3Hmi4aTXCj_4dn7svZ8R30IX6ZdoaxgCkkT3nL4EcKZtqZezwaFXjNmdILbOJ_8ZZYjvwnXUHiqs5jG5Vx91gcbTXSAY-KqnMmeuKzJBpxJ0AEvl9SDffztqSM888US1-kstEYa53FSU5BLnzoJ9g-bhkfmhZLgJbMsGK8IrXI66Aq5jqoXceM7BkipmUNI3xI8BMRCI9uVjLyaIrbxFmwvwxT6QMxT2NQ"/>
+</div>
+<div class="space-y-4 flex-grow">
+<div>
+<div class="flex justify-between text-xs font-semibold mb-1">
+<span>人员负载</span>
+<span>100%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full">
+<div class="bg-red-600 h-2 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+<div class="bg-slate-50 rounded-lg p-3 border border-slate-100">
+<p class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-tight">当前任务</p>
+<p class="text-sm font-medium text-slate-800">数据中心电力循环 - 第一阶段</p>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400 text-sm mt-0.5">history</span>
+<p class="text-xs text-slate-500 italic">"主 UPS 故障。团队正全力投入应急预案执行。"</p>
+</div>
+</div>
+<!-- Large Bento Action Card -->
+<div class="md:col-span-2 bg-blue-700 p-8 rounded-3xl relative overflow-hidden group">
+<div class="absolute right-0 bottom-0 translate-x-1/4 translate-y-1/4 opacity-10 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[320px]">engineering</span>
+</div>
+<div class="relative z-10 h-full flex flex-col justify-between">
+<div>
+<h2 class="text-3xl font-bold text-white mb-2">团队优化 AI</h2>
+<p class="text-blue-100 text-lg max-w-md">我们的 BPAI 分析了当前的分布情况。建议从“南部运营中心”调拨 3 名工程师至“东海岸矩阵”以平衡负载。</p>
+</div>
+<div class="mt-8 flex gap-4">
+<button class="px-6 py-3 bg-white text-blue-700 font-bold rounded-xl hover:shadow-xl transition-all">审查优化方案</button>
+<button class="px-6 py-3 bg-blue-600/30 text-white font-semibold border border-white/30 rounded-xl hover:bg-white/10 transition-all">忽略</button>
+</div>
+</div>
+</div>
+<!-- Team Card 4: South Ops (Green) -->
+<div class="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-6">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined">satellite_alt</span>
+</div>
+<div>
+<h3 class="font-bold text-lg text-slate-800">南部运营中心</h3>
+<p class="text-xs text-slate-500">奥斯汀, 德克萨斯州</p>
+</div>
+</div>
+<span class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold uppercase rounded-full tracking-wider">运行良好</span>
+</div>
+<div class="h-32 w-full mb-6 rounded-xl overflow-hidden grayscale opacity-70 border border-slate-100">
+<img class="w-full h-full object-cover" data-alt="modern tech office space in Austin with clean lines and natural light reflecting off glass" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDl-10sfL-VhI7WFs-4J0svoVWGI-c97gnpaL4i_c1TVYuBX1R_d_HYC9DVreSqHk6pNUrRmA1OaM4pEFyDxdgmsdHYOjzVhR_kynN_b5HvyOtRR7W_14AV90wqSqVv3iwuGMgNf2t-egqLEyc2MPsAZLazfobnePrc0jXlZFIrBv03ncgcwyf4uRL7IPQF6sxqyE_hzDIoTFzkeOtLEUoTLF-pOEsswIzuGbU3HPLIkZ3TZOY3C0-UokLwJB38jdUt5kwquIe2LA"/>
+</div>
+<div class="space-y-4 flex-grow">
+<div>
+<div class="flex justify-between text-xs font-semibold mb-1">
+<span>人员负载</span>
+<span>42%</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full">
+<div class="bg-blue-600 h-2 rounded-full" style="width: 42%"></div>
+</div>
+</div>
+<div class="bg-slate-50 rounded-lg p-3 border border-slate-100">
+<p class="text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-tight">当前任务</p>
+<p class="text-sm font-medium text-slate-800">常规固件更新</p>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-slate-100 flex items-start gap-3">
+<span class="material-symbols-outlined text-slate-400 text-sm mt-0.5">history</span>
+<p class="text-xs text-slate-500 italic">"固件 v2.4 部署已在所有本地节点完成 80%。"</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

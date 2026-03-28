@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>工程队仓库 - 我的BPAI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed-variant": "#573e5c",
+              "on-primary": "#ffffff",
+              "on-primary-fixed": "#001b3e",
+              "surface-container-low": "#f3f3f3",
+              "on-primary-fixed-variant": "#00458d",
+              "on-background": "#1b1b1b",
+              "surface-variant": "#e2e2e2",
+              "secondary-fixed-dim": "#bec6dc",
+              "on-tertiary-container": "#573e5c",
+              "on-secondary-container": "#3e4759",
+              "tertiary-fixed-dim": "#dcbce0",
+              "surface-dim": "#dadada",
+              "outline-variant": "#c6c6c6",
+              "inverse-primary": "#aac7ff",
+              "error-container": "#ffdad6",
+              "on-tertiary": "#ffffff",
+              "secondary-fixed": "#dae2f9",
+              "tertiary": "#6f5575",
+              "tertiary-container": "#f9d8fd",
+              "surface-container-highest": "#e2e2e2",
+              "on-tertiary-fixed": "#28132e",
+              "surface-tint": "#2a5ea7",
+              "primary-fixed-dim": "#aac7ff",
+              "inverse-on-surface": "#f1f1f1",
+              "tertiary-fixed": "#f9d8fd",
+              "on-secondary-fixed-variant": "#3e4759",
+              "surface-bright": "#f9f9f9",
+              "surface-container-lowest": "#ffffff",
+              "on-secondary": "#ffffff",
+              "on-error-container": "#93000a",
+              "on-primary-container": "#00458d",
+              "on-error": "#ffffff",
+              "secondary": "#565f71",
+              "error": "#ba1a1a",
+              "on-secondary-fixed": "#131c2b",
+              "surface-container-high": "#e8e8e8",
+              "secondary-container": "#dae2f9",
+              "primary-container": "#d6e3ff",
+              "background": "#f9f9f9",
+              "on-surface": "#1b1b1b",
+              "primary-fixed": "#d6e3ff",
+              "outline": "#777777",
+              "on-surface-variant": "#474747",
+              "surface-container": "#eeeeee",
+              "inverse-surface": "#303030",
+              "surface": "#f9f9f9",
+              "primary": "#2a5ea7"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/80 px-6 shadow-sm backdrop-blur-md font-['Inter'] antialiased">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold text-blue-600 dark:text-blue-400 tracking-tighter">我的BPAI</span>
+<nav class="hidden md:flex items-center gap-6 font-sans text-sm font-medium tracking-tight">
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">总览</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 pb-1" href="#">工程队</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">文档档案室</a>
+<a class="text-slate-600 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-slate-100 dark:bg-slate-800 border-none rounded-full text-xs focus:ring-2 focus:ring-primary w-64" placeholder="搜索物料或单据..." type="text"/>
+</div>
+<button class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-full">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<img alt="管理员头像" class="w-8 h-8 rounded-full border border-slate-200" data-alt="professional portrait of a male site manager wearing a smart casual outfit with a neutral studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzHG53O6WANt4ObF6XdjutvxHzd_nChd44ZUrBOMhX6v2fAGsJmUf3Nwg6FXDwmzz0EddW5CuMasaQMLr0CmcqBzNhaR3SrQUeHHBckSoP7dYxSrOQ9L03lNH8tv8u2gSdHY_bQGgvG9ab9eIEwNsht0D3PKONviRwfR3y2y4ZlhsiNNkRcI-MqdLa9h2PRdxGsaei64TxiW_I7YefwMAPpG9vTc5ng15XZbReojVm30l2Db8VJdt9t-p3T4FdZoxJi5nIJTCWPg"/>
+</div>
+</header>
+<div class="flex">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full flex flex-col pt-20 pb-6 w-64 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 z-30">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-bold text-slate-800 dark:text-slate-100 font-sans">基地管理</h2>
+<p class="text-xs text-slate-500 uppercase tracking-widest mt-1">工程队调度中心</p>
+</div>
+<nav class="flex-1 px-3 space-y-1 font-sans text-sm">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="./department-overview.html">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>部门总览</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="./team-logs.html">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span>工程队日志</span>
+</a>
+<a class="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold rounded-lg px-4 py-3 hover:translate-x-1 transition-transform duration-200" href="./team-warehouse.html">
+<span class="material-symbols-outlined" data-icon="inventory_2" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span>工程队仓库</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="./site-monitoring.html">
+<span class="material-symbols-outlined" data-icon="videocam">videocam</span>
+<span>现场施工监控</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 hover:translate-x-1 transition-transform duration-200" href="../overview-pages/bp-ask.html">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+<span>BP问问</span>
+</a>
+</nav>
+<div class="px-6 mt-auto">
+<div class="bg-primary/5 rounded-xl p-4 border border-primary/10">
+<p class="text-[10px] font-bold text-primary uppercase mb-1">系统状态</p>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+<span class="text-xs text-slate-600">云端仓库同步中</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 flex-1 p-8">
+<div class="max-w-7xl mx-auto">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">工程队仓库</h1>
+<p class="text-slate-500 mt-1">实时监控物料动态与库存水位</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">download</span> 导出报表
+                        </button>
+<button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:opacity-90 transition-opacity shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-sm">add</span> 新建物料入库
+                        </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-12 gap-6">
+<!-- Top Visual Row -->
+<div class="col-span-12 lg:col-span-8 grid grid-cols-2 gap-6">
+<!-- Key Inventory Cards -->
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">核心物料</p>
+<h3 class="text-xl font-bold mt-1">10kV电缆</h3>
+</div>
+<span class="p-2 bg-blue-50 text-blue-600 rounded-lg material-symbols-outlined">electric_bolt</span>
+</div>
+<div class="mt-6">
+<div class="flex justify-between items-end mb-2">
+<span class="text-2xl font-bold">1,240 <small class="text-sm font-normal text-slate-400">米</small></span>
+<span class="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">+12% 本周</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+<div class="bg-blue-500 h-full w-[65%] rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">配电组件</p>
+<h3 class="text-xl font-bold mt-1">光缆接头盒</h3>
+</div>
+<span class="p-2 bg-purple-50 text-purple-600 rounded-lg material-symbols-outlined">settings_input_component</span>
+</div>
+<div class="mt-6">
+<div class="flex justify-between items-end mb-2">
+<span class="text-2xl font-bold">85 <small class="text-sm font-normal text-slate-400">个</small></span>
+<span class="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">低水位警告</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+<div class="bg-red-500 h-full w-[25%] rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">输电设备</p>
+<h3 class="text-xl font-bold mt-1">配电箱</h3>
+</div>
+<span class="p-2 bg-orange-50 text-orange-600 rounded-lg material-symbols-outlined">inventory</span>
+</div>
+<div class="mt-6">
+<div class="flex justify-between items-end mb-2">
+<span class="text-2xl font-bold">42 <small class="text-sm font-normal text-slate-400">组</small></span>
+<span class="text-xs font-medium text-slate-500">库存充足</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+<div class="bg-orange-500 h-full w-[82%] rounded-full"></div>
+</div>
+</div>
+</div>
+<div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-slate-500 text-xs font-semibold uppercase tracking-wider">标准紧固件</p>
+<h3 class="text-xl font-bold mt-1">高强螺栓</h3>
+</div>
+<span class="p-2 bg-emerald-50 text-emerald-600 rounded-lg material-symbols-outlined">build</span>
+</div>
+<div class="mt-6">
+<div class="flex justify-between items-end mb-2">
+<span class="text-2xl font-bold">5,000+ <small class="text-sm font-normal text-slate-400">颗</small></span>
+<span class="text-xs font-medium text-slate-400">稳定供应</span>
+</div>
+<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+<div class="bg-emerald-500 h-full w-[95%] rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Warehouse 3D Illustration / Profile Card -->
+<div class="col-span-12 lg:col-span-4 bg-primary rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl shadow-primary/30 flex flex-col">
+<div class="relative z-10">
+<h3 class="text-2xl font-bold mb-2">库位数字孪生</h3>
+<p class="text-primary-container/80 text-sm mb-8 leading-relaxed">当前仓库占用率 68%，主要集中在 A3-C5 货架区。AI 建议优先处理 10kV 备件补仓。</p>
+</div>
+<div class="flex-1 flex items-center justify-center relative z-10">
+<!-- Placeholder for 3D Warehouse visualization -->
+<div class="w-full aspect-square bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-4 flex items-center justify-center group cursor-pointer hover:bg-white/20 transition-all">
+<div class="text-center">
+<span class="material-symbols-outlined text-6xl opacity-80 mb-4 block" style="font-variation-settings: 'FILL' 1;">view_in_ar</span>
+<p class="text-xs font-medium uppercase tracking-widest opacity-60">点击进入 3D 剖面视图</p>
+</div>
+</div>
+</div>
+<!-- Decorative Shapes -->
+<div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+<div class="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-16 -mb-16 blur-2xl"></div>
+</div>
+<!-- Usage History List -->
+<div class="col-span-12 lg:col-span-8 bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">history</span> 近期领用记录
+                            </h3>
+<a class="text-sm font-medium text-primary hover:underline" href="#">查看全部</a>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="text-xs text-slate-400 uppercase tracking-wider border-b border-slate-50">
+<th class="pb-3 font-semibold">物料名称</th>
+<th class="pb-3 font-semibold">领用人 / 工程队</th>
+<th class="pb-3 font-semibold">数量</th>
+<th class="pb-3 font-semibold">时间</th>
+<th class="pb-3 font-semibold">状态</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+<td class="py-4 font-medium">10kV 架空绝缘导线</td>
+<td class="py-4">张伟 / 第一工程队</td>
+<td class="py-4">450 米</td>
+<td class="py-4 text-slate-500">今天 09:42</td>
+<td class="py-4">
+<span class="px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-bold">已签收</span>
+</td>
+</tr>
+<tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+<td class="py-4 font-medium">智能配电监测终端</td>
+<td class="py-4">李明 / 维护三组</td>
+<td class="py-4">12 套</td>
+<td class="py-4 text-slate-500">昨天 16:15</td>
+<td class="py-4">
+<span class="px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-bold">已签收</span>
+</td>
+</tr>
+<tr class="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+<td class="py-4 font-medium">环网柜密封圈</td>
+<td class="py-4">王方 / 抢修分队</td>
+<td class="py-4">50 个</td>
+<td class="py-4 text-slate-500">昨天 14:02</td>
+<td class="py-4">
+<span class="px-2 py-1 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">配送中</span>
+</td>
+</tr>
+<tr class="hover:bg-slate-50/50 transition-colors">
+<td class="py-4 font-medium">水泥电线杆 B型</td>
+<td class="py-4">赵磊 / 第二工程队</td>
+<td class="py-4">8 根</td>
+<td class="py-4 text-slate-500">2023-10-24</td>
+<td class="py-4">
+<span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold">已完成</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Visual Inventory Metrics (Circular) -->
+<div class="col-span-12 lg:col-span-4 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col items-center justify-center">
+<h3 class="text-sm font-bold text-slate-800 mb-6 self-start">库存分类占比</h3>
+<div class="relative w-48 h-48 flex items-center justify-center mb-6">
+<!-- Simple CSS Donut Chart simulation -->
+<div class="w-full h-full rounded-full border-[16px] border-slate-100 relative">
+<div class="absolute inset-0 rounded-full border-[16px] border-primary border-t-transparent border-l-transparent rotate-45"></div>
+<div class="absolute inset-0 rounded-full border-[16px] border-tertiary border-r-transparent border-b-transparent -rotate-12"></div>
+</div>
+<div class="absolute text-center">
+<p class="text-3xl font-extrabold text-slate-900">248</p>
+<p class="text-[10px] text-slate-400 font-bold uppercase">SKU 总数</p>
+</div>
+</div>
+<div class="w-full grid grid-cols-2 gap-4">
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="text-xs text-slate-600">电缆类 (42%)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-tertiary"></span>
+<span class="text-xs text-slate-600">金具类 (28%)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-orange-400"></span>
+<span class="text-xs text-slate-600">设备类 (15%)</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3 h-3 rounded-full bg-slate-300"></span>
+<span class="text-xs text-slate-600">其他 (15%)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Inventory Visualization Section (Extended Content) -->
+<div class="ml-64 p-8 pt-0">
+<div class="max-w-7xl mx-auto">
+<div class="bg-slate-900 rounded-3xl p-8 mb-8 text-white">
+<div class="flex flex-col md:flex-row gap-8 items-center">
+<div class="flex-1">
+<h3 class="text-xl font-bold mb-4">库房全景监测</h3>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+<div class="bg-white/5 border border-white/10 p-4 rounded-xl">
+<p class="text-white/50 text-[10px] font-bold uppercase mb-1">环境温度</p>
+<p class="text-2xl font-bold">24.5<small class="text-sm font-normal ml-1">°C</small></p>
+</div>
+<div class="bg-white/5 border border-white/10 p-4 rounded-xl">
+<p class="text-white/50 text-[10px] font-bold uppercase mb-1">空气湿度</p>
+<p class="text-2xl font-bold">48<small class="text-sm font-normal ml-1">%</small></p>
+</div>
+<div class="bg-white/5 border border-white/10 p-4 rounded-xl">
+<p class="text-white/50 text-[10px] font-bold uppercase mb-1">安防状态</p>
+<p class="text-2xl font-bold text-green-400">正常</p>
+</div>
+<div class="bg-white/5 border border-white/10 p-4 rounded-xl">
+<p class="text-white/50 text-[10px] font-bold uppercase mb-1">最近同步</p>
+<p class="text-2xl font-bold">2<small class="text-sm font-normal ml-1">min前</small></p>
+</div>
+</div>
+</div>
+<div class="w-full md:w-64 h-32 rounded-2xl overflow-hidden relative">
+<img class="w-full h-full object-cover opacity-50" data-alt="modern industrial warehouse interior with organized shelving and high ceilings dramatic lighting casting long shadows on concrete floor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEYevKPsfbQWhDvMGmcpw2PZD1P78Q5y-AUOljTnJ21ooRYfdoiLJMOISa6R4SxJvjuSqnDAIDOvO0iG4Knseb3GIzq74FBHnjDNOE4GlPm46R3oIbIFAWYxpB9y6FKX60bodiM2bCNsdbrDCocGUx0Jyz4skcl5gQJ6OpuBvYnadF3EzHBEV2jBgiYJXLsCPTAEBEOp1OJIVSPTZ-Uc7rrdFauU4uiZ3iRFipLSD-ttfXZqsNRkFeeH2Y3Vrq--HUHnvFIlNI_w"/>
+<div class="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent"></div>
+<div class="absolute bottom-3 left-3 flex items-center gap-2">
+<span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+<span class="text-[10px] font-bold tracking-widest uppercase">Live CCTV: W-04</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

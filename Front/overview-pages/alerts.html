@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>预警中心 - 我的BPAI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary": "#ffffff",
+              "outline": "#777777",
+              "on-primary": "#ffffff",
+              "primary-fixed-dim": "#aac7ff",
+              "tertiary": "#6f5575",
+              "surface-container-highest": "#e2e2e2",
+              "on-background": "#1b1b1b",
+              "inverse-surface": "#303030",
+              "surface-container-high": "#e8e8e8",
+              "on-error": "#ffffff",
+              "on-primary-fixed-variant": "#00458d",
+              "on-secondary-fixed": "#131c2b",
+              "secondary-container": "#dae2f9",
+              "on-surface-variant": "#474747",
+              "error-container": "#ffdad6",
+              "surface-container-lowest": "#ffffff",
+              "inverse-on-surface": "#f1f1f1",
+              "on-surface": "#1b1b1b",
+              "on-primary-fixed": "#001b3e",
+              "on-primary-container": "#00458d",
+              "secondary": "#565f71",
+              "on-secondary": "#ffffff",
+              "secondary-fixed-dim": "#bec6dc",
+              "primary-container": "#d6e3ff",
+              "on-error-container": "#93000a",
+              "primary-fixed": "#d6e3ff",
+              "surface-dim": "#dadada",
+              "primary": "#2a5ea7",
+              "surface-tint": "#2a5ea7",
+              "on-tertiary-fixed-variant": "#573e5c",
+              "surface-bright": "#f9f9f9",
+              "on-secondary-fixed-variant": "#3e4759",
+              "inverse-primary": "#aac7ff",
+              "surface-container": "#eeeeee",
+              "outline-variant": "#c6c6c6",
+              "background": "#f9f9f9",
+              "tertiary-container": "#f9d8fd",
+              "surface": "#f9f9f9",
+              "error": "#ba1a1a",
+              "on-secondary-container": "#3e4759",
+              "surface-variant": "#e2e2e2",
+              "surface-container-low": "#f3f3f3",
+              "tertiary-fixed": "#f9d8fd",
+              "on-tertiary-container": "#573e5c",
+              "tertiary-fixed-dim": "#dcbce0",
+              "on-tertiary-fixed": "#28132e",
+              "secondary-fixed": "#dae2f9"
+            },
+            fontFamily: {
+              "headline": ["Inter"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      body { font-family: 'Inter', sans-serif; }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+    </style>
+</head>
+<body class="bg-slate-100 text-on-surface font-body">
+<!-- TopNavBar -->
+<header class="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm font-['Inter'] antialiased tracking-tight">
+<div class="flex items-center gap-4">
+<span class="text-xl font-bold text-blue-700 tracking-tight">我的BPAI</span>
+<nav class="hidden md:flex items-center space-x-6 ml-8 text-sm font-medium">
+<a class="text-blue-600 border-b-2 border-blue-600 pb-1" href="#">总览</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">文档档案室</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="bg-slate-50 border border-slate-200 rounded-full py-1.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary w-64" placeholder="搜索资源..." type="text"/>
+</div>
+<button class="p-2 hover:bg-slate-50 rounded-lg transition-all relative">
+<span class="material-symbols-outlined text-slate-500">notifications</span>
+<span class="absolute top-2.5 right-2.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 hover:bg-slate-50 rounded-lg transition-all">
+<span class="material-symbols-outlined text-slate-500">account_circle</span>
+</button>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] z-40 flex flex-col py-4 bg-slate-50 border-r border-slate-200 w-64 font-['Inter'] text-sm">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-black text-blue-600">总览控制台</h2>
+<p class="text-xs text-slate-500 mt-1">实时监控网络</p>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600 rounded-lg" href="./dashboard.html">
+<span class="material-symbols-outlined">map</span>
+<span>全城实时地图</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600 rounded-lg" href="./team-status.html">
+<span class="material-symbols-outlined">group_work</span>
+<span>工程队状态</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 bg-blue-50 text-blue-700 font-semibold border-r-4 border-blue-600 transition-transform translate-x-1" href="./alerts.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">warning</span>
+<span>预警中心</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600 rounded-lg" href="./bp-ask.html">
+<span class="material-symbols-outlined">psychology</span>
+<span>BP问问</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-slate-600 hover:bg-slate-100 transition-all hover:text-blue-600 rounded-lg" href="./settings.html">
+<span class="material-symbols-outlined">settings</span>
+<span>设置</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+<div class="flex items-center justify-between mb-2">
+<span class="text-xs text-slate-500">系统稳定性</span>
+<span class="text-xs font-bold text-green-600">99.8%</span>
+</div>
+<div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+<div class="bg-blue-600 h-full w-[99.8%]"></div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="p-8 max-w-[1600px] mx-auto">
+<!-- Dashboard Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+<div>
+<h1 class="text-3xl font-extrabold tracking-tight text-on-surface">网络风险控制</h1>
+<p class="text-on-surface-variant mt-1">实时监控与事件处理仪表板。</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-white border border-outline-variant rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-lg">filter_list</span>
+                    筛选视图
+                </button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-lg">download</span>
+                    导出报告
+                </button>
+</div>
+</div>
+<!-- Bento Grid: Risk Summary -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+<!-- Critical Alerts -->
+<div class="bg-error-container text-on-error-container p-6 rounded-2xl border border-error/10 flex flex-col justify-between shadow-sm">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-2 bg-white/40 rounded-lg">error</span>
+<span class="text-xs font-bold tracking-widest uppercase opacity-70">等级 01</span>
+</div>
+<div class="mt-4">
+<div class="text-4xl font-black">12</div>
+<div class="text-sm font-bold mt-1">致命故障</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-xs font-semibold">
+<span class="material-symbols-outlined text-sm">trending_up</span>
+<span>较上小时 +4</span>
+</div>
+</div>
+<!-- Warning Alerts -->
+<div class="bg-tertiary-container text-on-tertiary-container p-6 rounded-2xl border border-tertiary/10 flex flex-col justify-between shadow-sm">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-2 bg-white/40 rounded-lg">warning</span>
+<span class="text-xs font-bold tracking-widest uppercase opacity-70">等级 02</span>
+</div>
+<div class="mt-4">
+<div class="text-4xl font-black">38</div>
+<div class="text-sm font-bold mt-1">活跃警告</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-xs font-semibold">
+<span class="material-symbols-outlined text-sm">trending_down</span>
+<span>较上小时 -12</span>
+</div>
+</div>
+<!-- Info Alerts -->
+<div class="bg-secondary-container text-on-secondary-container p-6 rounded-2xl border border-secondary/10 flex flex-col justify-between shadow-sm">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined p-2 bg-white/40 rounded-lg">info</span>
+<span class="text-xs font-bold tracking-widest uppercase opacity-70">等级 03</span>
+</div>
+<div class="mt-4">
+<div class="text-4xl font-black">156</div>
+<div class="text-sm font-bold mt-1">一般信息</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-xs font-semibold opacity-70">
+<span>汇报趋势平稳</span>
+</div>
+</div>
+<!-- Hotspot Visualization (Map) -->
+<div class="bg-white p-4 rounded-2xl border border-outline-variant shadow-sm relative overflow-hidden group">
+<img class="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" data-alt="abstract tech map" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCL-Vqu3QZtLhcyjr4gs_Yi84ZpIilzsP4K9Lic7PJxGBooSmj5fizx0MOQY_EWcKfrgyAIdsX7TUiiFJS1PQJsEXU8Fa40jQVdypsonADLX5qzX_LS98WNMkFmxS2PVlICM6-89RB_2zxTNhD7JFbUUbf3gg5DWmbej2OJsJIei14gj9b03v69P1rGd19d2yGoGFtsLWYshIcl5eGO7WTSkI2M748s9arhksFxz4PsGD5YhysyP6_LmoGcUaAf6LRmIJ4Dy9Qa5A"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="relative h-full flex flex-col justify-end p-2">
+<div class="flex items-center gap-2 text-white">
+<span class="w-2 h-2 bg-error rounded-full animate-pulse"></span>
+<span class="text-sm font-bold">网络热点</span>
+</div>
+<p class="text-[10px] text-white/80 leading-tight">南区 Sector-7 检测到高活跃度</p>
+</div>
+</div>
+</div>
+<!-- Asymmetric Dashboard Section -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<!-- Main Alert List (2/3 width) -->
+<div class="lg:col-span-2 space-y-4">
+<div class="flex items-center justify-between px-2">
+<h3 class="text-lg font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">dynamic_feed</span>
+                        实时活动流
+                    </h3>
+<div class="text-xs text-on-surface-variant font-medium">上次同步: 2 分钟前</div>
+</div>
+<!-- Alert Item: Critical -->
+<div class="bg-white border-l-4 border-l-error p-5 rounded-xl shadow-sm border border-outline-variant flex flex-wrap md:flex-nowrap items-center gap-6 hover:shadow-md transition-shadow">
+<div class="flex-shrink-0 w-12 h-12 bg-error/10 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">emergency</span>
+</div>
+<div class="flex-grow min-w-[200px]">
+<div class="flex items-center gap-3 mb-1">
+<span class="text-sm font-black text-error">致命</span>
+<span class="text-xs text-on-surface-variant font-medium">#F-82910</span>
+</div>
+<h4 class="font-bold text-on-surface">核心路由器超时 - B4 扇区</h4>
+<p class="text-sm text-on-surface-variant mt-1">检测到 12 个下游节点发生全量丢包。</p>
+</div>
+<div class="flex flex-col md:text-right text-xs gap-1">
+<div class="font-bold text-on-surface">已耗时 04:12</div>
+<div class="text-on-surface-variant">位置: 北枢纽 1A</div>
+<div class="flex items-center md:justify-end gap-1 mt-1">
+<img class="w-5 h-5 rounded-full border border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDc-hiVXQQAt11mUV6yz04HNN9KqxtWhc9LgL2tyCXKxgiwVYR9SqLgMQ5dvRPtRwIylcYDYMeZIiN8u3MDjSTe5ofH_o-wndsSkW6A6yTbGa_gYniDR-8tvqsbuwI4HJHH3YmEztj46zso33crJQgp-60Jpv9XTkhMa5G2Iej_aR0vrXX1aepgma2FYORRtihhO5UYZbdvb2Z7DOo7NMvB_WGOgGzD2oqC6IXbeH4bR35jjFcQ0RLAojT3Erad4j3zivJ3eRl0Xg"/>
+<span class="font-medium">陈大卫</span>
+</div>
+</div>
+<div class="flex-shrink-0">
+<button class="px-6 py-2.5 bg-error text-on-error rounded-lg font-bold text-sm hover:brightness-110 transition-all active:scale-95">处理</button>
+</div>
+</div>
+<!-- Alert Item: Warning -->
+<div class="bg-white border-l-4 border-l-tertiary p-5 rounded-xl shadow-sm border border-outline-variant flex flex-wrap md:flex-nowrap items-center gap-6 hover:shadow-md transition-shadow">
+<div class="flex-shrink-0 w-12 h-12 bg-tertiary/10 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">report</span>
+</div>
+<div class="flex-grow min-w-[200px]">
+<div class="flex items-center gap-3 mb-1">
+<span class="text-sm font-black text-tertiary">警告</span>
+<span class="text-xs text-on-surface-variant font-medium">#W-09211</span>
+</div>
+<h4 class="font-bold text-on-surface">温度超过阈值</h4>
+<p class="text-sm text-on-surface-variant mt-1">冷却系统冗余已激活。当前温度: 72°C。</p>
+</div>
+<div class="flex flex-col md:text-right text-xs gap-1">
+<div class="font-bold text-on-surface">已耗时 18:45</div>
+<div class="text-on-surface-variant">位置: Gamma 数据中心</div>
+<div class="flex items-center md:justify-end gap-1 mt-1">
+<img class="w-5 h-5 rounded-full border border-white" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDR8Fe-wRgoNmyHvsyny5kcF0nK8Yh6D0lVvaUjnbo6NXnvm1w1lgGOBaVGR70aspDUZLohMVfJBGl7UCePGUiYnghQoVK61SJCjWQZX4QISqThtUa_b1M1xS0ZYQgtZfUjEW3_3y-Kml5AwOOr8Z-dDZsoEK9MQPzeKRZDXD9f6-bM3c54bYRjenUicYjPWOvUj9PyD24_rnp_G88KsqH7cKT-5z_sDy4r0U6sO_oKJoVlfErv87Ozfqv_KdBiV3Gnzo3DSWD8g"/>
+<span class="font-medium">莎拉·米勒</span>
+</div>
+</div>
+<div class="flex-shrink-0">
+<button class="px-6 py-2.5 bg-tertiary text-on-tertiary rounded-lg font-bold text-sm hover:brightness-110 transition-all active:scale-95">处理</button>
+</div>
+</div>
+<!-- Alert Item: Info/Warning -->
+<div class="bg-white border-l-4 border-l-secondary p-5 rounded-xl shadow-sm border border-outline-variant flex flex-wrap md:flex-nowrap items-center gap-6 hover:shadow-md transition-shadow">
+<div class="flex-shrink-0 w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">podium</span>
+</div>
+<div class="flex-grow min-w-[200px]">
+<div class="flex items-center gap-3 mb-1">
+<span class="text-sm font-black text-secondary">信息</span>
+<span class="text-xs text-on-surface-variant font-medium">#I-22340</span>
+</div>
+<h4 class="font-bold text-on-surface">计划备份延迟</h4>
+<p class="text-sm text-on-surface-variant mt-1">由于流量过大，云同步速度比基准低 15%。</p>
+</div>
+<div class="flex flex-col md:text-right text-xs gap-1">
+<div class="font-bold text-on-surface">已耗时 32:10</div>
+<div class="text-on-surface-variant">位置: 西部云区域</div>
+<div class="flex items-center md:justify-end gap-1 mt-1">
+<div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-[10px] text-white font-bold">AI</div>
+<span class="font-medium text-primary">自动机器人</span>
+</div>
+</div>
+<div class="flex-shrink-0">
+<button class="px-6 py-2.5 bg-surface-container-high text-on-surface-variant rounded-lg font-bold text-sm hover:bg-outline-variant transition-all">审查</button>
+</div>
+</div>
+</div>
+<!-- Right Column: Contextual Data -->
+<div class="space-y-6">
+<!-- Live Hotspot Map Detail -->
+<div class="bg-white rounded-2xl border border-outline-variant overflow-hidden shadow-sm">
+<div class="p-4 border-b border-outline-variant flex items-center justify-between">
+<h3 class="font-bold text-sm">视觉风险地图</h3>
+<span class="text-[10px] px-2 py-0.5 bg-error/10 text-error rounded-full font-bold">实时</span>
+</div>
+<div class="h-64 relative bg-slate-100">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvMJwTlvyzLnVlvOZ7dDWrsTK49cezFMC6U8B8nk1qHW_7UrSQmi3a-q9P8KXvDrxYepRnBnPOkJCSWZmmoIgEfR1FBwA_nyX7mf5QfyR119MCQpQKPsVA-Owy9XbW5aOvkk1Zn8PwNs1N0oEgj_qgzev9Hxnv1v-EGZ1zgFDkYFugMvP-a003tvAtmuwOxhlWo2U40o3yBvYhw_-LFj_8HtgUoJvJ5cg6Pfo-j51e3UoHXL1-iQWR9YNJOjPM91H4pJXzzadSoQ"/>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+<div class="w-12 h-12 bg-error/20 rounded-full animate-ping absolute"></div>
+<div class="w-4 h-4 bg-error rounded-full shadow-lg border-2 border-white"></div>
+</div>
+</div>
+<div class="p-4">
+<div class="flex items-center gap-2 mb-3">
+<span class="material-symbols-outlined text-sm text-on-surface-variant">location_on</span>
+<span class="text-xs font-semibold">首要故障: X9 集群 - 东航站楼</span>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 mb-1">
+<div class="bg-error h-1.5 rounded-full" style="width: 85%"></div>
+</div>
+<div class="flex justify-between text-[10px] font-bold">
+<span>威胁概率</span>
+<span>85%</span>
+</div>
+</div>
+</div>
+<!-- AI Insights -->
+<div class="bg-primary text-on-primary p-6 rounded-2xl shadow-lg relative overflow-hidden">
+<span class="material-symbols-outlined absolute -right-4 -bottom-4 text-white/10 text-8xl" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<div class="relative z-10">
+<div class="flex items-center gap-2 mb-4">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-bold text-sm">AI 预测</span>
+</div>
+<p class="text-sm font-medium leading-relaxed opacity-90">
+                            当前趋势表明，如果核心路由器继续无响应，B4 扇区在 15 分钟内发生级联失效的概率为 70%。
+                        </p>
+<button class="mt-6 w-full py-2 bg-white text-primary rounded-lg text-sm font-bold shadow-md hover:bg-primary-container transition-colors">
+                            部署 AI 对抗措施
+                        </button>
+</div>
+</div>
+<!-- Team on Duty -->
+<div class="bg-white p-5 rounded-2xl border border-outline-variant shadow-sm">
+<h3 class="font-bold text-sm mb-4">值班响应团队</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCptT8OQqeinESpEcMk7rCPLdkOYLDLWIs5KQtbsa0B4XxjUXDTeotLm0LsjnYusZAs6zKDCiOAUzAMNo6_-2ejd2ihdpaoYKc2cFwGmRrwdfsNBzLfKH-OhWp3njhROx71xIhQbOYoYrdk5FrDqWFcg7PYPOYWhqB6bFx5o-DizxWsXFRvFosmkOdpGHz1Zax2v40YsOIAx4TR_VE1-qF64ilc-m8_H7uUM9jz3EjIpV339ShhGrVwl7Ik3k5NORWYeSsVVeMuTQ"/>
+<div>
+<div class="text-sm font-bold">马库斯·索恩</div>
+<div class="text-[10px] text-on-surface-variant">首席事件经理 (现场)</div>
+</div>
+<span class="ml-auto w-2 h-2 bg-emerald-500 rounded-full"></span>
+</div>
+<div class="flex items-center gap-3">
+<img class="w-10 h-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAkqLxmLxsKN76FJtIfvQBzL10vIjTjS-I7cU4_VyEryoxW5elaj6e0eSkRnJNDSHBzXhGOm_lX9Rde5ALfo-GKHgs375NuSFXA0Vg6nwz0444AGd2B3bZiUimH-r5AneNI4_Qr9HRhG6Osl2dUryokdyK69KRN0wc71g3RCePq_hE8cLwzmVCyXpG9Si-y-GNsit81D7U1MTX3fc4XF9Or4q6Ppv_ahVjLdILgh21QcMrd2bq4J-8RFAS0T_apzCSKZv2LSXn8nw"/>
+<div>
+<div class="text-sm font-bold">埃琳娜·罗德里格斯</div>
+<div class="text-[10px] text-on-surface-variant">网络架构师 (远程)</div>
+</div>
+<span class="ml-auto w-2 h-2 bg-emerald-500 rounded-full"></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Contextual FAB -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group">
+<span class="material-symbols-outlined">add</span>
+<span class="absolute right-full mr-4 px-3 py-1 bg-on-background text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">创建事件</span>
+</button>
+</body></html>
