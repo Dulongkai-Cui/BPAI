@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>系统后台 - 我的BPAI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2a5ea7",
+                        "background": "#f9f9f9",
+                        "surface": "#f9f9f9",
+                        "surface-container": "#eeeeee",
+                        "surface-container-low": "#f3f3f3",
+                        "surface-container-high": "#e8e8e8",
+                        "surface-container-highest": "#e2e2e2",
+                        "outline": "#777777",
+                        "outline-variant": "#c6c6c6",
+                        "on-surface": "#1b1b1b",
+                        "on-surface-variant": "#474747",
+                        "primary-container": "#d6e3ff",
+                        "secondary-container": "#dae2f9",
+                        "error": "#ba1a1a",
+                        "error-container": "#ffdad6"
+                    },
+                    fontFamily: {
+                        "body": ["Inter"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<header class="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-6 shadow-sm font-['Inter'] antialiased">
+<div class="flex items-center gap-4">
+<span class="text-xl font-bold tracking-tight text-blue-700">我的BPAI</span>
+<nav class="hidden md:flex items-center space-x-6 ml-8 text-sm font-medium">
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./bp-ask.html">BP问问</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./dashboard.html">总览</a>
+<a class="text-blue-600 border-b-2 border-blue-600 pb-1" href="./engineering-hub.html">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./work-orders.html">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./docs-home.html">文档档案室</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./ai-home.html">AI宿舍</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-full border border-slate-200 focus:ring-2 focus:ring-primary text-sm w-64 bg-slate-50" placeholder="搜索服务、角色或配置..." type="text"/>
+</div>
+<div class="flex items-center space-x-3">
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-2 text-slate-500 hover:bg-slate-50 rounded-full transition-all"><span class="material-symbols-outlined">admin_panel_settings</span></button>
+</div>
+</div>
+</header>
+<main class="pt-24 px-8 pb-12 min-h-screen bg-slate-100">
+<div class="max-w-7xl mx-auto space-y-8">
+<div class="flex justify-between items-end">
+<div>
+<a class="inline-flex items-center gap-2 px-3 py-2 mb-4 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all shadow-sm" href="./engineering-hub.html"><span class="material-symbols-outlined text-[18px]">arrow_back</span><span>返回工程队基地 - 互动中心</span></a>
+<nav class="flex text-xs text-slate-500 mb-2 gap-2">
+<span>工程队</span>
+<span>/</span>
+<span class="text-primary font-medium">系统后台</span>
+</nav>
+<h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">系统后台入口</h1>
+<p class="text-slate-500 mt-2">仅管理员可访问的系统服务、权限配置、审计日志与发布运维总控台。</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 flex items-center gap-2 hover:bg-slate-50 shadow-sm transition-all">
+<span class="material-symbols-outlined text-sm">manage_accounts</span> 权限配置
+</button>
+<button class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold flex items-center gap-2 hover:opacity-90 shadow-md shadow-primary/20 transition-all">
+<span class="material-symbols-outlined text-sm">rocket_launch</span> 发布入口
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-widest">在线服务</p>
+<div class="mt-3 flex items-end justify-between">
+<span class="text-3xl font-black text-slate-900">16</span>
+<span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">全部健康</span>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-widest">活跃用户</p>
+<div class="mt-3 flex items-end justify-between">
+<span class="text-3xl font-black text-slate-900">182</span>
+<span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">当前在线</span>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-widest">系统告警</p>
+<div class="mt-3 flex items-end justify-between">
+<span class="text-3xl font-black text-red-600">03</span>
+<span class="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded-full">需管理员处理</span>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<p class="text-xs font-bold text-slate-400 uppercase tracking-widest">今日部署</p>
+<div class="mt-3 flex items-end justify-between">
+<span class="text-3xl font-black text-slate-900">02</span>
+<span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">一项待发布</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-6">
+<section class="col-span-12 xl:col-span-8 space-y-6">
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+<div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+<h3 class="font-bold text-lg">服务状态总览</h3>
+<span class="text-primary text-xs font-medium cursor-pointer hover:underline">进入控制台</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left text-sm">
+<thead class="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs">
+<tr>
+<th class="px-6 py-3 font-semibold">服务</th>
+<th class="px-6 py-3 font-semibold">节点</th>
+<th class="px-6 py-3 font-semibold">版本</th>
+<th class="px-6 py-3 font-semibold">状态</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100">
+<tr class="hover:bg-slate-50/60">
+<td class="px-6 py-4 font-semibold">auth-gateway</td>
+<td class="px-6 py-4">3</td>
+<td class="px-6 py-4">v2.6.1</td>
+<td class="px-6 py-4"><span class="px-2 py-1 bg-green-50 text-green-700 text-[10px] font-bold rounded-full">稳定</span></td>
+</tr>
+<tr class="hover:bg-slate-50/60">
+<td class="px-6 py-4 font-semibold">video-inspection</td>
+<td class="px-6 py-4">4</td>
+<td class="px-6 py-4">v1.9.4</td>
+<td class="px-6 py-4"><span class="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-full">待升级</span></td>
+</tr>
+<tr class="hover:bg-slate-50/60">
+<td class="px-6 py-4 font-semibold">ops-dashboard</td>
+<td class="px-6 py-4">2</td>
+<td class="px-6 py-4">v3.1.0</td>
+<td class="px-6 py-4"><span class="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full">灰度中</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-slate-900">角色与权限</h3>
+<span class="text-xs font-bold text-slate-500">管理员视角</span>
+</div>
+<div class="space-y-4 text-sm">
+<div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+<p class="font-semibold text-slate-900">系统管理员</p>
+<p class="text-xs text-slate-500 mt-1">可访问系统后台、发布、权限策略与审计日志。</p>
+</div>
+<div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+<p class="font-semibold text-slate-900">工程主管</p>
+<p class="text-xs text-slate-500 mt-1">可访问工程队模块与现场监控，但不能修改系统策略。</p>
+</div>
+<div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
+<p class="font-semibold text-slate-900">财务专员</p>
+<p class="text-xs text-slate-500 mt-1">仅可进入会计部工作台和票据审批链路。</p>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-lg font-bold text-slate-900">发布记录</h3>
+<span class="text-xs font-bold text-slate-500">最近 24h</span>
+</div>
+<div class="space-y-4 text-sm">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-blue-500">deployment</span>
+<div>
+<p class="font-semibold text-slate-900">ops-dashboard v3.1.0 进入灰度</p>
+<p class="text-xs text-slate-500 mt-1">今天 10:20 · 发布负责人：林峰</p>
+</div>
+</div>
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-green-500">check_circle</span>
+<div>
+<p class="font-semibold text-slate-900">auth-gateway 热修复完成</p>
+<p class="text-xs text-slate-500 mt-1">今天 09:10 · 延迟恢复正常</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<aside class="col-span-12 xl:col-span-4 space-y-6">
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<h3 class="text-lg font-bold text-slate-900 mb-4">实时告警</h3>
+<div class="space-y-4 text-sm">
+<div class="p-4 rounded-xl bg-red-50 border border-red-100">
+<p class="font-bold text-red-700">video-inspection CPU 过高</p>
+<p class="text-xs text-red-600 mt-1">节点 02 持续 5 分钟超过阈值。</p>
+</div>
+<div class="p-4 rounded-xl bg-amber-50 border border-amber-100">
+<p class="font-bold text-amber-700">权限策略待发布</p>
+<p class="text-xs text-amber-600 mt-1">新角色“财务专员”尚未同步到生产环境。</p>
+</div>
+</div>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<h3 class="text-lg font-bold text-slate-900 mb-4">审计日志</h3>
+<ul class="space-y-3 text-sm text-slate-600">
+<li class="flex items-start gap-3"><span class="material-symbols-outlined text-blue-500 text-base">history</span><span>10:22 管理员更新了系统角色策略。</span></li>
+<li class="flex items-start gap-3"><span class="material-symbols-outlined text-blue-500 text-base">history</span><span>09:41 发布了监控模块灰度版本。</span></li>
+<li class="flex items-start gap-3"><span class="material-symbols-outlined text-blue-500 text-base">history</span><span>08:55 新增 2 个运维告警订阅。</span></li>
+</ul>
+</div>
+<div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+<h3 class="text-lg font-bold text-slate-900 mb-4">维护窗口</h3>
+<div class="space-y-3 text-sm text-slate-600">
+<div class="flex items-center justify-between">
+<span>视频服务升级</span>
+<span class="text-xs text-slate-400">今晚 23:00</span>
+</div>
+<div class="flex items-center justify-between">
+<span>权限服务备份</span>
+<span class="text-xs text-slate-400">周三 02:00</span>
+</div>
+<div class="flex items-center justify-between">
+<span>日志归档任务</span>
+<span class="text-xs text-slate-400">周五 01:30</span>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</main>
+</body></html>

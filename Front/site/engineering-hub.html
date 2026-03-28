@@ -81,21 +81,32 @@
         .low-poly-card {
             clip-path: polygon(5% 0%, 100% 0%, 100% 90%, 95% 100%, 0% 100%, 0% 10%);
         }
+        .hub-scroll-row::-webkit-scrollbar {
+            height: 8px;
+        }
+        .hub-scroll-row::-webkit-scrollbar-track {
+            background: rgba(148, 163, 184, 0.18);
+            border-radius: 9999px;
+        }
+        .hub-scroll-row::-webkit-scrollbar-thumb {
+            background: rgba(42, 94, 167, 0.55);
+            border-radius: 9999px;
+        }
     </style>
 </head>
 <body class="bg-background font-body text-on-background overflow-hidden">
 <!-- Top Navigation (Shared Component) -->
 <nav class="fixed top-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-white dark:bg-slate-900 shadow-sm border-b border-slate-200 dark:border-slate-800 font-['Inter'] antialiased">
 <div class="flex items-center gap-4">
-<span class="text-xl font-bold text-blue-700 dark:text-blue-400">我的BPAI</span>
-<div class="h-6 w-[1px] bg-slate-200 mx-2"></div>
-<div class="flex gap-6">
-<a class="text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">总览</a>
-<a class="text-blue-600 dark:text-blue-400 font-semibold border-b-2 border-blue-600 pb-1" href="#">工程队</a>
-<a class="text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">工单</a>
-<a class="text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">文档档案室</a>
-<a class="text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors" href="#">AI宿舍</a>
-</div>
+<span class="text-xl font-bold tracking-tight text-blue-700">我的BPAI</span>
+<nav class="hidden md:flex items-center space-x-6 ml-8 text-sm font-medium">
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./bp-ask.html">BP问问</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./dashboard.html">总览</a>
+<a class="text-blue-600 border-b-2 border-blue-600 pb-1" href="./engineering-hub.html">工程队</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./work-orders.html">工单</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./docs-home.html">文档档案室</a>
+<a class="text-slate-600 hover:text-blue-500 transition-colors" href="./ai-home.html">AI宿舍</a>
+</nav>
 </div>
 <div class="flex items-center gap-4">
 <div class="relative group">
@@ -105,43 +116,8 @@
 <span class="material-symbols-outlined text-slate-500 p-2 rounded-full hover:bg-slate-50 cursor-pointer">account_circle</span>
 </div>
 </nav>
-<!-- Side Navigation (Shared Component) -->
-<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 z-40 flex flex-col py-4 bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 font-['Inter'] text-sm">
-<div class="px-6 mb-8">
-<h2 class="text-lg font-black text-blue-600">工程队基地</h2>
-<p class="text-xs text-slate-500">工程管理指挥系统</p>
-</div>
-<nav class="flex-1 px-3 space-y-1">
-<a class="flex items-center gap-3 px-3 py-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold border-r-4 border-blue-600 transition-transform" href="#">
-<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
-<span>部门总览</span>
-</a>
-<a class="flex items-center gap-3 px-3 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-blue-600 transition-all" href="#">
-<span class="material-symbols-outlined" data-icon="description">description</span>
-<span>工程队日志</span>
-</a>
-<a class="flex items-center gap-3 px-3 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-blue-600 transition-all" href="#">
-<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
-<span>工程队仓库</span>
-</a>
-<a class="flex items-center gap-3 px-3 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-blue-600 transition-all" href="#">
-<span class="material-symbols-outlined" data-icon="videocam">videocam</span>
-<span>现场施工监控</span>
-</a>
-<a class="flex items-center gap-3 px-3 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 hover:text-blue-600 transition-all" href="#">
-<span class="material-symbols-outlined" data-icon="psychology">psychology</span>
-<span>BP问问</span>
-</a>
-</nav>
-<div class="mt-auto px-3 border-t border-slate-200 pt-4">
-<a class="flex items-center gap-3 px-3 py-3 text-slate-600 hover:text-blue-600 transition-all" href="#">
-<span class="material-symbols-outlined" data-icon="help">help</span>
-<span>帮助</span>
-</a>
-</div>
-</aside>
 <!-- Main Content Canvas -->
-<main class="ml-64 mt-16 h-[calc(100vh-64px)] relative overflow-hidden bg-slate-100">
+<main class="mt-16 min-h-[calc(100vh-64px)] relative overflow-hidden bg-slate-100">
 <!-- 3D Scene Simulation Container -->
 <div class="absolute inset-0 z-0">
 <!-- Background: Changsha Partial Map/View -->
@@ -149,7 +125,7 @@
 <div class="absolute inset-0 bg-gradient-to-b from-transparent via-white/50 to-white"></div>
 </div>
 <!-- Interactive Hub Label -->
-<div class="absolute top-8 left-8 z-10">
+<div class="relative z-10 px-8 pt-12 pb-16 xl:pr-[24rem]">
 <h1 class="text-4xl font-black text-primary tracking-tight">工程队基地 - 互动中心</h1>
 <div class="mt-2 flex items-center gap-2">
 <span class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -157,80 +133,99 @@
 </div>
 </div>
 <!-- Low-Poly Interactive Compound Grid -->
-<div class="absolute inset-0 flex items-center justify-center p-20 z-10 pointer-events-none">
-<div class="grid grid-cols-3 gap-12 w-full max-w-5xl pointer-events-auto perspective-lg">
+<div class="relative z-10 px-8 pb-20 xl:pr-[24rem]">
+<div class="w-full max-w-[1180px] mx-auto pointer-events-auto perspective-lg">
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-6">
 <!-- Office Building -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-primary text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="business">business</span>
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./department-overview.html">
+<div class="low-poly-card bg-primary text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="business">business</span>
 <div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">Admin</span>
-<h3 class="text-2xl font-black mt-1">办公室</h3>
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Admin</span>
+<h3 class="text-lg font-black mt-1">办公室</h3>
 </div>
 </div>
-</button>
+</a>
 <!-- Engineering Group -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-secondary text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="construction">construction</span>
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./engineering-board.html">
+<div class="low-poly-card bg-secondary text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="construction">construction</span>
 <div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">Operations</span>
-<h3 class="text-2xl font-black mt-1">工程组</h3>
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Operations</span>
+<h3 class="text-lg font-black mt-1">工程组</h3>
 </div>
 </div>
-</button>
-<!-- Warehouse -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-slate-800 text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="warehouse">warehouse</span>
-<div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">Logistics</span>
-<h3 class="text-2xl font-black mt-1">仓库</h3>
-</div>
-</div>
-</button>
-<!-- Design Institute -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-tertiary text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="architecture">architecture</span>
-<div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">R&amp;D</span>
-<h3 class="text-2xl font-black mt-1">设计院</h3>
-</div>
-</div>
-</button>
+</a>
 <!-- Audit Center -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-blue-400 text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="fact_check">fact_check</span>
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./audit-center.html">
+<div class="low-poly-card bg-blue-400 text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="fact_check">fact_check</span>
 <div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">Compliance</span>
-<h3 class="text-2xl font-black mt-1">送审中心</h3>
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Compliance</span>
+<h3 class="text-lg font-black mt-1">送审中心</h3>
 </div>
 </div>
-</button>
-<!-- Document Center -->
-<button class="group relative transition-all duration-300 hover:-translate-y-4">
-<div class="low-poly-card bg-outline text-white p-8 aspect-square flex flex-col justify-end shadow-2xl overflow-hidden">
-<span class="material-symbols-outlined text-6xl opacity-30 absolute -top-4 -right-4 scale-150 rotate-12" data-icon="folder_managed">folder_managed</span>
+</a>
+<!-- Site Monitoring -->
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./site-monitoring.html">
+<div class="low-poly-card bg-emerald-600 text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="videocam">videocam</span>
 <div class="relative z-10">
-<span class="text-xs font-bold opacity-70 uppercase tracking-widest">Archive</span>
-<h3 class="text-2xl font-black mt-1">文档中心</h3>
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Monitoring</span>
+<h3 class="text-lg font-black mt-1 leading-snug">现场施工监控</h3>
 </div>
 </div>
-</button>
+</a>
+<!-- Warehouse -->
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./team-warehouse.html">
+<div class="low-poly-card bg-slate-800 text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="warehouse">warehouse</span>
+<div class="relative z-10">
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Logistics</span>
+<h3 class="text-lg font-black mt-1">仓库</h3>
 </div>
 </div>
-<!-- 2D Sidebar Panel (Interactive Triggered) -->
-<aside class="absolute right-0 top-0 bottom-0 w-[400px] bg-white shadow-2xl border-l border-slate-200 z-50 p-8 flex flex-col gap-8 transition-transform translate-x-0" id="business-panel">
+</a>
+<!-- Design Institute -->
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./cad-design.html">
+<div class="low-poly-card bg-tertiary text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="architecture">architecture</span>
+<div class="relative z-10">
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">R&amp;D</span>
+<h3 class="text-lg font-black mt-1">设计院</h3>
+</div>
+</div>
+</a>
+<!-- Finance -->
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./accounting.html">
+<div class="low-poly-card bg-amber-600 text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="account_balance_wallet">account_balance_wallet</span>
+<div class="relative z-10">
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">Finance</span>
+<h3 class="text-lg font-black mt-1">会计部</h3>
+</div>
+</div>
+</a>
+<!-- System -->
+<a class="group relative transition-all duration-300 hover:-translate-y-3 block" href="./system-backend.html">
+<div class="low-poly-card bg-outline text-white p-6 min-h-[210px] flex flex-col justify-end shadow-2xl overflow-hidden">
+<span class="material-symbols-outlined text-4xl opacity-25 absolute -top-2 -right-2 scale-110 rotate-12" data-icon="admin_panel_settings">admin_panel_settings</span>
+<div class="relative z-10">
+<span class="text-[11px] font-bold opacity-70 uppercase tracking-widest">System</span>
+<h3 class="text-lg font-black mt-1">系统后台</h3>
+</div>
+</div>
+</a>
+</div>
+</div>
+</div>
+<!-- 业务概览抽屉 -->
+<aside class="absolute right-0 top-0 bottom-0 w-[360px] bg-white shadow-2xl border-l border-slate-200 z-50 p-6 flex flex-col gap-6 xl:flex" id="business-panel">
 <div class="flex justify-between items-start">
 <div>
 <h2 class="text-3xl font-black text-on-background">业务概览</h2>
 <p class="text-slate-500 font-medium">设计院 | 研发与规划中心</p>
 </div>
-<button class="p-2 hover:bg-slate-100 rounded-full transition-colors">
-<span class="material-symbols-outlined" data-icon="close">close</span>
-</button>
 </div>
 <!-- Dashboard Stats -->
 <div class="grid grid-cols-2 gap-4">
@@ -292,17 +287,13 @@
 </div>
 </div>
 </div>
-<button class="w-full py-4 bg-primary text-white font-black rounded-xl hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
-<span>进入管理后台</span>
-<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+<button class="w-full py-4 bg-primary text-white font-black rounded-xl hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 opacity-70 pointer-events-none">
+<span>业务概览面板</span>
+<span class="material-symbols-outlined" data-icon="dashboard_customize">dashboard_customize</span>
 </button>
 </aside>
-<!-- Floating Action Button (FAB) -->
-<button class="fixed bottom-8 right-[432px] w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition-all z-40">
-<span class="material-symbols-outlined" data-icon="add" style="font-variation-settings: 'FILL' 0, 'wght' 700;">add</span>
-</button>
 <!-- Tooltip / Legend -->
-<div class="absolute bottom-8 left-8 z-10 bg-white/80 backdrop-blur-md p-4 rounded-lg border border-white/50 shadow-xl flex gap-6">
+<div class="fixed bottom-8 left-8 z-20 bg-white/80 backdrop-blur-md p-3 rounded-lg border border-white/50 shadow-xl flex gap-4 max-w-fit xl:left-8 xl:right-auto right-20">
 <div class="flex items-center gap-2">
 <span class="w-3 h-3 bg-primary rounded-sm"></span>
 <span class="text-xs font-bold text-slate-700">行政办公</span>
