@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:check": "node ./scripts/db-check.mjs",
     "db:generate": "drizzle-kit generate",
+    "db:import-store": "node ./scripts/db-import-store.mjs",
+    "db:import-store:reset": "node ./scripts/db-import-store.mjs --reset",
     "db:migrate": "node ./scripts/db-migrate.mjs",
     "db:studio": "drizzle-kit studio"
   },
