@@ -3,7 +3,6 @@ import "server-only";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { mutateAppStore, readAppStore } from "@/lib/auth/server";
 import type {
-  AppStore,
   StoredBrowserFolderIcon,
   StoredBrowserFolderTone,
   StoredBrowserViewMode,
@@ -12,6 +11,15 @@ import type {
   StoredWorkspaceBoardMessage,
   StoredWorkspaceBrowserState,
 } from "@/lib/auth/types";
+import {
+  mirrorSharedBrowserStateToPostgres,
+  mirrorUserBrowserStateToPostgres,
+} from "@/lib/db/app-store-write";
+import {
+  runShadowWrite,
+  upsertSharedBrowserStateInRawStore,
+  upsertUserBrowserStateInRawStore,
+} from "@/lib/store/raw-shadow";
 
 export type BrowserCustomFolderState = {
   id: string;
@@ -267,75 +275,70 @@ export async function saveBrowserStateForUser(params: {
   const workspaceId = params.workspaceId ?? user.workspaceId;
   const timestamp = nowIso();
   const stateId = buildBrowserStateId(kind, workspaceId, user.id);
-
-  return mutateAppStore((store) => {
-    const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
-    const existingCustomFolderMap = new Map(
-      existingState?.customFolders.map((folder) => [folder.id, folder]) ?? [],
-    );
-    const existingInnerFolderMap = new Map(
-      existingState?.innerFolders.map((folder) => [folder.id, folder]) ?? [],
-    );
-    const existingFileStateMap = new Map(
-      existingState?.fileStates.map((fileState) => [fileState.fileId, fileState]) ?? [],
-    );
-    const nextState: StoredWorkspaceBrowserState = {
-      id: stateId,
-      kind,
-      ownerUserId: user.id,
-      workspaceId,
-      activeFolderId: state.activeFolderId,
-      activeInnerFolderId: state.activeInnerFolderId,
-      folderViewMode: state.folderViewMode,
-      deletedFolderIds: state.deletedFolderIds,
-      customFolders: state.customFolders.map((folder) => ({
-        id: folder.id,
-        name: folder.name,
-        description: folder.description,
-        tone: folder.tone,
-        icon: folder.icon,
-        createdAt: existingCustomFolderMap.get(folder.id)?.createdAt ?? timestamp,
-        updatedAt: timestamp,
-      })),
-      innerFolders: state.innerFolders.map((folder) => ({
-        id: folder.id,
-        parentFolderId: folder.parentFolderId,
-        parentInnerFolderId: folder.parentInnerFolderId,
-        name: folder.name,
-        description: folder.description,
-        tone: folder.tone,
-        icon: folder.icon,
-        createdAt: existingInnerFolderMap.get(folder.id)?.createdAt ?? timestamp,
-        updatedAt: timestamp,
-      })),
-      fileStates: state.fileStates.map((fileState) => ({
-        fileId: fileState.fileId,
-        folderId: fileState.folderId,
-        subfolderId: fileState.subfolderId,
-        titleOverride: fileState.titleOverride,
-        isTrashed: fileState.isTrashed,
-        isDeleted: fileState.isDeleted,
-        trashedAt: fileState.trashedAt,
-        updatedAt: existingFileStateMap.get(fileState.fileId)?.updatedAt ?? timestamp,
-      })),
-      createdAt: existingState?.createdAt ?? timestamp,
+  const store = await readAppStore();
+  const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
+  const existingCustomFolderMap = new Map(
+    existingState?.customFolders.map((folder) => [folder.id, folder]) ?? [],
+  );
+  const existingInnerFolderMap = new Map(
+    existingState?.innerFolders.map((folder) => [folder.id, folder]) ?? [],
+  );
+  const existingFileStateMap = new Map(
+    existingState?.fileStates.map((fileState) => [fileState.fileId, fileState]) ?? [],
+  );
+  const nextState: StoredWorkspaceBrowserState = {
+    id: stateId,
+    kind,
+    ownerUserId: user.id,
+    workspaceId,
+    activeFolderId: state.activeFolderId,
+    activeInnerFolderId: state.activeInnerFolderId,
+    folderViewMode: state.folderViewMode,
+    deletedFolderIds: state.deletedFolderIds,
+    customFolders: state.customFolders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      description: folder.description,
+      tone: folder.tone,
+      icon: folder.icon,
+      createdAt: existingCustomFolderMap.get(folder.id)?.createdAt ?? timestamp,
       updatedAt: timestamp,
-    };
+    })),
+    innerFolders: state.innerFolders.map((folder) => ({
+      id: folder.id,
+      parentFolderId: folder.parentFolderId,
+      parentInnerFolderId: folder.parentInnerFolderId,
+      name: folder.name,
+      description: folder.description,
+      tone: folder.tone,
+      icon: folder.icon,
+      createdAt: existingInnerFolderMap.get(folder.id)?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    })),
+    fileStates: state.fileStates.map((fileState) => ({
+      fileId: fileState.fileId,
+      folderId: fileState.folderId,
+      subfolderId: fileState.subfolderId,
+      titleOverride: fileState.titleOverride,
+      isTrashed: fileState.isTrashed,
+      isDeleted: fileState.isDeleted,
+      trashedAt: fileState.trashedAt,
+      updatedAt: existingFileStateMap.get(fileState.fileId)?.updatedAt ?? timestamp,
+    })),
+    createdAt: existingState?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
 
-    const existingIndex = store.browserStates.findIndex((item) => item.id === stateId);
-    const nextBrowserStates =
-      existingIndex >= 0
-        ? store.browserStates.map((item, index) => (index === existingIndex ? nextState : item))
-        : [...store.browserStates, nextState];
+  await mirrorUserBrowserStateToPostgres(nextState);
 
-    return {
-      store: {
-        ...store,
-        browserStates: nextBrowserStates,
-      } as AppStore,
-      result: nextState,
-    };
+  void runShadowWrite("user-browser-state-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertUserBrowserStateInRawStore(store, nextState),
+      result: undefined,
+    }));
   });
+
+  return nextState;
 }
 
 export async function saveSharedBrowserStateForWorkspace(params: {
@@ -346,82 +349,73 @@ export async function saveSharedBrowserStateForWorkspace(params: {
   const { kind, workspaceId, state } = params;
   const timestamp = nowIso();
   const stateId = buildSharedBrowserStateId(kind, workspaceId);
+  const store = await readAppStore();
+  const existingState =
+    store.workspaceBrowserStates.find((item) => item.id === stateId) ?? null;
+  const existingCustomFolderMap = new Map(
+    existingState?.customFolders.map((folder) => [folder.id, folder]) ?? [],
+  );
+  const existingInnerFolderMap = new Map(
+    existingState?.innerFolders.map((folder) => [folder.id, folder]) ?? [],
+  );
+  const existingFileStateMap = new Map(
+    existingState?.fileStates.map((fileState) => [fileState.fileId, fileState]) ?? [],
+  );
 
-  return mutateAppStore((store) => {
-    const existingState =
-      store.workspaceBrowserStates.find((item) => item.id === stateId) ?? null;
-    const existingCustomFolderMap = new Map(
-      existingState?.customFolders.map((folder) => [folder.id, folder]) ?? [],
-    );
-    const existingInnerFolderMap = new Map(
-      existingState?.innerFolders.map((folder) => [folder.id, folder]) ?? [],
-    );
-    const existingFileStateMap = new Map(
-      existingState?.fileStates.map((fileState) => [fileState.fileId, fileState]) ?? [],
-    );
-
-    const nextState: StoredSharedWorkspaceBrowserState = {
-      id: stateId,
-      kind,
-      workspaceId,
-      deletedFolderIds: state.deletedFolderIds,
-      customFolders: state.customFolders.map((folder) => ({
-        id: folder.id,
-        name: folder.name,
-        description: folder.description,
-        tone: folder.tone,
-        icon: folder.icon,
-        createdAt: existingCustomFolderMap.get(folder.id)?.createdAt ?? timestamp,
-        updatedAt: timestamp,
-      })),
-      innerFolders: state.innerFolders.map((folder) => ({
-        id: folder.id,
-        parentFolderId: folder.parentFolderId,
-        parentInnerFolderId: folder.parentInnerFolderId,
-        name: folder.name,
-        description: folder.description,
-        tone: folder.tone,
-        icon: folder.icon,
-        createdAt: existingInnerFolderMap.get(folder.id)?.createdAt ?? timestamp,
-        updatedAt: timestamp,
-      })),
-      fileStates: state.fileStates.map((fileState) => ({
-        fileId: fileState.fileId,
-        folderId: fileState.folderId,
-        subfolderId: fileState.subfolderId,
-        titleOverride: fileState.titleOverride,
-        isTrashed: fileState.isTrashed,
-        isDeleted: fileState.isDeleted,
-        trashedAt: fileState.trashedAt,
-        updatedAt: existingFileStateMap.get(fileState.fileId)?.updatedAt ?? timestamp,
-      })),
-      boardMessages: serializeSharedBoardMessages(
-        state.boardMessages,
-        existingState,
-        timestamp,
-      ),
-      createdAt: existingState?.createdAt ?? timestamp,
+  const nextState: StoredSharedWorkspaceBrowserState = {
+    id: stateId,
+    kind,
+    workspaceId,
+    deletedFolderIds: state.deletedFolderIds,
+    customFolders: state.customFolders.map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      description: folder.description,
+      tone: folder.tone,
+      icon: folder.icon,
+      createdAt: existingCustomFolderMap.get(folder.id)?.createdAt ?? timestamp,
       updatedAt: timestamp,
-    };
+    })),
+    innerFolders: state.innerFolders.map((folder) => ({
+      id: folder.id,
+      parentFolderId: folder.parentFolderId,
+      parentInnerFolderId: folder.parentInnerFolderId,
+      name: folder.name,
+      description: folder.description,
+      tone: folder.tone,
+      icon: folder.icon,
+      createdAt: existingInnerFolderMap.get(folder.id)?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    })),
+    fileStates: state.fileStates.map((fileState) => ({
+      fileId: fileState.fileId,
+      folderId: fileState.folderId,
+      subfolderId: fileState.subfolderId,
+      titleOverride: fileState.titleOverride,
+      isTrashed: fileState.isTrashed,
+      isDeleted: fileState.isDeleted,
+      trashedAt: fileState.trashedAt,
+      updatedAt: existingFileStateMap.get(fileState.fileId)?.updatedAt ?? timestamp,
+    })),
+    boardMessages: serializeSharedBoardMessages(
+      state.boardMessages,
+      existingState,
+      timestamp,
+    ),
+    createdAt: existingState?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
 
-    const existingIndex = store.workspaceBrowserStates.findIndex(
-      (item) => item.id === stateId,
-    );
-    const nextWorkspaceBrowserStates =
-      existingIndex >= 0
-        ? store.workspaceBrowserStates.map((item, index) =>
-            index === existingIndex ? nextState : item,
-          )
-        : [...store.workspaceBrowserStates, nextState];
+  await mirrorSharedBrowserStateToPostgres(nextState);
 
-    return {
-      store: {
-        ...store,
-        workspaceBrowserStates: nextWorkspaceBrowserStates,
-      } as AppStore,
-      result: nextState,
-    };
+  void runShadowWrite("shared-browser-state-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertSharedBrowserStateInRawStore(store, nextState),
+      result: undefined,
+    }));
   });
+
+  return nextState;
 }
 
 export async function finalizeTrashedBrowserFilesForUser(params: {
@@ -435,52 +429,48 @@ export async function finalizeTrashedBrowserFilesForUser(params: {
   const timestamp = nowIso();
   const stateId = buildBrowserStateId(kind, workspaceId, user.id);
   const removedAssetIds = new Set(removedAssetFileIds);
+  const store = await readAppStore();
+  const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
 
-  return mutateAppStore((store) => {
-    const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
+  if (!existingState) {
+    return null;
+  }
 
-    if (!existingState) {
-      return {
-        store,
-        result: null,
-      };
+  const nextFileStates = existingState.fileStates.flatMap((fileState) => {
+    if (removedAssetIds.has(fileState.fileId)) {
+      return [];
     }
 
-    const nextFileStates = existingState.fileStates.flatMap((fileState) => {
-      if (removedAssetIds.has(fileState.fileId)) {
-        return [];
-      }
+    if (!fileState.isTrashed) {
+      return [fileState];
+    }
 
-      if (!fileState.isTrashed) {
-        return [fileState];
-      }
-
-      return [
-        {
-          ...fileState,
-          isTrashed: false,
-          isDeleted: true,
-          updatedAt: timestamp,
-        },
-      ];
-    });
-
-    const nextState: StoredWorkspaceBrowserState = {
-      ...existingState,
-      fileStates: nextFileStates,
-      updatedAt: timestamp,
-    };
-
-    return {
-      store: {
-        ...store,
-        browserStates: store.browserStates.map((item) =>
-          item.id === stateId ? nextState : item,
-        ),
-      } as AppStore,
-      result: nextState,
-    };
+    return [
+      {
+        ...fileState,
+        isTrashed: false,
+        isDeleted: true,
+        updatedAt: timestamp,
+      },
+    ];
   });
+
+  const nextState: StoredWorkspaceBrowserState = {
+    ...existingState,
+    fileStates: nextFileStates,
+    updatedAt: timestamp,
+  };
+
+  await mirrorUserBrowserStateToPostgres(nextState);
+
+  void runShadowWrite("user-browser-state-finalize-trash-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertUserBrowserStateInRawStore(store, nextState),
+      result: undefined,
+    }));
+  });
+
+  return nextState;
 }
 
 export async function setBrowserFileLifecycleForUser(params: {
@@ -497,81 +487,70 @@ export async function setBrowserFileLifecycleForUser(params: {
   const workspaceId = params.workspaceId ?? user.workspaceId;
   const timestamp = nowIso();
   const stateId = buildBrowserStateId(kind, workspaceId, user.id);
+  const store = await readAppStore();
+  const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
+  const existingFileState =
+    existingState?.fileStates.find((fileState) => fileState.fileId === fileId) ?? null;
 
-  return mutateAppStore((store) => {
-    const existingState = store.browserStates.find((item) => item.id === stateId) ?? null;
-    const existingFileState =
-      existingState?.fileStates.find((fileState) => fileState.fileId === fileId) ?? null;
+  if (action === "restore" && !existingFileState) {
+    return existingState;
+  }
 
-    if (action === "restore" && !existingFileState) {
-      return {
-        store,
-        result: existingState,
-      };
-    }
+  const nextFileState = {
+    fileId,
+    folderId: folderId ?? existingFileState?.folderId ?? "all",
+    subfolderId:
+      subfolderId !== undefined ? subfolderId : (existingFileState?.subfolderId ?? null),
+    titleOverride:
+      titleOverride !== undefined ? titleOverride : existingFileState?.titleOverride,
+    isTrashed: action === "trash",
+    isDeleted: false,
+    trashedAt: action === "trash" ? timestamp : undefined,
+    updatedAt: timestamp,
+  };
 
-    const nextFileState = {
-      fileId,
-      folderId: folderId ?? existingFileState?.folderId ?? "all",
-      subfolderId:
-        subfolderId !== undefined
-          ? subfolderId
-          : (existingFileState?.subfolderId ?? null),
-      titleOverride:
-        titleOverride !== undefined
-          ? titleOverride
-          : existingFileState?.titleOverride,
-      isTrashed: action === "trash",
-      isDeleted: false,
-      trashedAt: action === "trash" ? timestamp : undefined,
+  const baseState: StoredWorkspaceBrowserState =
+    existingState ?? {
+      id: stateId,
+      kind,
+      ownerUserId: user.id,
+      workspaceId,
+      activeFolderId: "all",
+      activeInnerFolderId: null,
+      folderViewMode: "small",
+      deletedFolderIds: [],
+      customFolders: [],
+      innerFolders: [],
+      fileStates: [],
+      createdAt: timestamp,
       updatedAt: timestamp,
     };
 
-    const baseState: StoredWorkspaceBrowserState =
-      existingState ?? {
-        id: stateId,
-        kind,
-        ownerUserId: user.id,
-        workspaceId,
-        activeFolderId: "all",
-        activeInnerFolderId: null,
-        folderViewMode: "small",
-        customFolders: [],
-        innerFolders: [],
-        fileStates: [],
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
+  const hasExistingFileState = baseState.fileStates.some(
+    (fileState) => fileState.fileId === fileId,
+  );
+  const nextFileStates = hasExistingFileState
+    ? baseState.fileStates.map((fileState) =>
+        fileState.fileId === fileId ? nextFileState : fileState,
+      )
+    : [...baseState.fileStates, nextFileState];
 
-    const hasExistingFileState = baseState.fileStates.some(
-      (fileState) => fileState.fileId === fileId,
-    );
-    const nextFileStates = hasExistingFileState
-      ? baseState.fileStates.map((fileState) =>
-          fileState.fileId === fileId ? nextFileState : fileState,
-        )
-      : [...baseState.fileStates, nextFileState];
+  const nextState: StoredWorkspaceBrowserState = {
+    ...baseState,
+    fileStates: nextFileStates,
+    updatedAt: timestamp,
+  };
 
-    const nextState: StoredWorkspaceBrowserState = {
-      ...baseState,
-      fileStates: nextFileStates,
-      updatedAt: timestamp,
-    };
+  await mirrorUserBrowserStateToPostgres(nextState);
 
-    const existingIndex = store.browserStates.findIndex((item) => item.id === stateId);
-    const nextBrowserStates =
-      existingIndex >= 0
-        ? store.browserStates.map((item, index) => (index === existingIndex ? nextState : item))
-        : [...store.browserStates, nextState];
-
-    return {
-      store: {
-        ...store,
-        browserStates: nextBrowserStates,
-      } as AppStore,
-      result: nextState,
-    };
+  void runShadowWrite("user-browser-state-file-lifecycle-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertUserBrowserStateInRawStore(store, nextState),
+      result: undefined,
+    }));
   });
+
+  return nextState;
 }
 
 export async function setBrowserFileLifecycleForWorkspace(params: {
@@ -587,81 +566,66 @@ export async function setBrowserFileLifecycleForWorkspace(params: {
     params;
   const timestamp = nowIso();
   const stateId = buildSharedBrowserStateId(kind, workspaceId);
+  const store = await readAppStore();
+  const existingState =
+    store.workspaceBrowserStates.find((item) => item.id === stateId) ?? null;
+  const existingFileState =
+    existingState?.fileStates.find((fileState) => fileState.fileId === fileId) ?? null;
 
-  return mutateAppStore((store) => {
-    const existingState =
-      store.workspaceBrowserStates.find((item) => item.id === stateId) ?? null;
-    const existingFileState =
-      existingState?.fileStates.find((fileState) => fileState.fileId === fileId) ?? null;
+  if (action === "restore" && !existingFileState) {
+    return existingState;
+  }
 
-    if (action === "restore" && !existingFileState) {
-      return {
-        store,
-        result: existingState,
-      };
-    }
+  const nextFileState = {
+    fileId,
+    folderId: folderId ?? existingFileState?.folderId ?? "all",
+    subfolderId:
+      subfolderId !== undefined ? subfolderId : (existingFileState?.subfolderId ?? null),
+    titleOverride:
+      titleOverride !== undefined ? titleOverride : existingFileState?.titleOverride,
+    isTrashed: action === "trash",
+    isDeleted: false,
+    trashedAt: action === "trash" ? timestamp : undefined,
+    updatedAt: timestamp,
+  };
 
-    const nextFileState = {
-      fileId,
-      folderId: folderId ?? existingFileState?.folderId ?? "all",
-      subfolderId:
-        subfolderId !== undefined
-          ? subfolderId
-          : (existingFileState?.subfolderId ?? null),
-      titleOverride:
-        titleOverride !== undefined
-          ? titleOverride
-          : existingFileState?.titleOverride,
-      isTrashed: action === "trash",
-      isDeleted: false,
-      trashedAt: action === "trash" ? timestamp : undefined,
+  const baseState: StoredSharedWorkspaceBrowserState =
+    existingState ?? {
+      id: stateId,
+      kind,
+      workspaceId,
+      deletedFolderIds: [],
+      customFolders: [],
+      innerFolders: [],
+      fileStates: [],
+      boardMessages: [],
+      createdAt: timestamp,
       updatedAt: timestamp,
     };
 
-    const baseState: StoredSharedWorkspaceBrowserState =
-      existingState ?? {
-        id: stateId,
-        kind,
-        workspaceId,
-        customFolders: [],
-        innerFolders: [],
-        fileStates: [],
-        boardMessages: [],
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
+  const hasExistingFileState = baseState.fileStates.some(
+    (fileState) => fileState.fileId === fileId,
+  );
+  const nextFileStates = hasExistingFileState
+    ? baseState.fileStates.map((fileState) =>
+        fileState.fileId === fileId ? nextFileState : fileState,
+      )
+    : [...baseState.fileStates, nextFileState];
 
-    const hasExistingFileState = baseState.fileStates.some(
-      (fileState) => fileState.fileId === fileId,
-    );
-    const nextFileStates = hasExistingFileState
-      ? baseState.fileStates.map((fileState) =>
-          fileState.fileId === fileId ? nextFileState : fileState,
-        )
-      : [...baseState.fileStates, nextFileState];
+  const nextState: StoredSharedWorkspaceBrowserState = {
+    ...baseState,
+    fileStates: nextFileStates,
+    updatedAt: timestamp,
+  };
 
-    const nextState: StoredSharedWorkspaceBrowserState = {
-      ...baseState,
-      fileStates: nextFileStates,
-      updatedAt: timestamp,
-    };
+  await mirrorSharedBrowserStateToPostgres(nextState);
 
-    const existingIndex = store.workspaceBrowserStates.findIndex(
-      (item) => item.id === stateId,
-    );
-    const nextWorkspaceBrowserStates =
-      existingIndex >= 0
-        ? store.workspaceBrowserStates.map((item, index) =>
-            index === existingIndex ? nextState : item,
-          )
-        : [...store.workspaceBrowserStates, nextState];
-
-    return {
-      store: {
-        ...store,
-        workspaceBrowserStates: nextWorkspaceBrowserStates,
-      } as AppStore,
-      result: nextState,
-    };
+  void runShadowWrite("shared-browser-state-file-lifecycle-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertSharedBrowserStateInRawStore(store, nextState),
+      result: undefined,
+    }));
   });
+
+  return nextState;
 }

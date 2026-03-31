@@ -5,7 +5,13 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { mutateAppStore, readAppStore } from "@/lib/auth/server";
-import type { AppStore, StoredContentAsset } from "@/lib/auth/types";
+import type { StoredContentAsset } from "@/lib/auth/types";
+import { deleteAssetsFromPostgres, mirrorAssetToPostgres } from "@/lib/db/app-store-write";
+import {
+  deleteAssetsFromRawStore,
+  runShadowWrite,
+  upsertAssetInRawStore,
+} from "@/lib/store/raw-shadow";
 import { getDocumentById, getSheetById } from "@/lib/docs/mock-data";
 
 export type ContentKind = "document" | "sheet" | "slide";
@@ -151,14 +157,13 @@ async function persistAsset(params: {
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, buffer);
 
-  const collectionKey = getCollectionKey(kind);
-  await mutateAppStore((store) => ({
-    store: {
-      ...store,
-      [collectionKey]: [...store[collectionKey], asset],
-    } as AppStore,
-    result: undefined,
-  }));
+  await mirrorAssetToPostgres(asset);
+  void runShadowWrite("asset-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertAssetInRawStore(store, asset),
+      result: undefined,
+    }));
+  });
 
   return {
     asset,
@@ -402,7 +407,6 @@ export async function overwriteAssetBinary(
   assetId: string,
   buffer: Buffer,
 ) {
-  const collectionKey = getCollectionKey(kind);
   const asset = await getAssetById(kind, assetId);
 
   if (!asset) {
@@ -413,33 +417,20 @@ export async function overwriteAssetBinary(
   await mkdir(path.dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, buffer);
 
-  return mutateAppStore((store) => {
-    const collection = store[collectionKey] as StoredContentAsset[];
-    const assetIndex = collection.findIndex((current) => current.id === assetId);
-
-    if (assetIndex < 0) {
-      return {
-        store,
-        result: null,
-      };
-    }
-
-    const nextAsset: StoredContentAsset = {
-      ...collection[assetIndex],
-      sizeBytes: buffer.byteLength,
-      updatedAt: nowIso(),
-    };
-    const nextCollection = [...collection];
-    nextCollection[assetIndex] = nextAsset;
-
-    return {
-      store: {
-        ...store,
-        [collectionKey]: nextCollection,
-      } as AppStore,
-      result: nextAsset,
-    };
+  const nextAsset: StoredContentAsset = {
+    ...asset,
+    sizeBytes: buffer.byteLength,
+    updatedAt: nowIso(),
+  };
+  await mirrorAssetToPostgres(nextAsset);
+  void runShadowWrite("asset-overwrite-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertAssetInRawStore(store, nextAsset),
+      result: undefined,
+    }));
   });
+
+  return nextAsset;
 }
 
 export async function moveAssetToTrash(params: {
@@ -450,87 +441,54 @@ export async function moveAssetToTrash(params: {
 }) {
   const { kind, assetId, user } = params;
   const workspaceId = params.workspaceId ?? user.workspaceId;
-  const collectionKey = getCollectionKey(kind);
   const timestamp = nowIso();
+  const asset = await getAssetById(kind, assetId, { includeTrashed: false });
 
-  return mutateAppStore((store) => {
-    const collection = store[collectionKey] as StoredContentAsset[];
-    const assetIndex = collection.findIndex(
-      (asset) =>
-        asset.id === assetId &&
-        !asset.trashedAt &&
-        asset.workspaceId === workspaceId,
-    );
+  if (!asset || asset.workspaceId !== workspaceId || asset.trashedAt) {
+    return null;
+  }
 
-    if (assetIndex < 0) {
-      return {
-        store,
-        result: null,
-      };
-    }
-
-    const nextAsset: StoredContentAsset = {
-      ...collection[assetIndex],
-      trashedAt: timestamp,
-      updatedAt: timestamp,
-    };
-    const nextCollection = [...collection];
-    nextCollection[assetIndex] = nextAsset;
-
-    return {
-      store: {
-        ...store,
-        [collectionKey]: nextCollection,
-      } as AppStore,
-      result: nextAsset,
-    };
+  const nextAsset: StoredContentAsset = {
+    ...asset,
+    trashedAt: timestamp,
+    updatedAt: timestamp,
+  };
+  await mirrorAssetToPostgres(nextAsset);
+  void runShadowWrite("asset-trash-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertAssetInRawStore(store, nextAsset),
+      result: undefined,
+    }));
   });
+
+  return nextAsset;
 }
 
 export async function clearTrashedAssetsForUser(
   user: AuthenticatedUser,
   workspaceId: string = user.workspaceId,
 ) {
-  const removedAssets = await mutateAppStore((store) => {
-    const removedDocumentAssets = store.documents.filter(
-      (asset) => asset.trashedAt && asset.workspaceId === workspaceId,
-    );
-    const removedSheetAssets = store.sheets.filter(
-      (asset) => asset.trashedAt && asset.workspaceId === workspaceId,
-    );
-    const removedSlideAssets = store.slides.filter(
-      (asset) => asset.trashedAt && asset.workspaceId === workspaceId,
-    );
-    const removedIds = new Set(
-      [...removedDocumentAssets, ...removedSheetAssets, ...removedSlideAssets].map(
-        (asset) => asset.id,
-      ),
-    );
-
-    return {
-      store: {
-        ...store,
-        documents: store.documents.filter((asset) => !removedIds.has(asset.id)),
-        sheets: store.sheets.filter((asset) => !removedIds.has(asset.id)),
-        slides: store.slides.filter((asset) => !removedIds.has(asset.id)),
-        browserStates: store.browserStates.map((state) => ({
-          ...state,
-          fileStates: state.fileStates.filter((fileState) => !removedIds.has(fileState.fileId)),
-        })),
-        workspaceBrowserStates: store.workspaceBrowserStates.map((state) => ({
-          ...state,
-          fileStates: state.fileStates.filter((fileState) => !removedIds.has(fileState.fileId)),
-        })),
-      } as AppStore,
-      result: [...removedDocumentAssets, ...removedSheetAssets, ...removedSlideAssets],
-    };
-  });
+  const store = await readAppStore();
+  const removedAssets = [
+    ...store.documents.filter((asset) => asset.trashedAt && asset.workspaceId === workspaceId),
+    ...store.sheets.filter((asset) => asset.trashedAt && asset.workspaceId === workspaceId),
+    ...store.slides.filter((asset) => asset.trashedAt && asset.workspaceId === workspaceId),
+  ];
+  const removedIds = new Set(removedAssets.map((asset) => asset.id));
 
   await Promise.all(
     removedAssets.map((asset) =>
       unlink(toStoredPath(asset.storedRelativePath)).catch(() => undefined),
     ),
   );
+
+  await deleteAssetsFromPostgres(removedAssets.map((asset) => asset.id));
+  void runShadowWrite("asset-delete-many-shadow", async () => {
+    await mutateAppStore((rawStore) => ({
+      store: deleteAssetsFromRawStore(rawStore, [...removedIds]),
+      result: undefined,
+    }));
+  });
 
   return removedAssets;
 }
@@ -543,39 +501,25 @@ export async function restoreAssetFromTrash(params: {
 }) {
   const { kind, assetId, user } = params;
   const workspaceId = params.workspaceId ?? user.workspaceId;
-  const collectionKey = getCollectionKey(kind);
   const timestamp = nowIso();
+  const asset = await getAssetById(kind, assetId, { includeTrashed: true });
 
-  return mutateAppStore((store) => {
-    const collection = store[collectionKey] as StoredContentAsset[];
-    const assetIndex = collection.findIndex(
-      (asset) =>
-        asset.id === assetId &&
-        asset.trashedAt &&
-        asset.workspaceId === workspaceId,
-    );
+  if (!asset || asset.workspaceId !== workspaceId || !asset.trashedAt) {
+    return null;
+  }
 
-    if (assetIndex < 0) {
-      return {
-        store,
-        result: null,
-      };
-    }
-
-    const nextAsset: StoredContentAsset = {
-      ...collection[assetIndex],
-      trashedAt: null,
-      updatedAt: timestamp,
-    };
-    const nextCollection = [...collection];
-    nextCollection[assetIndex] = nextAsset;
-
-    return {
-      store: {
-        ...store,
-        [collectionKey]: nextCollection,
-      } as AppStore,
-      result: nextAsset,
-    };
+  const nextAsset: StoredContentAsset = {
+    ...asset,
+    trashedAt: null,
+    updatedAt: timestamp,
+  };
+  await mirrorAssetToPostgres(nextAsset);
+  void runShadowWrite("asset-restore-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertAssetInRawStore(store, nextAsset),
+      result: undefined,
+    }));
   });
+
+  return nextAsset;
 }

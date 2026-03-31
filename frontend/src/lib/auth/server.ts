@@ -10,6 +10,13 @@ import {
 } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readAppStoreFromPostgres } from "@/lib/db/app-store-read";
+import { deleteSessionFromPostgres, mirrorSessionToPostgres } from "@/lib/db/app-store-write";
+import {
+  deleteSessionFromRawStore,
+  runShadowWrite,
+  upsertSessionInRawStore,
+} from "@/lib/store/raw-shadow";
 import type {
   AppStore,
   AuthenticatedUser,
@@ -313,6 +320,31 @@ async function writeStore(store: AppStore) {
   await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
 }
 
+async function buildStoreFallbackFromPostgresOrSeed() {
+  const postgresStore = await readAppStoreFromPostgres().catch((error) => {
+    console.error("[bpai-store] postgres fallback read failed", error);
+    return null;
+  });
+
+  return postgresStore
+    ? ensureSeedUsersPresent(normalizeStore(postgresStore))
+    : createSeedStore();
+}
+
+async function restoreStoreFromFallback(reason: string, source?: string) {
+  console.error(`[bpai-store] restoring raw store from fallback: ${reason}`);
+  await mkdir(STORE_DIR, { recursive: true });
+
+  if (source) {
+    const backupPath = path.join(STORE_DIR, `app-store.corrupt-${Date.now()}.json`);
+    await writeFile(backupPath, source, "utf8");
+  }
+
+  const fallbackStore = await buildStoreFallbackFromPostgresOrSeed();
+  await writeStore(fallbackStore);
+  return fallbackStore;
+}
+
 async function withStoreMutationLock<T>(operation: () => Promise<T>) {
   const previous = globalThis.__bpaiStoreMutationQueue ?? Promise.resolve();
   let release!: () => void;
@@ -336,7 +368,16 @@ async function withStoreMutationLock<T>(operation: () => Promise<T>) {
 async function readOrCreateStore() {
   try {
     const source = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(source) as AppStore;
+    let parsed: AppStore;
+
+    try {
+      parsed = JSON.parse(source) as AppStore;
+    } catch (error) {
+      return restoreStoreFromFallback(
+        error instanceof Error ? error.message : "invalid raw json",
+        source,
+      );
+    }
 
     if (
       parsed.version === 1 &&
@@ -356,15 +397,108 @@ async function readOrCreateStore() {
     if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
       throw error;
     }
+
+    return restoreStoreFromFallback("raw store missing");
   }
 
-  const seedStore = createSeedStore();
-  await writeStore(seedStore);
-  return seedStore;
+  return restoreStoreFromFallback("raw store schema mismatch");
+}
+
+function preferByUpdatedAt<T extends { updatedAt: string }>(left: T, right: T) {
+  return Date.parse(right.updatedAt) > Date.parse(left.updatedAt) ? right : left;
+}
+
+function preferSession(left: StoredSession, right: StoredSession) {
+  return Date.parse(right.lastSeenAt) > Date.parse(left.lastSeenAt) ? right : left;
+}
+
+function mergeCollectionById<T>(
+  primary: T[],
+  fallback: T[],
+  getId: (item: T) => string,
+  pickWinner: (primaryItem: T, fallbackItem: T) => T,
+) {
+  const merged = new Map(primary.map((item) => [getId(item), item]));
+
+  for (const item of fallback) {
+    const key = getId(item);
+    const existing = merged.get(key);
+    merged.set(key, existing ? pickWinner(existing, item) : item);
+  }
+
+  return [...merged.values()];
+}
+
+function mergeAppStores(primary: AppStore, fallback: AppStore): AppStore {
+  return {
+    version: 1,
+    users: mergeCollectionById(primary.users, fallback.users, (item) => item.id, preferByUpdatedAt),
+    workspaces: mergeCollectionById(
+      primary.workspaces,
+      fallback.workspaces,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    sessions: mergeCollectionById(
+      primary.sessions,
+      fallback.sessions,
+      (item) => item.id,
+      preferSession,
+    ),
+    documents: mergeCollectionById(
+      primary.documents,
+      fallback.documents,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    sheets: mergeCollectionById(primary.sheets, fallback.sheets, (item) => item.id, preferByUpdatedAt),
+    slides: mergeCollectionById(primary.slides, fallback.slides, (item) => item.id, preferByUpdatedAt),
+    browserStates: mergeCollectionById(
+      primary.browserStates,
+      fallback.browserStates,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    workspaceBrowserStates: mergeCollectionById(
+      primary.workspaceBrowserStates,
+      fallback.workspaceBrowserStates,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    collaborationSpaces: mergeCollectionById(
+      primary.collaborationSpaces,
+      fallback.collaborationSpaces,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    collaborationSpaceMembers: mergeCollectionById(
+      primary.collaborationSpaceMembers,
+      fallback.collaborationSpaceMembers,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    dissolvedCollaborationSpaceIds: Array.from(
+      new Set([
+        ...primary.dissolvedCollaborationSpaceIds,
+        ...fallback.dissolvedCollaborationSpaceIds,
+      ]),
+    ),
+  };
+}
+
+export async function readRawAppStore() {
+  return readOrCreateStore();
 }
 
 export async function readAppStore() {
-  return readOrCreateStore();
+  const rawStore = await readOrCreateStore();
+  const postgresStore = await readAppStoreFromPostgres();
+
+  if (!postgresStore) {
+    return rawStore;
+  }
+
+  return mergeAppStores(postgresStore, rawStore);
 }
 
 export async function saveAppStore(store: AppStore) {
@@ -480,7 +614,7 @@ async function resolveSession(
     throw new Error("INVALID_SESSION");
   }
 
-  const cleanedStore = cleanupExpiredSessions(await readOrCreateStore());
+  const cleanedStore = cleanupExpiredSessions(await readAppStore());
   const session = cleanedStore.sessions.find(
     (current) =>
       current.id === payload.sessionId && current.userId === payload.userId,
@@ -514,7 +648,7 @@ export function buildAuthCookie(expiresAt: string) {
 
 export async function authenticateUser(email: string, password: string) {
   const normalizedEmail = normalizeEmail(email);
-  const cleanedStore = cleanupExpiredSessions(await readOrCreateStore());
+  const cleanedStore = cleanupExpiredSessions(await readAppStore());
   const user = cleanedStore.users.find(
     (current) => normalizeEmail(current.email) === normalizedEmail,
   );
@@ -538,30 +672,26 @@ export async function authenticateUser(email: string, password: string) {
     expiresAt,
     lastSeenAt: createdAt,
   };
-
-  return mutateAppStore((store) => {
-    const sessionUser = store.users.find((current) => current.id === user.id) ?? user;
-    const nextStore: AppStore = {
-      ...store,
-      sessions: [...store.sessions, session],
-    };
-
-    return {
-      store: nextStore,
-      result: {
-        token: serializeSessionToken({
-          sessionId: session.id,
-          userId: session.userId,
-          expiresAt: session.expiresAt,
-        }),
-        expiresAt: session.expiresAt,
-        user: toAuthenticatedUser(
-          sessionUser,
-          getWorkspaceForUser(nextStore, sessionUser),
-        ),
-      },
-    };
+  await mirrorSessionToPostgres(session);
+  void runShadowWrite("session-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertSessionInRawStore(store, session),
+      result: undefined,
+    }));
   });
+
+  return {
+    token: serializeSessionToken({
+      sessionId: session.id,
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+    }),
+    expiresAt: session.expiresAt,
+    user: toAuthenticatedUser(
+      user,
+      getWorkspaceForUser(cleanedStore, user),
+    ),
+  };
 }
 
 export async function deleteSession(token: string | undefined) {
@@ -571,15 +701,13 @@ export async function deleteSession(token: string | undefined) {
     return;
   }
 
-  await mutateAppStore((store) => ({
-    store: {
-      ...store,
-      sessions: store.sessions.filter(
-        (session) => session.id !== payload.sessionId,
-      ),
-    },
-    result: undefined,
-  }));
+  await deleteSessionFromPostgres(payload.sessionId);
+  void runShadowWrite("session-delete-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: deleteSessionFromRawStore(store, payload.sessionId),
+      result: undefined,
+    }));
+  });
 }
 
 export async function getCurrentUserFromToken(token: string | undefined) {

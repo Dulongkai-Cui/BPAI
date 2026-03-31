@@ -4,10 +4,20 @@ import { randomBytes } from "node:crypto";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { mutateAppStore, readAppStore } from "@/lib/auth/server";
 import type {
-  AppStore,
   StoredCollaborationSpace,
   StoredCollaborationSpaceMembers,
 } from "@/lib/auth/types";
+import {
+  dissolveCollaborationSpaceInPostgres,
+  mirrorCollaborationSpaceToPostgres,
+  mirrorAssetToPostgres,
+} from "@/lib/db/app-store-write";
+import {
+  dissolveCollaborationSpaceInRawStore,
+  insertCollaborationSpaceInRawStore,
+  runShadowWrite,
+  upsertCollaborationMemberStateInRawStore,
+} from "@/lib/store/raw-shadow";
 import {
   assignedSystemForms,
   collaborationSpaces,
@@ -289,30 +299,35 @@ async function updateWorkspaceMemberEmails(params: {
 }) {
   const { workspaceId } = params;
   const nextMemberEmails = uniqueEmails(params.memberEmails);
+  const store = await readAppStore();
+  const existingState =
+    store.collaborationSpaceMembers.find((item) => item.workspaceId === workspaceId) ?? null;
+  const nextState = buildNextMemberState(workspaceId, nextMemberEmails, existingState);
+  const space = await getCollaborationSpaceById(workspaceId);
 
-  return mutateAppStore((store) => {
-    const existingState =
-      store.collaborationSpaceMembers.find((item) => item.workspaceId === workspaceId) ?? null;
-    const nextState = buildNextMemberState(workspaceId, nextMemberEmails, existingState);
-    const existingIndex = store.collaborationSpaceMembers.findIndex(
-      (item) => item.workspaceId === workspaceId,
-    );
+  if (space) {
+    await mirrorCollaborationSpaceToPostgres({
+      id: space.id,
+      name: space.name,
+      summary: space.summary,
+      ownerEmail: space.ownerEmail,
+      memberEmails: nextState.memberEmails,
+      documentCount: space.documentCount,
+      systemFormCount: space.systemFormCount,
+      tone: space.tone,
+      createdAt: nextState.createdAt,
+      updatedAt: nextState.updatedAt,
+    });
+  }
 
-    const nextMemberStates =
-      existingIndex >= 0
-        ? store.collaborationSpaceMembers.map((item, index) =>
-            index === existingIndex ? nextState : item,
-          )
-        : [...store.collaborationSpaceMembers, nextState];
-
-    return {
-      store: {
-        ...store,
-        collaborationSpaceMembers: nextMemberStates,
-      } as AppStore,
-      result: nextState,
-    };
+  void runShadowWrite("workspace-members-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertCollaborationMemberStateInRawStore(store, nextState),
+      result: undefined,
+    }));
   });
+
+  return nextState;
 }
 
 export async function inviteMembersToWorkspace(params: {
@@ -403,13 +418,16 @@ export async function createCollaborationSpace(params: {
     updatedAt: timestamp,
   };
 
-  return mutateAppStore((store) => ({
-    store: {
-      ...store,
-      collaborationSpaces: [nextSpace, ...store.collaborationSpaces],
-    } as AppStore,
-    result: mapStoredSpaceToCollaborationSpace(nextSpace, null),
-  }));
+  await mirrorCollaborationSpaceToPostgres(nextSpace);
+
+  void runShadowWrite("collaboration-space-upsert-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: insertCollaborationSpaceInRawStore(store, nextSpace),
+      result: undefined,
+    }));
+  });
+
+  return mapStoredSpaceToCollaborationSpace(nextSpace, null);
 }
 
 export async function dissolveCollaborationSpace(params: {
@@ -428,45 +446,56 @@ export async function dissolveCollaborationSpace(params: {
   }
 
   const timestamp = nowIso();
+  const store = await readAppStore();
+  const storedSpace = store.collaborationSpaces.find((item) => item.id === workspaceId) ?? null;
+  const movedAssets = [
+    ...store.documents.filter((asset) => asset.workspaceId === workspaceId),
+    ...store.sheets.filter((asset) => asset.workspaceId === workspaceId),
+    ...store.slides.filter((asset) => asset.workspaceId === workspaceId),
+  ];
+  const migratedAssets = movedAssets.map((asset) => ({
+    ...asset,
+    workspaceId: actor.workspaceId,
+    trashedAt: asset.trashedAt ?? timestamp,
+    updatedAt: timestamp,
+  }));
 
-  return mutateAppStore((store) => {
-    const dissolvedIds = new Set(store.dissolvedCollaborationSpaceIds);
-    dissolvedIds.add(workspaceId);
-
-    const migrateAssets = <T extends { workspaceId: string; trashedAt?: string | null; updatedAt: string }>(
-      assets: T[],
-    ) =>
-      assets.map((asset) =>
-        asset.workspaceId === workspaceId
-          ? {
-              ...asset,
-              workspaceId: actor.workspaceId,
-              trashedAt: asset.trashedAt ?? timestamp,
-              updatedAt: timestamp,
-            }
-          : asset,
-      );
-
-    return {
-      store: {
-        ...store,
-        documents: migrateAssets(store.documents),
-        sheets: migrateAssets(store.sheets),
-        slides: migrateAssets(store.slides),
-        collaborationSpaces: store.collaborationSpaces.filter(
-          (item) => item.id !== workspaceId,
-        ),
-        collaborationSpaceMembers: store.collaborationSpaceMembers.filter(
-          (item) => item.workspaceId !== workspaceId,
-        ),
-        workspaceBrowserStates: store.workspaceBrowserStates.filter(
-          (item) => item.workspaceId !== workspaceId,
-        ),
-        dissolvedCollaborationSpaceIds: [...dissolvedIds],
-      } as AppStore,
-      result: {
-        workspaceId,
-      },
-    };
+  await mirrorCollaborationSpaceToPostgres({
+    id: space.id,
+    name: space.name,
+    summary: space.summary,
+    ownerEmail: space.ownerEmail,
+    memberEmails: space.memberEmails,
+    documentCount: space.documentCount,
+    systemFormCount: space.systemFormCount,
+    tone: space.tone,
+    createdAt: storedSpace?.createdAt ?? timestamp,
+    updatedAt: storedSpace?.updatedAt ?? timestamp,
   });
+
+  for (const asset of migratedAssets) {
+    await mirrorAssetToPostgres(asset);
+  }
+
+  await dissolveCollaborationSpaceInPostgres({
+    workspaceId,
+    dissolvedAt: timestamp,
+  });
+
+  void runShadowWrite("collaboration-space-dissolve-shadow", async () => {
+    await mutateAppStore((rawStore) => ({
+      store: dissolveCollaborationSpaceInRawStore(rawStore, {
+        workspaceId,
+        targetWorkspaceId: actor.workspaceId,
+        dissolvedAt: timestamp,
+      }),
+      result: undefined,
+    }));
+  });
+
+  return {
+    workspaceId,
+    dissolvedAt: timestamp,
+    movedAssetIds: movedAssets.map((asset) => asset.id),
+  };
 }
