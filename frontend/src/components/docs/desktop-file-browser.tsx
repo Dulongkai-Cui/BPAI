@@ -6,7 +6,7 @@ import type {
   MouseEvent as ReactMouseEvent,
 } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type FolderTone = "blue" | "amber" | "emerald" | "slate" | "violet" | "rose";
@@ -68,12 +68,44 @@ export type BrowserBoardMessage = {
   postedAt: string;
 };
 
+type BrowserCopyTargetInnerFolder = {
+  id: string;
+  parentFolderId: string;
+  parentInnerFolderId: string | null;
+  name: string;
+  description: string;
+  tone: FolderTone;
+  icon: FolderIconName;
+};
+
+type BrowserCopyTargetFileState = {
+  fileId: string;
+  folderId: string;
+  subfolderId: string | null;
+  titleOverride?: string;
+  isTrashed?: boolean;
+  isDeleted?: boolean;
+  trashedAt?: string;
+};
+
 export type BrowserCopyTarget = {
   id: string;
   label: string;
   description?: string;
   workspaceId: string;
   shareMode: "personal" | "workspace";
+  folders?: BrowserFolder[];
+  customFolders?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    tone: FolderTone;
+    icon?: FolderIconName;
+  }>;
+  deletedFolderIds?: string[];
+  innerFolders?: BrowserCopyTargetInnerFolder[];
+  fileStates?: BrowserCopyTargetFileState[];
+  boardMessages?: BrowserBoardMessage[];
 };
 
 type InnerFolder = {
@@ -179,6 +211,21 @@ type DraggedItem =
   | { kind: "file"; id: string }
   | { kind: "inner-folder"; id: string }
   | null;
+type SpaceUploadSource =
+  | { kind: "file"; id: string }
+  | { kind: "folder"; id: string }
+  | { kind: "inner-folder"; id: string }
+  | null;
+type CreateItemKind = BrowserFile["kind"];
+type CreateItemTemplateOption = {
+  value: CreateItemKind;
+  label: string;
+  helper: string;
+  extension: string;
+  sampleFileName?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+};
 
 type SelectionRect = {
   left: number;
@@ -196,6 +243,35 @@ const EMPTY_FILE_STATES: PersistedBrowserFileState[] = [];
 const EMPTY_DELETED_FOLDER_IDS: string[] = [];
 const EMPTY_BOARD_MESSAGES: BrowserBoardMessage[] = [];
 const DEFAULT_FOLDER_NAME = "新建文件夹";
+const DEFAULT_NEW_ITEM_NAME: Record<CreateItemKind, string> = {
+  document: "未命名文档",
+  sheet: "未命名表格",
+  slide: "未命名演示",
+};
+const CREATE_ITEM_TEMPLATE_OPTIONS: CreateItemTemplateOption[] = [
+  {
+    value: "document",
+    label: "文档",
+    helper: "新建可直接进入 OnlyOffice 的空白文档",
+    extension: "docx",
+    sampleFileName: "new.docx",
+  },
+  {
+    value: "sheet",
+    label: "表格",
+    helper: "创建空白表格并直接进入编辑页",
+    extension: "xlsx",
+    sampleFileName: "sheet-new.xlsx",
+  },
+  {
+    value: "slide",
+    label: "演示稿",
+    helper: "创建空白演示稿并直接进入编辑页",
+    extension: "pptx",
+    sampleFileName: "slide-new.pptx",
+  },
+];
+const NON_DESTINATION_FOLDER_IDS = new Set(["recent-uploads", "workspace-recent-uploads"]);
 const toneOptions: FolderTone[] = [
   "blue",
   "amber",
@@ -322,6 +398,17 @@ function withReturnTo(href: string, returnToHref?: string) {
   if (!returnToHref) return href;
   const s = href.includes("?") ? "&" : "?";
   return `${href}${s}returnTo=${encodeURIComponent(returnToHref)}`;
+}
+function ensureTitleForKind(name: string, kind: CreateItemKind) {
+  const option = CREATE_ITEM_TEMPLATE_OPTIONS.find((item) => item.value === kind);
+  const extension = option?.extension ?? "docx";
+  const fallback = DEFAULT_NEW_ITEM_NAME[kind];
+  const baseName = (name || "")
+    .trim()
+    .replace(/\.[^.]+$/u, "")
+    .trim();
+
+  return `${baseName || fallback}.${extension}`;
 }
 function hasExternalFiles(e: DragEvent<HTMLElement>) {
   return (
@@ -742,11 +829,39 @@ export function DesktopFileBrowser({
   const [folderDraftTone, setFolderDraftTone] = useState<FolderTone>("blue");
   const [folderDraftIcon, setFolderDraftIcon] =
     useState<FolderIconName>("folder");
+  const [newItemDialogOpen, setNewItemDialogOpen] = useState(false);
+  const [newItemDraftName, setNewItemDraftName] = useState(
+    DEFAULT_NEW_ITEM_NAME.document,
+  );
+  const [newItemDraftKind, setNewItemDraftKind] =
+    useState<CreateItemKind>("document");
+  const [newItemTargetFolderId, setNewItemTargetFolderId] = useState<
+    string | null
+  >(null);
+  const [newItemTargetInnerFolderId, setNewItemTargetInnerFolderId] = useState<
+    string | null
+  >(null);
+  const [newItemError, setNewItemError] = useState("");
+  const [isCreatingNewItem, setIsCreatingNewItem] = useState(false);
   const [selectedInviteEmails, setSelectedInviteEmails] = useState<string[]>(
     [],
   );
   const [savingMembers, setSavingMembers] = useState(false);
   const [copyFileId, setCopyFileId] = useState<string | null>(null);
+  const [spaceUploadSource, setSpaceUploadSource] =
+    useState<SpaceUploadSource>(null);
+  const [spaceUploadTargets, setSpaceUploadTargets] =
+    useState<BrowserCopyTarget[]>(copyTargets);
+  const [spaceUploadTargetId, setSpaceUploadTargetId] = useState<string | null>(
+    null,
+  );
+  const [spaceUploadTargetFolderId, setSpaceUploadTargetFolderId] = useState<
+    string | null
+  >(null);
+  const [spaceUploadTargetInnerFolderId, setSpaceUploadTargetInnerFolderId] =
+    useState<string | null>(null);
+  const [spaceUploadError, setSpaceUploadError] = useState("");
+  const [spaceUploadingOut, setSpaceUploadingOut] = useState(false);
   const [copyingOut, setCopyingOut] = useState(false);
   const [isDraggingNodeMap, setIsDraggingNodeMap] = useState(false);
   const derivedManagedFiles = useMemo(
@@ -791,6 +906,11 @@ export function DesktopFileBrowser({
       sameContacts(cur, contactOptions) ? cur : contactOptions,
     );
   }, [contactOptions]);
+  useEffect(() => {
+    setSpaceUploadTargets((cur) =>
+      sameArrayByValue(cur, copyTargets) ? cur : copyTargets,
+    );
+  }, [copyTargets]);
   useEffect(() => {
     const v = readViewState(viewKey);
     if (v) {
@@ -982,12 +1102,262 @@ export function DesktopFileBrowser({
         ),
     [activeFolderId, activeInnerFolderId, boardMessages],
   );
+  const createItemRootFolders = useMemo(
+    () =>
+      allFolders.filter(
+        (folder) =>
+          folder.id !== "all" && !NON_DESTINATION_FOLDER_IDS.has(folder.id),
+      ),
+    [allFolders],
+  );
+  const createItemTargetFolder =
+    createItemRootFolders.find((folder) => folder.id === newItemTargetFolderId) ??
+    null;
+  const createItemInnerFolders = useMemo(
+    () =>
+      createItemTargetFolder
+        ? innerFolders.filter(
+            (folder) => folder.parentFolderId === createItemTargetFolder.id,
+          )
+        : [],
+    [createItemTargetFolder, innerFolders],
+  );
+  const createItemInnerFolderMap = useMemo(
+    () => new Map(createItemInnerFolders.map((folder) => [folder.id, folder])),
+    [createItemInnerFolders],
+  );
+  const createItemTargetPath = useMemo(() => {
+    if (!newItemTargetInnerFolderId) return [] as InnerFolder[];
+
+    const path: InnerFolder[] = [];
+    let cursor =
+      createItemInnerFolderMap.get(newItemTargetInnerFolderId) ?? null;
+
+    while (cursor) {
+      path.unshift(cursor);
+      cursor = cursor.parentInnerFolderId
+        ? (createItemInnerFolderMap.get(cursor.parentInnerFolderId) ?? null)
+        : null;
+    }
+
+    return path;
+  }, [createItemInnerFolderMap, newItemTargetInnerFolderId]);
+  const createItemVisibleInnerFolders = useMemo(
+    () =>
+      createItemInnerFolders.filter(
+        (folder) => folder.parentInnerFolderId === newItemTargetInnerFolderId,
+      ),
+    [createItemInnerFolders, newItemTargetInnerFolderId],
+  );
+  const createItemTemplate =
+    CREATE_ITEM_TEMPLATE_OPTIONS.find(
+      (option) => option.value === newItemDraftKind,
+    ) ?? CREATE_ITEM_TEMPLATE_OPTIONS[0];
+  const hasStructuredCopyTargets =
+    isPersonalLayout &&
+    spaceUploadTargets.some(
+      (target) => target.shareMode === "workspace" && (target.folders?.length ?? 0) > 0,
+    );
+  const selectedSpaceUploadTarget =
+    spaceUploadTargets.find((target) => target.id === spaceUploadTargetId) ??
+    spaceUploadTargets[0] ??
+    null;
+  const selectedSpaceUploadFolders = useMemo(
+    () =>
+      selectedSpaceUploadTarget?.folders?.filter(
+        (folder) => !NON_DESTINATION_FOLDER_IDS.has(folder.id),
+      ) ?? [],
+    [selectedSpaceUploadTarget],
+  );
+  const selectedSpaceUploadInnerFolders = useMemo(
+    () =>
+      selectedSpaceUploadTarget?.innerFolders?.filter((folder) =>
+        selectedSpaceUploadFolders.some(
+          (rootFolder) => rootFolder.id === folder.parentFolderId,
+        ),
+      ) ?? [],
+    [selectedSpaceUploadFolders, selectedSpaceUploadTarget],
+  );
+  const selectedSpaceUploadInnerFolderMap = useMemo(
+    () =>
+      new Map(
+        selectedSpaceUploadInnerFolders.map((folder) => [folder.id, folder]),
+      ),
+    [selectedSpaceUploadInnerFolders],
+  );
+  const selectedSpaceUploadPath = useMemo(() => {
+    if (!spaceUploadTargetInnerFolderId) return [] as BrowserCopyTargetInnerFolder[];
+
+    const path: BrowserCopyTargetInnerFolder[] = [];
+    let cursor =
+      selectedSpaceUploadInnerFolderMap.get(spaceUploadTargetInnerFolderId) ??
+      null;
+
+    while (cursor) {
+      path.unshift(cursor);
+      cursor = cursor.parentInnerFolderId
+        ? (selectedSpaceUploadInnerFolderMap.get(cursor.parentInnerFolderId) ??
+            null)
+        : null;
+    }
+
+    return path;
+  }, [selectedSpaceUploadInnerFolderMap, spaceUploadTargetInnerFolderId]);
+  const visibleSpaceUploadInnerFolders = useMemo(
+    () =>
+      selectedSpaceUploadInnerFolders.filter(
+        (folder) =>
+          folder.parentFolderId === spaceUploadTargetFolderId &&
+          folder.parentInnerFolderId === spaceUploadTargetInnerFolderId,
+      ),
+    [
+      selectedSpaceUploadInnerFolders,
+      spaceUploadTargetFolderId,
+      spaceUploadTargetInnerFolderId,
+    ],
+  );
+  const spaceUploadSourceMeta = useMemo(() => {
+    if (!spaceUploadSource) return null;
+
+    if (spaceUploadSource.kind === "file") {
+      const file = managedFiles.find((item) => item.id === spaceUploadSource.id);
+      return file
+        ? {
+            label: file.title,
+            helper: "会复制这个文件到所选合作空间目录",
+          }
+        : null;
+    }
+
+    if (spaceUploadSource.kind === "folder") {
+      const folder = allFolders.find((item) => item.id === spaceUploadSource.id);
+      return folder
+        ? {
+            label: folder.name,
+            helper: "会把这个大文件夹整理成一个子文件夹后复制过去",
+          }
+        : null;
+    }
+
+    const folder = innerFolders.find((item) => item.id === spaceUploadSource.id);
+    return folder
+      ? {
+          label: folder.name,
+          helper: "会把这个子文件夹连同里面的文件一起复制过去",
+        }
+      : null;
+  }, [allFolders, innerFolders, managedFiles, spaceUploadSource]);
   const copyTargetsForModal = copyFileId
     ? managedFiles.find((f) => f.id === copyFileId)
     : null;
   const latestBoardMessageId = currentMessages.length
     ? currentMessages[currentMessages.length - 1]?.id
     : null;
+
+  const buildBrowserStatePayload = useCallback((options?: {
+    nextManagedFiles?: ManagedBrowserFile[];
+    nextActiveFolderId?: string;
+    nextActiveInnerFolderId?: string | null;
+  }) => {
+    const nextManagedFiles = options?.nextManagedFiles ?? managedFiles;
+
+    return {
+      kind,
+      workspaceId,
+      shareMode: sharedWorkspaceState ? "workspace" : "personal",
+      activeFolderId: options?.nextActiveFolderId ?? activeFolderId,
+      activeInnerFolderId:
+        options?.nextActiveInnerFolderId !== undefined
+          ? options.nextActiveInnerFolderId
+          : activeInnerFolderId,
+      folderViewMode,
+      deletedFolderIds,
+      customFolders: customFolders.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        description: folder.description,
+        tone: folder.tone,
+        icon: folder.icon,
+      })),
+      innerFolders: innerFolders.map((folder) => ({
+        id: folder.id,
+        parentFolderId: folder.parentFolderId,
+        parentInnerFolderId: folder.parentInnerFolderId,
+        name: folder.name,
+        description: folder.description,
+        tone: folder.tone,
+        icon: folder.icon,
+      })),
+      fileStates: [
+        ...nextManagedFiles.map((file) => ({
+          fileId: file.id,
+          folderId: file.folderId,
+          subfolderId: file.subfolderId,
+          titleOverride:
+            file.title !== fileMap.get(file.id)?.title ? file.title : undefined,
+          isTrashed: file.isTrashed,
+          isDeleted: file.isDeleted,
+          trashedAt: file.trashedAt,
+        })),
+        ...detachedStates.filter(
+          (state) => !nextManagedFiles.some((file) => file.id === state.fileId),
+        ),
+      ],
+      boardMessages: sharedWorkspaceState ? boardMessages : undefined,
+    };
+  }, [
+    activeFolderId,
+    activeInnerFolderId,
+    boardMessages,
+    customFolders,
+    deletedFolderIds,
+    detachedStates,
+    fileMap,
+    folderViewMode,
+    innerFolders,
+    kind,
+    managedFiles,
+    sharedWorkspaceState,
+    workspaceId,
+  ]);
+
+  const persistBrowserStateSnapshot = useCallback(async (options?: {
+    nextManagedFiles?: ManagedBrowserFile[];
+    nextActiveFolderId?: string;
+    nextActiveInnerFolderId?: string | null;
+  }) => {
+    await fetch("/api/browser-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildBrowserStatePayload(options)),
+    }).catch(() => null);
+  }, [buildBrowserStatePayload]);
+
+  function resolveDefaultCreateItemDestination() {
+    const currentFolderSelectable =
+      activeFolderId !== "all" &&
+      !NON_DESTINATION_FOLDER_IDS.has(activeFolderId) &&
+      createItemRootFolders.some((folder) => folder.id === activeFolderId);
+
+    const folderId = currentFolderSelectable
+      ? activeFolderId
+      : (createItemRootFolders[0]?.id ?? null);
+    const innerFolderId =
+      currentFolderSelectable &&
+      activeInnerFolderId &&
+      innerFolders.some(
+        (folder) =>
+          folder.id === activeInnerFolderId &&
+          folder.parentFolderId === activeFolderId,
+      )
+        ? activeInnerFolderId
+        : null;
+
+    return {
+      folderId,
+      innerFolderId,
+    };
+  }
 
   useEffect(() => {
     if (!isDraggingNodeMap) return;
@@ -1133,47 +1503,7 @@ export function DesktopFileBrowser({
       return;
     }
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    const payload = {
-      kind,
-      workspaceId,
-      shareMode: sharedWorkspaceState ? "workspace" : "personal",
-      activeFolderId,
-      activeInnerFolderId,
-      folderViewMode,
-      deletedFolderIds,
-      customFolders: customFolders.map((f) => ({
-        id: f.id,
-        name: f.name,
-        description: f.description,
-        tone: f.tone,
-        icon: f.icon,
-      })),
-      innerFolders: innerFolders.map((f) => ({
-        id: f.id,
-        parentFolderId: f.parentFolderId,
-        parentInnerFolderId: f.parentInnerFolderId,
-        name: f.name,
-        description: f.description,
-        tone: f.tone,
-        icon: f.icon,
-      })),
-      fileStates: [
-        ...managedFiles.map((f) => ({
-          fileId: f.id,
-          folderId: f.folderId,
-          subfolderId: f.subfolderId,
-          titleOverride:
-            f.title !== fileMap.get(f.id)?.title ? f.title : undefined,
-          isTrashed: f.isTrashed,
-          isDeleted: f.isDeleted,
-          trashedAt: f.trashedAt,
-        })),
-        ...detachedStates.filter(
-          (s) => !managedFiles.some((f) => f.id === s.fileId),
-        ),
-      ],
-      boardMessages: sharedWorkspaceState ? boardMessages : undefined,
-    };
+    const payload = buildBrowserStatePayload();
     saveTimerRef.current = setTimeout(() => {
       void fetch("/api/browser-state", {
         method: "POST",
@@ -1188,6 +1518,7 @@ export function DesktopFileBrowser({
     activeFolderId,
     activeInnerFolderId,
     boardMessages,
+    buildBrowserStatePayload,
     customFolders,
     deletedFolderIds,
     detachedStates,
@@ -1362,6 +1693,101 @@ export function DesktopFileBrowser({
     setFolderDialogMode("create");
     setFolderDialogTargetId(null);
   }
+  function closeCreateItemDialog() {
+    if (isCreatingNewItem) return;
+    setNewItemDialogOpen(false);
+    setNewItemError("");
+  }
+  function resolveDefaultSpaceUploadDestination(target?: BrowserCopyTarget | null) {
+    const nextTarget =
+      target ??
+      spaceUploadTargets.find(
+        (item) =>
+          item.shareMode === "workspace" && (item.folders?.length ?? 0) > 0,
+      ) ??
+      spaceUploadTargets[0] ??
+      null;
+    const nextFolderId =
+      nextTarget?.folders?.find(
+        (folder) => !NON_DESTINATION_FOLDER_IDS.has(folder.id),
+      )?.id ?? null;
+
+    return {
+      targetId: nextTarget?.id ?? null,
+      folderId: nextFolderId,
+      innerFolderId: null as string | null,
+    };
+  }
+  function closeSpaceUploadDialog() {
+    setSpaceUploadSource(null);
+    setSpaceUploadError("");
+  }
+  function openSpaceUploadDialog(source: Exclude<SpaceUploadSource, null>) {
+    if (!hasStructuredCopyTargets) return;
+    const defaults = resolveDefaultSpaceUploadDestination();
+    setSpaceUploadSource(source);
+    setSpaceUploadTargetId(defaults.targetId);
+    setSpaceUploadTargetFolderId(defaults.folderId);
+    setSpaceUploadTargetInnerFolderId(defaults.innerFolderId);
+    setSpaceUploadError("");
+    setContextMenu(null);
+  }
+  function changeSpaceUploadTarget(targetId: string) {
+    const nextTarget =
+      spaceUploadTargets.find((target) => target.id === targetId) ?? null;
+    const defaults = resolveDefaultSpaceUploadDestination(nextTarget);
+    setSpaceUploadTargetId(targetId);
+    setSpaceUploadTargetFolderId(defaults.folderId);
+    setSpaceUploadTargetInnerFolderId(defaults.innerFolderId);
+    setSpaceUploadError("");
+  }
+  function selectSpaceUploadTargetFolder(folderId: string) {
+    setSpaceUploadTargetFolderId(folderId);
+    setSpaceUploadTargetInnerFolderId(null);
+    setSpaceUploadError("");
+  }
+  function selectSpaceUploadTargetInnerFolder(folderId: string | null) {
+    setSpaceUploadTargetInnerFolderId(folderId);
+    setSpaceUploadError("");
+  }
+  function openCreateItemDialog() {
+    if (!canCreate || !workspaceId) {
+      router.push(newItemHref);
+      return;
+    }
+    const destination = resolveDefaultCreateItemDestination();
+    setNewItemDraftKind("document");
+    setNewItemDraftName(DEFAULT_NEW_ITEM_NAME.document);
+    setNewItemTargetFolderId(destination.folderId);
+    setNewItemTargetInnerFolderId(destination.innerFolderId);
+    setNewItemError("");
+    setNewItemDialogOpen(true);
+    setContextMenu(null);
+  }
+  function changeCreateItemKind(nextKind: CreateItemKind) {
+    const nextTemplate = CREATE_ITEM_TEMPLATE_OPTIONS.find(
+      (option) => option.value === nextKind,
+    );
+    if (!nextTemplate || nextTemplate.disabled) return;
+
+    const nextBaseName = newItemDraftName
+      .trim()
+      .replace(/\.[^.]+$/u, "")
+      .trim();
+
+    setNewItemDraftKind(nextKind);
+    setNewItemDraftName(nextBaseName || DEFAULT_NEW_ITEM_NAME[nextKind]);
+    setNewItemError("");
+  }
+  function selectCreateItemRootFolder(folderId: string) {
+    setNewItemTargetFolderId(folderId);
+    setNewItemTargetInnerFolderId(null);
+    setNewItemError("");
+  }
+  function selectCreateItemInnerFolder(folderId: string | null) {
+    setNewItemTargetInnerFolderId(folderId);
+    setNewItemError("");
+  }
   function openCreateFolderDialog() {
     if (!canCreate) return;
     setFolderDialogMode("create");
@@ -1466,6 +1892,102 @@ export function DesktopFileBrowser({
     setActiveFolderId(next.id);
     setActiveInnerFolderId(null);
     closeFolderDialog();
+  }
+  async function createNewItem() {
+    if (!workspaceId) {
+      setNewItemError("当前空间还没有准备好，请刷新后重试。");
+      return;
+    }
+    if (!createItemTargetFolder) {
+      setNewItemError("请先选择要放入的文件夹。");
+      return;
+    }
+    if (createItemTemplate.disabled || !createItemTemplate.sampleFileName) {
+      setNewItemError(
+        createItemTemplate.disabledReason || "当前类型还没有可用模板。",
+      );
+      return;
+    }
+
+    setIsCreatingNewItem(true);
+    setNewItemError("");
+
+    try {
+      const title = ensureTitleForKind(newItemDraftName, newItemDraftKind);
+      const response = await fetch("/api/assets/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: newItemDraftKind,
+          assetId: `sample-${newItemDraftKind}`,
+          source: "sample",
+          sampleFileName: createItemTemplate.sampleFileName,
+          title,
+          targetWorkspaceId: workspaceId,
+        }),
+      }).catch(() => null);
+
+      const payload = (await response?.json().catch(() => null)) as
+        | {
+            asset?: {
+              id: string;
+              kind: BrowserFile["kind"];
+              title: string;
+              updatedAt: string;
+            };
+            openPath?: string;
+            message?: string;
+          }
+        | null;
+
+      if (!response?.ok || !payload?.asset) {
+        setNewItemError(payload?.message ?? "新建文档失败，请稍后再试。");
+        return;
+      }
+
+      const nextFile: ManagedBrowserFile = {
+        id: payload.asset.id,
+        title: payload.asset.title,
+        subtitle: isPersonalLayout ? "新建文档" : "空间新建",
+        owner: currentUserIdentity?.name ?? "当前用户",
+        updatedAt: fmt(payload.asset.updatedAt),
+        folderId: createItemTargetFolder.id,
+        subfolderId: newItemTargetInnerFolderId,
+        tag: "新建",
+        href: withReturnTo(
+          payload.openPath ?? `/docs/documents/${payload.asset.id}`,
+          returnToHref,
+        ),
+        kind: payload.asset.kind,
+        source: "asset",
+        storageKind: payload.asset.kind,
+      };
+      const nextActiveFolderId = createItemTargetFolder.id;
+      const nextActiveInnerFolderId = newItemTargetInnerFolderId;
+      const nextManagedFiles = [nextFile, ...managedFiles];
+
+      setManagedFiles(nextManagedFiles);
+      setActiveFolderId(nextActiveFolderId);
+      setActiveInnerFolderId(nextActiveInnerFolderId);
+      setNewItemDialogOpen(false);
+
+      await persistBrowserStateSnapshot({
+        nextManagedFiles,
+        nextActiveFolderId,
+        nextActiveInnerFolderId,
+      });
+
+      router.push(
+        withReturnTo(
+          payload.openPath ?? `/docs/documents/${payload.asset.id}`,
+          returnToHref,
+        ),
+      );
+    } catch {
+      setNewItemError("新建文档失败，请稍后再试。");
+    } finally {
+      setIsCreatingNewItem(false);
+    }
   }
   function createInnerFolder() {
     if (!canCreate || activeFolderId === "all") return;
@@ -1648,13 +2170,11 @@ export function DesktopFileBrowser({
       ),
     );
   }
-  async function copyIntoCurrentWorkspace(
+  async function cloneFileIntoWorkspace(
     file: ManagedBrowserFile,
-    folderId: string,
-    subfolderId: string | null,
+    targetWorkspaceId: string,
     titleOverride?: string,
   ) {
-    if (!workspaceId) return null;
     const response = await fetch("/api/assets/copy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1666,19 +2186,31 @@ export function DesktopFileBrowser({
         title:
           titleOverride ??
           (file.title.includes("副本") ? file.title : `${file.title} 副本`),
-        targetWorkspaceId: workspaceId,
+        targetWorkspaceId,
       }),
     }).catch(() => null);
     if (!response?.ok) return null;
-    const payload = (await response.json().catch(() => null)) as {
-      asset?: {
-        id: string;
-        kind: BrowserFile["kind"];
-        title: string;
-        updatedAt: string;
-      };
-      openPath?: string;
-    } | null;
+
+    return (await response.json().catch(() => null)) as
+      | {
+          asset?: {
+            id: string;
+            kind: BrowserFile["kind"];
+            title: string;
+            updatedAt: string;
+          };
+          openPath?: string;
+        }
+      | null;
+  }
+  async function copyIntoCurrentWorkspace(
+    file: ManagedBrowserFile,
+    folderId: string,
+    subfolderId: string | null,
+    titleOverride?: string,
+  ) {
+    if (!workspaceId) return null;
+    const payload = await cloneFileIntoWorkspace(file, workspaceId, titleOverride);
     if (!payload?.asset) return null;
     return {
       id: payload.asset.id,
@@ -1841,22 +2373,247 @@ export function DesktopFileBrowser({
   ) {
     setCopyingOut(true);
     try {
-      await fetch("/api/assets/copy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: file.storageKind ?? file.kind,
-          assetId: file.id,
-          source: file.source ?? "sample",
-          sampleFileName: file.sampleFileName,
-          title: file.title,
-          targetWorkspaceId: target.workspaceId,
-        }),
-      });
+      await cloneFileIntoWorkspace(file, target.workspaceId, file.title);
       setCopyFileId(null);
       router.refresh();
     } finally {
       setCopyingOut(false);
+    }
+  }
+  async function persistStructuredCopyTargetState(params: {
+    target: BrowserCopyTarget;
+    nextInnerFolders: BrowserCopyTargetInnerFolder[];
+    nextFileStates: BrowserCopyTargetFileState[];
+  }) {
+    const { target, nextInnerFolders, nextFileStates } = params;
+    await fetch("/api/browser-state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind,
+        workspaceId: target.workspaceId,
+        shareMode: target.shareMode,
+        activeFolderId: params.target.folders?.[0]?.id ?? "all",
+        activeInnerFolderId: null,
+        folderViewMode: "small",
+        deletedFolderIds: target.deletedFolderIds ?? [],
+        customFolders: target.customFolders ?? [],
+        innerFolders: nextInnerFolders,
+        fileStates: nextFileStates,
+        boardMessages: target.boardMessages ?? [],
+      }),
+    }).catch(() => null);
+  }
+  async function uploadSourceToStructuredSpace() {
+    if (!spaceUploadSource) return;
+    const target = selectedSpaceUploadTarget;
+    if (!target || target.shareMode !== "workspace") {
+      setSpaceUploadError("请先选择一个可用的合作空间。");
+      return;
+    }
+    if (!spaceUploadTargetFolderId) {
+      setSpaceUploadError("请先选择要放入的目标文件夹。");
+      return;
+    }
+
+    setSpaceUploadingOut(true);
+    setSpaceUploadError("");
+
+    try {
+      const nextInnerFolders = [...(target.innerFolders ?? [])];
+      const nextFileStates = [...(target.fileStates ?? [])];
+
+      const appendFileState = (fileState: BrowserCopyTargetFileState) => {
+        nextFileStates.push(fileState);
+      };
+
+      if (spaceUploadSource.kind === "file") {
+        const file = managedFiles.find((item) => item.id === spaceUploadSource.id);
+        if (!file) {
+          setSpaceUploadError("没有找到要上传的文件。");
+          return;
+        }
+        const payload = await cloneFileIntoWorkspace(
+          file,
+          target.workspaceId,
+          file.title,
+        );
+        if (!payload?.asset) {
+          setSpaceUploadError("文件上传到合作空间失败，请稍后再试。");
+          return;
+        }
+        appendFileState({
+          fileId: payload.asset.id,
+          folderId: spaceUploadTargetFolderId,
+          subfolderId: spaceUploadTargetInnerFolderId,
+        });
+      }
+
+      if (spaceUploadSource.kind === "inner-folder") {
+        const sourceRoot =
+          innerFolders.find((item) => item.id === spaceUploadSource.id) ?? null;
+        if (!sourceRoot) {
+          setSpaceUploadError("没有找到要上传的子文件夹。");
+          return;
+        }
+
+        const sourceIds = descendants(sourceRoot.id);
+        const sourceFolders = innerFolders.filter((folder) =>
+          sourceIds.includes(folder.id),
+        );
+        const sourceFiles = managedFiles.filter(
+          (file) =>
+            !file.isTrashed &&
+            !file.isDeleted &&
+            file.subfolderId &&
+            sourceIds.includes(file.subfolderId),
+        );
+        const folderIdMap = new Map<string, string>();
+        const queue = [sourceRoot.id];
+
+        while (queue.length) {
+          const currentId = queue.shift();
+          if (!currentId) continue;
+          const current = sourceFolders.find((folder) => folder.id === currentId);
+          if (!current) continue;
+
+          const nextId = makeId("inner-folder");
+          folderIdMap.set(current.id, nextId);
+          nextInnerFolders.push({
+            ...current,
+            id: nextId,
+            parentFolderId: spaceUploadTargetFolderId,
+            parentInnerFolderId:
+              current.id === sourceRoot.id
+                ? spaceUploadTargetInnerFolderId
+                : current.parentInnerFolderId
+                  ? (folderIdMap.get(current.parentInnerFolderId) ?? null)
+                  : null,
+          });
+          queue.push(
+            ...sourceFolders
+              .filter((folder) => folder.parentInnerFolderId === current.id)
+              .map((folder) => folder.id),
+          );
+        }
+
+        for (const file of sourceFiles) {
+          const payload = await cloneFileIntoWorkspace(
+            file,
+            target.workspaceId,
+            file.title,
+          );
+          if (!payload?.asset) continue;
+          appendFileState({
+            fileId: payload.asset.id,
+            folderId: spaceUploadTargetFolderId,
+            subfolderId: file.subfolderId
+              ? (folderIdMap.get(file.subfolderId) ?? null)
+              : null,
+          });
+        }
+      }
+
+      if (spaceUploadSource.kind === "folder") {
+        const sourceFolder =
+          allFolders.find((item) => item.id === spaceUploadSource.id) ?? null;
+        if (!sourceFolder || sourceFolder.id === "all") {
+          setSpaceUploadError("没有找到要上传的大文件夹。");
+          return;
+        }
+        if (NON_DESTINATION_FOLDER_IDS.has(sourceFolder.id)) {
+          setSpaceUploadError("这个系统文件夹不能整体上传到合作空间。");
+          return;
+        }
+
+        const wrapperFolderId = makeId("inner-folder");
+        nextInnerFolders.push({
+          id: wrapperFolderId,
+          parentFolderId: spaceUploadTargetFolderId,
+          parentInnerFolderId: spaceUploadTargetInnerFolderId,
+          name: sourceFolder.name,
+          description: sourceFolder.description,
+          tone: sourceFolder.tone,
+          icon: sourceFolder.icon ?? "folder",
+        });
+
+        const sourceFolders = innerFolders.filter(
+          (folder) => folder.parentFolderId === sourceFolder.id,
+        );
+        const folderIdMap = new Map<string, string>();
+        const topLevelFolderIds = sourceFolders
+          .filter((folder) => folder.parentInnerFolderId === null)
+          .map((folder) => folder.id);
+        const queue = [...topLevelFolderIds];
+
+        while (queue.length) {
+          const currentId = queue.shift();
+          if (!currentId) continue;
+          const current = sourceFolders.find((folder) => folder.id === currentId);
+          if (!current) continue;
+
+          const nextId = makeId("inner-folder");
+          folderIdMap.set(current.id, nextId);
+          nextInnerFolders.push({
+            ...current,
+            id: nextId,
+            parentFolderId: spaceUploadTargetFolderId,
+            parentInnerFolderId: current.parentInnerFolderId
+              ? (folderIdMap.get(current.parentInnerFolderId) ?? wrapperFolderId)
+              : wrapperFolderId,
+          });
+          queue.push(
+            ...sourceFolders
+              .filter((folder) => folder.parentInnerFolderId === current.id)
+              .map((folder) => folder.id),
+          );
+        }
+
+        const sourceFiles = managedFiles.filter(
+          (file) =>
+            !file.isTrashed &&
+            !file.isDeleted &&
+            file.folderId === sourceFolder.id,
+        );
+        for (const file of sourceFiles) {
+          const payload = await cloneFileIntoWorkspace(
+            file,
+            target.workspaceId,
+            file.title,
+          );
+          if (!payload?.asset) continue;
+          appendFileState({
+            fileId: payload.asset.id,
+            folderId: spaceUploadTargetFolderId,
+            subfolderId: file.subfolderId
+              ? (folderIdMap.get(file.subfolderId) ?? wrapperFolderId)
+              : wrapperFolderId,
+          });
+        }
+      }
+
+      await persistStructuredCopyTargetState({
+        target,
+        nextInnerFolders,
+        nextFileStates,
+      });
+
+      setSpaceUploadTargets((current) =>
+        current.map((item) =>
+          item.id === target.id
+            ? {
+                ...item,
+                innerFolders: nextInnerFolders,
+                fileStates: nextFileStates,
+              }
+            : item,
+        ),
+      );
+      closeSpaceUploadDialog();
+    } catch {
+      setSpaceUploadError("上传到合作空间失败，请稍后再试。");
+    } finally {
+      setSpaceUploadingOut(false);
     }
   }
   async function uploadFiles(
@@ -2277,12 +3034,22 @@ export function DesktopFileBrowser({
               </button>
             ) : null}
             {!hideNewItemButton ? (
-              <Link
-                href={newItemHref}
-                className={`rounded-full border border-slate-200 bg-white font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700 ${isCompactLayout ? "px-3 py-1.5 text-[11px]" : "px-4 py-2.5 text-sm"}`}
-              >
-                {newItemLabel}
-              </Link>
+              workspaceId && canCreate ? (
+                <button
+                  type="button"
+                  onClick={openCreateItemDialog}
+                  className={`rounded-full border border-slate-200 bg-white font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700 ${isCompactLayout ? "px-3 py-1.5 text-[11px]" : "px-4 py-2.5 text-sm"}`}
+                >
+                  {newItemLabel}
+                </button>
+              ) : (
+                <Link
+                  href={newItemHref}
+                  className={`rounded-full border border-slate-200 bg-white font-semibold text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700 ${isCompactLayout ? "px-3 py-1.5 text-[11px]" : "px-4 py-2.5 text-sm"}`}
+                >
+                  {newItemLabel}
+                </Link>
+              )
             ) : null}
             {canCreate ? (
               <button
@@ -3403,6 +4170,323 @@ export function DesktopFileBrowser({
         </div>
       </section>
 
+      {newItemDialogOpen ? (
+        <div className="fixed inset-0 z-[89] flex items-center justify-center bg-slate-950/28 px-5 py-10 backdrop-blur-sm">
+          <div className="w-full max-w-[980px] max-h-[calc(100vh-88px)] overflow-y-auto rounded-[26px] border border-white/80 bg-white/96 p-5 shadow-[0_28px_80px_rgba(15,23,42,0.22)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  新建文档
+                </div>
+                <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+                  先确定类型，再放进目标文件夹
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  确认后会先创建文件，再直接进入 OnlyOffice 编辑页。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCreateItemDialog}
+                disabled={isCreatingNewItem}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <IconX />
+              </button>
+            </div>
+
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createNewItem();
+              }}
+            >
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                <label className="space-y-2">
+                  <div className="text-sm font-semibold text-slate-700">
+                    文件名称
+                  </div>
+                  <input
+                    autoFocus
+                    value={newItemDraftName}
+                    onChange={(event) => {
+                      setNewItemDraftName(event.target.value);
+                      setNewItemError("");
+                    }}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    placeholder="例如：项目周报"
+                  />
+                </label>
+                <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4">
+                  <div className="text-sm font-semibold text-slate-700">
+                    即将创建
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <IconFile
+                      kind={newItemDraftKind}
+                      title={ensureTitleForKind(newItemDraftName, newItemDraftKind)}
+                      compact
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {ensureTitleForKind(newItemDraftName, newItemDraftKind)}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {createItemTemplate.label} ·{" "}
+                        {createItemTargetFolder
+                          ? [
+                              createItemTargetFolder.name,
+                              ...createItemTargetPath.map((folder) => folder.name),
+                            ].join(" / ")
+                          : "请选择目标文件夹"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-semibold text-slate-700">
+                  文档类型
+                </div>
+                <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                  {CREATE_ITEM_TEMPLATE_OPTIONS.map((option) => {
+                    const selected = option.value === newItemDraftKind;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={option.disabled}
+                        onClick={() => changeCreateItemKind(option.value)}
+                        className={`rounded-[20px] border px-3.5 py-3.5 text-left transition ${
+                          selected
+                            ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                            : option.disabled
+                              ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <IconFile
+                            kind={option.value}
+                            title={`blank.${option.extension}`}
+                            compact
+                          />
+                          <div>
+                            <div className="text-sm font-semibold">
+                              {option.label}
+                            </div>
+                            <div
+                              className={`mt-1 text-xs leading-5 ${
+                                selected ? "text-white/75" : "text-slate-500"
+                              }`}
+                            >
+                              {option.helper}
+                            </div>
+                            {option.disabledReason ? (
+                              <div
+                                className={`mt-2 text-[11px] font-semibold ${
+                                  selected ? "text-white/75" : "text-amber-600"
+                                }`}
+                              >
+                                {option.disabledReason}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-semibold text-slate-700">
+                  目标文件夹
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[248px_minmax(0,1fr)]">
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-3.5">
+                    <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                      大文件夹
+                    </div>
+                    <div className="mt-3 max-h-[260px] space-y-2 overflow-y-auto pr-1">
+                      {createItemRootFolders.length > 0 ? (
+                        createItemRootFolders.map((folder) => {
+                          const selected = folder.id === createItemTargetFolder?.id;
+                          const folderTone = toneStyles[folder.tone];
+                          return (
+                            <button
+                              key={folder.id}
+                              type="button"
+                              onClick={() => selectCreateItemRootFolder(folder.id)}
+                              className={`flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition ${
+                                selected
+                                  ? `border-slate-900 ${folderTone.surface}`
+                                  : "border-slate-200 bg-white hover:border-slate-300"
+                              }`}
+                            >
+                              <span
+                                className={`inline-flex rounded-full p-2 ${folderTone.tab} ${folderTone.accent}`}
+                              >
+                                <IconFolder
+                                  icon={folder.icon ?? "folder"}
+                                  className="h-4 w-4"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-slate-900">
+                                  {folder.name}
+                                </span>
+                                <span className="mt-1 block truncate text-xs text-slate-500">
+                                  {folder.description || "根目录"}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-[18px] border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                          这里还没有可用文件夹，请先创建大文件夹。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-slate-200 bg-white p-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                          子文件夹
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                          <button
+                            type="button"
+                            disabled={!createItemTargetFolder}
+                            onClick={() => selectCreateItemInnerFolder(null)}
+                            className={`rounded-full border px-3 py-1.5 font-semibold transition ${
+                              createItemTargetFolder && newItemTargetInnerFolderId === null
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            }`}
+                          >
+                            {createItemTargetFolder
+                              ? createItemTargetFolder.name
+                              : "先选大文件夹"}
+                          </button>
+                          {createItemTargetPath.map((folder) => (
+                            <button
+                              key={folder.id}
+                              type="button"
+                              onClick={() => selectCreateItemInnerFolder(folder.id)}
+                              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-semibold transition ${
+                                folder.id === newItemTargetInnerFolderId
+                                  ? "border-slate-900 bg-slate-900 text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                              }`}
+                            >
+                              <IconArrow direction="right" className="h-3.5 w-3.5" />
+                              {folder.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                        当前落点：
+                        {" "}
+                        {createItemTargetFolder
+                          ? [
+                              createItemTargetFolder.name,
+                              ...createItemTargetPath.map((folder) => folder.name),
+                            ].join(" / ")
+                          : "未选择"}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 rounded-[20px] border border-slate-200 bg-slate-50/70 p-3.5">
+                      {createItemTargetFolder ? (
+                        createItemVisibleInnerFolders.length > 0 ? (
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                            {createItemVisibleInnerFolders.map((folder) => {
+                              const folderTone = toneStyles[folder.tone];
+                              const selected =
+                                folder.id === newItemTargetInnerFolderId;
+                              return (
+                                <button
+                                  key={folder.id}
+                                  type="button"
+                                  onClick={() => selectCreateItemInnerFolder(folder.id)}
+                                  className={`rounded-[20px] border px-4 py-4 text-left transition ${
+                                    selected
+                                      ? `border-slate-900 ${folderTone.surface}`
+                                      : "border-slate-200 bg-white hover:border-slate-300"
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-flex rounded-full p-2 ${folderTone.tab} ${folderTone.accent}`}
+                                  >
+                                    <IconFolder
+                                      icon={folder.icon}
+                                      className="h-4 w-4"
+                                    />
+                                  </span>
+                                  <div className="mt-3 text-sm font-semibold text-slate-900">
+                                    {folder.name}
+                                  </div>
+                                  <div className="mt-1 text-xs leading-5 text-slate-500">
+                                    {folder.description || "继续进入这个子文件夹"}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="rounded-[18px] border border-dashed border-slate-200 bg-white px-5 py-8 text-sm text-slate-500">
+                            当前目录下没有更深层子文件夹。确认后会直接在这里创建文件。
+                          </div>
+                        )
+                      ) : (
+                        <div className="rounded-[18px] border border-dashed border-slate-200 bg-white px-5 py-8 text-sm text-slate-500">
+                          先在左侧选一个大文件夹，再决定是否进入子文件夹。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {newItemError ? (
+                <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                  {newItemError}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={closeCreateItemDialog}
+                  disabled={isCreatingNewItem}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    isCreatingNewItem ||
+                    !createItemTargetFolder ||
+                    createItemTemplate.disabled
+                  }
+                  className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isCreatingNewItem ? "创建中..." : "创建并进入编辑"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       {folderDialogOpen ? (
         <div className="fixed inset-0 z-[88] flex items-center justify-center bg-slate-950/28 px-4 py-8 backdrop-blur-sm">
           <div className="w-full max-w-2xl rounded-[28px] border border-white/80 bg-white/96 p-6 shadow-[0_28px_80px_rgba(15,23,42,0.22)]">
@@ -3643,7 +4727,18 @@ export function DesktopFileBrowser({
                         </button>
                       </>
                     ) : null}
-                    {copyTargets.length > 0 ? (
+                    {hasStructuredCopyTargets ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openSpaceUploadDialog({ kind: "file", id: file.id })
+                        }
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        上传到合作空间...
+                      </button>
+                    ) : null}
+                    {!hasStructuredCopyTargets && copyTargets.length > 0 ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -3666,6 +4761,18 @@ export function DesktopFileBrowser({
                 if (!folder || folder.id === "all") return null;
                 return (
                   <div className="space-y-1">
+                    {hasStructuredCopyTargets &&
+                    !NON_DESTINATION_FOLDER_IDS.has(folder.id) ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openSpaceUploadDialog({ kind: "folder", id: folder.id })
+                        }
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        上传到合作空间...
+                      </button>
+                    ) : null}
                     {canManage ? (
                       <button
                         type="button"
@@ -3703,6 +4810,20 @@ export function DesktopFileBrowser({
                 if (!folder) return null;
                 return (
                   <div className="space-y-1">
+                    {hasStructuredCopyTargets ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openSpaceUploadDialog({
+                            kind: "inner-folder",
+                            id: folder.id,
+                          })
+                        }
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        上传到合作空间...
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {
@@ -3840,6 +4961,291 @@ export function DesktopFileBrowser({
                   ) : null}
                 </div>
               )}
+        </div>
+      ) : null}
+
+      {spaceUploadSource && spaceUploadSourceMeta ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/28 px-5 py-10 backdrop-blur-sm">
+          <div className="w-full max-w-[1080px] max-h-[calc(100vh-88px)] overflow-y-auto rounded-[26px] border border-white/80 bg-white/96 p-5 shadow-[0_28px_80px_rgba(15,23,42,0.22)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  上传到合作空间
+                </div>
+                <h3 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+                  选择目标空间和落点
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {spaceUploadSourceMeta.label}：{spaceUploadSourceMeta.helper}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeSpaceUploadDialog}
+                disabled={spaceUploadingOut}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <IconX />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
+              <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-3.5">
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                  我创建的空间
+                </div>
+                <div className="mt-3 space-y-2">
+                  {spaceUploadTargets.map((target) => {
+                    const selected = target.id === selectedSpaceUploadTarget?.id;
+                    return (
+                      <button
+                        key={target.id}
+                        type="button"
+                        onClick={() => changeSpaceUploadTarget(target.id)}
+                        className={`w-full rounded-[18px] border px-3 py-3 text-left transition ${
+                          selected
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">{target.label}</div>
+                        {target.description ? (
+                          <div
+                            className={`mt-1 text-xs leading-5 ${
+                              selected ? "text-white/75" : "text-slate-500"
+                            }`}
+                          >
+                            {target.description}
+                          </div>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="text-sm font-semibold text-slate-700">
+                      即将上传
+                    </div>
+                    <div className="mt-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {spaceUploadSourceMeta.label}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">
+                        {spaceUploadSourceMeta.helper}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 p-4">
+                    <div className="text-sm font-semibold text-slate-700">
+                      当前落点
+                    </div>
+                    <div className="mt-3 rounded-[18px] border border-slate-200 bg-white px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {selectedSpaceUploadTarget?.label ?? "未选择空间"}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-slate-500">
+                        {selectedSpaceUploadTarget && spaceUploadTargetFolderId
+                          ? [
+                              selectedSpaceUploadTarget.label,
+                              selectedSpaceUploadFolders.find(
+                                (folder) => folder.id === spaceUploadTargetFolderId,
+                              )?.name,
+                              ...selectedSpaceUploadPath.map((folder) => folder.name),
+                            ]
+                              .filter(Boolean)
+                              .join(" / ")
+                          : "先选择目标空间和具体目录"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[22px] border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-700">
+                    目标文件夹
+                  </div>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[248px_minmax(0,1fr)]">
+                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-3.5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                        大文件夹
+                      </div>
+                      <div className="mt-3 max-h-[260px] space-y-2 overflow-y-auto pr-1">
+                        {selectedSpaceUploadFolders.length > 0 ? (
+                          selectedSpaceUploadFolders.map((folder) => {
+                            const selected = folder.id === spaceUploadTargetFolderId;
+                            const folderTone = toneStyles[folder.tone];
+                            return (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() => selectSpaceUploadTargetFolder(folder.id)}
+                                className={`flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition ${
+                                  selected
+                                    ? `border-slate-900 ${folderTone.surface}`
+                                    : "border-slate-200 bg-white hover:border-slate-300"
+                                }`}
+                              >
+                                <span
+                                  className={`inline-flex rounded-full p-2 ${folderTone.tab} ${folderTone.accent}`}
+                                >
+                                  <IconFolder
+                                    icon={folder.icon ?? "folder"}
+                                    className="h-4 w-4"
+                                  />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-slate-900">
+                                    {folder.name}
+                                  </span>
+                                  <span className="mt-1 block truncate text-xs text-slate-500">
+                                    {folder.description || "目标目录"}
+                                  </span>
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded-[18px] border border-dashed border-slate-200 bg-white px-4 py-6 text-sm text-slate-500">
+                            这个合作空间里还没有可用的大文件夹。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-3.5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
+                            子文件夹
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                            <button
+                              type="button"
+                              disabled={!spaceUploadTargetFolderId}
+                              onClick={() => selectSpaceUploadTargetInnerFolder(null)}
+                              className={`rounded-full border px-3 py-1.5 font-semibold transition ${
+                                spaceUploadTargetFolderId &&
+                                spaceUploadTargetInnerFolderId === null
+                                  ? "border-slate-900 bg-slate-900 text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                              }`}
+                            >
+                              {spaceUploadTargetFolderId
+                                ? selectedSpaceUploadFolders.find(
+                                    (folder) => folder.id === spaceUploadTargetFolderId,
+                                  )?.name ?? "当前大文件夹"
+                                : "先选大文件夹"}
+                            </button>
+                            {selectedSpaceUploadPath.map((folder) => (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() =>
+                                  selectSpaceUploadTargetInnerFolder(folder.id)
+                                }
+                                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-semibold transition ${
+                                  folder.id === spaceUploadTargetInnerFolderId
+                                    ? "border-slate-900 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                                }`}
+                              >
+                                <IconArrow direction="right" className="h-3.5 w-3.5" />
+                                {folder.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-[18px] border border-slate-200 bg-white p-3.5">
+                        {spaceUploadTargetFolderId ? (
+                          visibleSpaceUploadInnerFolders.length > 0 ? (
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                              {visibleSpaceUploadInnerFolders.map((folder) => {
+                                const folderTone = toneStyles[folder.tone];
+                                const selected =
+                                  folder.id === spaceUploadTargetInnerFolderId;
+                                return (
+                                  <button
+                                    key={folder.id}
+                                    type="button"
+                                    onClick={() =>
+                                      selectSpaceUploadTargetInnerFolder(folder.id)
+                                    }
+                                    className={`rounded-[18px] border px-4 py-4 text-left transition ${
+                                      selected
+                                        ? `border-slate-900 ${folderTone.surface}`
+                                        : "border-slate-200 bg-white hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`inline-flex rounded-full p-2 ${folderTone.tab} ${folderTone.accent}`}
+                                    >
+                                      <IconFolder
+                                        icon={folder.icon}
+                                        className="h-4 w-4"
+                                      />
+                                    </span>
+                                    <div className="mt-3 text-sm font-semibold text-slate-900">
+                                      {folder.name}
+                                    </div>
+                                    <div className="mt-1 text-xs leading-5 text-slate-500">
+                                      {folder.description || "继续落到这个子文件夹"}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="rounded-[18px] border border-dashed border-slate-200 bg-slate-50/70 px-5 py-8 text-sm text-slate-500">
+                              当前目录下没有更深层子文件夹，确认后会直接放在这里。
+                            </div>
+                          )
+                        ) : (
+                          <div className="rounded-[18px] border border-dashed border-slate-200 bg-slate-50/70 px-5 py-8 text-sm text-slate-500">
+                            先选一个目标大文件夹，再决定是否进入子文件夹。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {spaceUploadError ? (
+                  <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                    {spaceUploadError}
+                  </div>
+                ) : null}
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeSpaceUploadDialog}
+                    disabled={spaceUploadingOut}
+                    className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void uploadSourceToStructuredSpace()}
+                    disabled={
+                      spaceUploadingOut ||
+                      !selectedSpaceUploadTarget ||
+                      !spaceUploadTargetFolderId
+                    }
+                    className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {spaceUploadingOut ? "上传中..." : "上传到所选空间"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
