@@ -7,21 +7,29 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:check": "node ./scripts/db-check.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node ./scripts/db-migrate.mjs",
+    "db:studio": "drizzle-kit studio"
   },
   "engines": {
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "next": "16.2.1",
+    "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
