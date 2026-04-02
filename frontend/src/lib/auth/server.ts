@@ -8,7 +8,7 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readAppStoreFromPostgres } from "@/lib/db/app-store-read";
 import { deleteSessionFromPostgres, mirrorSessionToPostgres } from "@/lib/db/app-store-write";
@@ -30,6 +30,7 @@ export const AUTH_COOKIE_NAME = "bpai_session";
 
 const STORE_DIR = path.join(process.cwd(), ".bpai");
 const STORE_PATH = path.join(STORE_DIR, "app-store.json");
+const STORE_PARSE_RETRY_MS = 40;
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 const PASSWORD_ITERATIONS = 120000;
 const PASSWORD_KEY_LENGTH = 32;
@@ -317,7 +318,20 @@ function normalizeStore(store: Partial<AppStore>) {
 
 async function writeStore(store: AppStore) {
   await mkdir(STORE_DIR, { recursive: true });
-  await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+  const nextSource = JSON.stringify(store, null, 2);
+  const tempPath = path.join(
+    STORE_DIR,
+    `app-store.${process.pid}.${Date.now()}.${randomBytes(6).toString("hex")}.tmp`,
+  );
+
+  await writeFile(tempPath, nextSource, "utf8");
+
+  try {
+    await rename(tempPath, STORE_PATH);
+  } catch {
+    await writeFile(STORE_PATH, nextSource, "utf8");
+    await rm(tempPath, { force: true }).catch(() => undefined);
+  }
 }
 
 async function buildStoreFallbackFromPostgresOrSeed() {
@@ -332,7 +346,7 @@ async function buildStoreFallbackFromPostgresOrSeed() {
 }
 
 async function restoreStoreFromFallback(reason: string, source?: string) {
-  console.error(`[bpai-store] restoring raw store from fallback: ${reason}`);
+  console.warn(`[bpai-store] restoring raw store from fallback: ${reason}`);
   await mkdir(STORE_DIR, { recursive: true });
 
   if (source) {
@@ -343,6 +357,12 @@ async function restoreStoreFromFallback(reason: string, source?: string) {
   const fallbackStore = await buildStoreFallbackFromPostgresOrSeed();
   await writeStore(fallbackStore);
   return fallbackStore;
+}
+
+function waitForStoreRetry() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, STORE_PARSE_RETRY_MS);
+  });
 }
 
 async function withStoreMutationLock<T>(operation: () => Promise<T>) {
@@ -367,16 +387,23 @@ async function withStoreMutationLock<T>(operation: () => Promise<T>) {
 
 async function readOrCreateStore() {
   try {
-    const source = await readFile(STORE_PATH, "utf8");
+    let source = await readFile(STORE_PATH, "utf8");
     let parsed: AppStore;
 
     try {
       parsed = JSON.parse(source) as AppStore;
     } catch (error) {
-      return restoreStoreFromFallback(
-        error instanceof Error ? error.message : "invalid raw json",
-        source,
-      );
+      await waitForStoreRetry();
+
+      try {
+        source = await readFile(STORE_PATH, "utf8");
+        parsed = JSON.parse(source) as AppStore;
+      } catch {
+        return restoreStoreFromFallback(
+          error instanceof Error ? error.message : "invalid raw json",
+          source,
+        );
+      }
     }
 
     if (

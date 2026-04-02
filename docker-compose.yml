@@ -5,4 +5,4 @@ services:
       dockerfile: Dockerfile
     container_name: bpai-front-static
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-3000}:3000"

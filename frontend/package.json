@@ -13,6 +13,9 @@
     "db:import-store": "node ./scripts/db-import-store.mjs",
     "db:import-store:reset": "node ./scripts/db-import-store.mjs --reset",
     "db:migrate": "node ./scripts/db-migrate.mjs",
+    "db:seed:work-orders": "node ./scripts/db-seed-work-orders.mjs",
+    "smoke:engineering": "node ./scripts/engineering-backend-smoke.mjs",
+    "smoke:work-orders": "node ./scripts/work-order-backend-smoke.mjs",
     "db:studio": "drizzle-kit studio"
   },
   "engines": {
@@ -23,7 +26,8 @@
     "next": "16.2.1",
     "pg": "^8.20.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

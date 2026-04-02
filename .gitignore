@@ -25,3 +25,13 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+
+frontend/.bpai/
+tmp-*.html
+tmp-*.txt
+tmp_*.html
+tmp_*.txt
+*_cookies.txt
+engineering_cookies.txt
+tmp_chili3d_official/
+.claude_plan.md
