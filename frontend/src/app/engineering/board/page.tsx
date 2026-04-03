@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CreateSquadButton } from "@/components/engineering/create-squad-button";
 import { requireCurrentUser } from "@/lib/auth/server";
 import { getEngineeringBoardData } from "@/lib/engineering/server";
 
@@ -63,7 +64,7 @@ export default async function EngineeringBoardPage() {
               工程组综合看板
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              当前 {board.summary.activeTaskCount} 个活跃任务，{board.summary.squadCount} 支编队在线，{board.summary.memberCount} 名成员已纳入管理。
+              当前 {board.summary.activeTaskCount} 个活跃任务，{board.summary.squadCount} 支编队在岗，{board.summary.memberCount} 名成员已纳入管理。
             </p>
           </div>
 
@@ -74,12 +75,7 @@ export default async function EngineeringBoardPage() {
             >
               进入工单中心
             </Link>
-            <button
-              type="button"
-              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500"
-            >
-              新建编队
-            </button>
+            <CreateSquadButton members={board.roster} />
           </div>
         </div>
 
@@ -134,9 +130,7 @@ export default async function EngineeringBoardPage() {
           <section className="col-span-12 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm xl:col-span-8">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
               <div>
-                <h2 className="text-xl font-black text-slate-900">
-                  当前施工任务清单
-                </h2>
+                <h2 className="text-xl font-black text-slate-900">当前施工任务清单</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   结合工单真源和派单记录，展示当前由工程组承接的任务。
                 </p>
@@ -165,12 +159,10 @@ export default async function EngineeringBoardPage() {
                       className="transition-colors hover:bg-slate-50/80"
                     >
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-900">
-                          {task.title}
-                        </div>
+                        <div className="font-semibold text-slate-900">{task.title}</div>
                         <div className="mt-1 text-xs text-slate-500">
                           {task.workOrderNo}
-                          {task.siteName ? ` · ${task.siteName}` : ""}
+                          {task.siteName ? ` 路 ${task.siteName}` : ""}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -178,7 +170,7 @@ export default async function EngineeringBoardPage() {
                           {task.assignedCrewTeamLabel}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          带队：{task.assignedCrewLeaderName} · {task.assignedCrewMemberCount} 人
+                          带队：{task.assignedCrewLeaderName} 路 {task.assignedCrewMemberCount} 人
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -247,7 +239,7 @@ export default async function EngineeringBoardPage() {
                           {squad.name}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          队长：{squad.leaderMemberName ?? "待指定"} · {squad.baseLabel}
+                          队长：{squad.leaderMemberName ?? "待指定"} 路 {squad.baseLabel}
                         </div>
                       </div>
                       <span className={`text-xs font-black ${squad.loadTextClass}`}>
@@ -284,7 +276,7 @@ export default async function EngineeringBoardPage() {
                           {member.name}
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
-                          {member.roleLabel} · {member.baseLabel || "暂未设置基地"}
+                          {member.roleLabel} 路 {member.baseLabel || "暂未设置基地"}
                         </div>
                       </div>
                       <span
@@ -364,7 +356,7 @@ export default async function EngineeringBoardPage() {
                         className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm"
                       >
                         {member.name}
-                        {member.memberRole === "leader" ? " · 队长" : ""}
+                        {member.memberRole === "leader" ? " 路 队长" : ""}
                       </span>
                     ))}
                   </div>
@@ -386,7 +378,7 @@ export default async function EngineeringBoardPage() {
                               {task.title}
                             </div>
                             <div className="mt-1 text-xs text-slate-500">
-                              {task.workOrderNo} · {task.stageLabel} · {task.priorityLabel}
+                              {task.workOrderNo} 路 {task.stageLabel} 路 {task.priorityLabel}
                             </div>
                           </Link>
                         ))

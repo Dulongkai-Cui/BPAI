@@ -55,6 +55,10 @@ function getMimeTypeFromExtension(extension: string, fallback?: string) {
   }
 
   switch (extension) {
+    case "dwg":
+      return "image/vnd.dwg";
+    case "dxf":
+      return "image/vnd.dxf";
     case "doc":
       return "application/msword";
     case "docx":
@@ -108,12 +112,22 @@ function buildStoredAsset(params: {
   kind: ContentKind;
   user: AuthenticatedUser;
   workspaceId: string;
+  folderId?: string;
   originalFileName: string;
   title: string;
   mimeType?: string;
   buffer: Buffer;
 }) {
-  const { kind, user, workspaceId, originalFileName, title, mimeType, buffer } = params;
+  const {
+    kind,
+    user,
+    workspaceId,
+    folderId,
+    originalFileName,
+    title,
+    mimeType,
+    buffer,
+  } = params;
   const extension = getFileExtension(originalFileName);
   const id = `${kind}-${randomBytes(8).toString("hex")}`;
   const storedFileName = extension ? `${id}.${extension}` : id;
@@ -126,7 +140,7 @@ function buildStoredAsset(params: {
     title,
     ownerUserId: user.id,
     workspaceId,
-    folderId: "recent-uploads",
+    folderId: folderId || "recent-uploads",
     originalFileName,
     storedFileName,
     storedRelativePath,
@@ -147,6 +161,7 @@ async function persistAsset(params: {
   kind: ContentKind;
   user: AuthenticatedUser;
   workspaceId: string;
+  folderId?: string;
   originalFileName: string;
   title: string;
   mimeType?: string;
@@ -324,6 +339,7 @@ export async function createUploadedAsset(params: {
   file: File;
   user: AuthenticatedUser;
   workspaceId?: string;
+  folderId?: string;
 }) {
   const { kind, file, user } = params;
   const workspaceId = params.workspaceId ?? user.workspaceId;
@@ -335,6 +351,7 @@ export async function createUploadedAsset(params: {
     kind,
     user,
     workspaceId,
+    folderId: params.folderId,
     originalFileName,
     title: originalFileName,
     mimeType: file.type || undefined,

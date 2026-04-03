@@ -3,7 +3,18 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { mutateAppStore } from "@/lib/auth/server";
-import type { StoredCollaborationSpace, AuthenticatedUser } from "@/lib/auth/types";
+import type {
+  StoredBrowserFolderIcon,
+  StoredBrowserFolderTone,
+  StoredCollaborationSpace,
+  AuthenticatedUser,
+} from "@/lib/auth/types";
+import {
+  getSharedBrowserStateForWorkspace,
+  saveSharedBrowserStateForWorkspace,
+  type BrowserCustomFolderState,
+} from "@/lib/content/browser-state";
+import { createUploadedAsset, type ContentKind } from "@/lib/content/server";
 import { getDb } from "@/lib/db/client";
 import {
   collaborationSpaces,
@@ -61,6 +72,34 @@ type DedicatedSpaceInput = {
   name?: string;
   summary?: string;
   tone?: CollaborationTone;
+};
+
+type WorkOrderDocumentLinkType =
+  | "source_attachment"
+  | "dispatch_attachment"
+  | "construction_evidence"
+  | "return_sheet"
+  | "drawing"
+  | "resource"
+  | "audit_material"
+  | "design_package"
+  | "other";
+
+export type WorkOrderStageFolderPreset = {
+  stage: WorkOrderStage;
+  folderId: string;
+  folderName: string;
+  description: string;
+  tone: StoredBrowserFolderTone;
+  icon: StoredBrowserFolderIcon;
+  linkType: WorkOrderDocumentLinkType;
+};
+
+export type WorkOrderStageAssetUploadInput = {
+  workOrderId: string;
+  stage: WorkOrderStage;
+  actor: AuthenticatedUser;
+  files: File[];
 };
 
 export type CreateWorkOrderInput = {
@@ -152,6 +191,128 @@ function normalizeCrewMemberNames(values: string[] | undefined) {
     .filter(Boolean);
 }
 
+function buildWorkOrderStageFolderId(stage: WorkOrderStage) {
+  return `wo-stage-${stage}`;
+}
+
+function stageUploadLinkType(stage: WorkOrderStage): WorkOrderDocumentLinkType {
+  switch (stage) {
+    case "source_intake":
+      return "source_attachment";
+    case "registration":
+    case "dispatch":
+      return "dispatch_attachment";
+    case "field_construction":
+      return "construction_evidence";
+    case "return_sheet":
+      return "return_sheet";
+    case "drawing_delivery":
+      return "drawing";
+    case "resource_entry":
+      return "resource";
+    case "resource_audit":
+    case "warning":
+      return "audit_material";
+    case "design_package":
+      return "design_package";
+    default:
+      return "other";
+  }
+}
+
+export const WORK_ORDER_STAGE_FOLDER_PRESETS: WorkOrderStageFolderPreset[] = [
+  {
+    stage: "source_intake",
+    folderId: buildWorkOrderStageFolderId("source_intake"),
+    folderName: "01_来源登记箱",
+    description: "收原始需求、聊天记录、邮件与初始附件。",
+    tone: "blue",
+    icon: "bookmark",
+    linkType: stageUploadLinkType("source_intake"),
+  },
+  {
+    stage: "registration",
+    folderId: buildWorkOrderStageFolderId("registration"),
+    folderName: "02_工单立项资料",
+    description: "放工单编号、立项说明、初始登记表和核准信息。",
+    tone: "violet",
+    icon: "briefcase",
+    linkType: stageUploadLinkType("registration"),
+  },
+  {
+    stage: "dispatch",
+    folderId: buildWorkOrderStageFolderId("dispatch"),
+    folderName: "03_派单记录",
+    description: "放派单记录、班组安排、计划表和协调纪要。",
+    tone: "rose",
+    icon: "briefcase",
+    linkType: stageUploadLinkType("dispatch"),
+  },
+  {
+    stage: "warning",
+    folderId: buildWorkOrderStageFolderId("warning"),
+    folderName: "04_预警处置",
+    description: "放预警说明、补件清单、风险确认和处置记录。",
+    tone: "amber",
+    icon: "bookmark",
+    linkType: stageUploadLinkType("warning"),
+  },
+  {
+    stage: "field_construction",
+    folderId: buildWorkOrderStageFolderId("field_construction"),
+    folderName: "05_现场施工",
+    description: "放施工照片、施工表、签证单和现场回传资料。",
+    tone: "emerald",
+    icon: "folder",
+    linkType: stageUploadLinkType("field_construction"),
+  },
+  {
+    stage: "return_sheet",
+    folderId: buildWorkOrderStageFolderId("return_sheet"),
+    folderName: "06_回单资料",
+    description: "放回单草稿、签字件、验收记录和补录说明。",
+    tone: "amber",
+    icon: "archive",
+    linkType: stageUploadLinkType("return_sheet"),
+  },
+  {
+    stage: "drawing_delivery",
+    folderId: buildWorkOrderStageFolderId("drawing_delivery"),
+    folderName: "07_图纸交付",
+    description: "放竣工图、交付图纸、设计修订件和打包输出。",
+    tone: "blue",
+    icon: "archive",
+    linkType: stageUploadLinkType("drawing_delivery"),
+  },
+  {
+    stage: "resource_entry",
+    folderId: buildWorkOrderStageFolderId("resource_entry"),
+    folderName: "08_录资源",
+    description: "放资源录入凭据、表单截图和系统回写材料。",
+    tone: "emerald",
+    icon: "spark",
+    linkType: stageUploadLinkType("resource_entry"),
+  },
+  {
+    stage: "resource_audit",
+    folderId: buildWorkOrderStageFolderId("resource_audit"),
+    folderName: "09_资源稽核",
+    description: "放稽核意见、缺陷项、整改回执和最终确认。",
+    tone: "slate",
+    icon: "bookmark",
+    linkType: stageUploadLinkType("resource_audit"),
+  },
+  {
+    stage: "design_package",
+    folderId: buildWorkOrderStageFolderId("design_package"),
+    folderName: "10_出设计资料",
+    description: "放打包图纸、最终文本、归档设计包和交付说明。",
+    tone: "violet",
+    icon: "archive",
+    linkType: stageUploadLinkType("design_package"),
+  },
+];
+
 function parseDispatchPayload(payload: Record<string, unknown> | null) {
   const assignedSquadId =
     payload && typeof payload.assignedSquadId === "string"
@@ -188,6 +349,46 @@ function parseDispatchPayload(payload: Record<string, unknown> | null) {
           )
         : [],
     crewMemberCount: crewMemberNames.length,
+  };
+}
+
+function inferContentKindFromFile(file: File): ContentKind {
+  const fileName = file.name.toLowerCase();
+  const mimeType = file.type.toLowerCase();
+
+  if (
+    fileName.endsWith(".xls") ||
+    fileName.endsWith(".xlsx") ||
+    fileName.endsWith(".csv") ||
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("excel") ||
+    mimeType === "text/csv"
+  ) {
+    return "sheet";
+  }
+
+  if (
+    fileName.endsWith(".ppt") ||
+    fileName.endsWith(".pptx") ||
+    fileName.endsWith(".pps") ||
+    fileName.endsWith(".ppsx") ||
+    fileName.endsWith(".odp") ||
+    mimeType.includes("presentation") ||
+    mimeType.includes("powerpoint")
+  ) {
+    return "slide";
+  }
+
+  return "document";
+}
+
+function buildStageFolderState(preset: WorkOrderStageFolderPreset): BrowserCustomFolderState {
+  return {
+    id: preset.folderId,
+    name: preset.folderName,
+    description: preset.description,
+    tone: preset.tone,
+    icon: preset.icon,
   };
 }
 
@@ -1233,6 +1434,164 @@ export async function ensureCanViewWorkOrder(
   workOrderId: string,
 ) {
   return ensureCanManageWorkOrder(actor, workOrderId);
+}
+
+export async function ensureWorkOrderStageFolders(workOrderId: string) {
+  const workOrder = await getWorkOrderById(workOrderId);
+
+  if (!workOrder?.collaborationSpaceId) {
+    return {
+      collaborationSpaceId: null,
+      presets: WORK_ORDER_STAGE_FOLDER_PRESETS,
+    };
+  }
+
+  const kinds: ContentKind[] = ["document", "sheet", "slide"];
+
+  await Promise.all(
+    kinds.map(async (kind) => {
+      const currentState = await getSharedBrowserStateForWorkspace(
+        workOrder.collaborationSpaceId!,
+        kind,
+      );
+      const nextCustomFolders = [...currentState.customFolders];
+      const existingFolderIds = new Set(nextCustomFolders.map((folder) => folder.id));
+      let hasChanges = false;
+
+      for (const preset of WORK_ORDER_STAGE_FOLDER_PRESETS) {
+        if (existingFolderIds.has(preset.folderId)) {
+          continue;
+        }
+
+        nextCustomFolders.push(buildStageFolderState(preset));
+        existingFolderIds.add(preset.folderId);
+        hasChanges = true;
+      }
+
+      if (!hasChanges) {
+        return;
+      }
+
+      await saveSharedBrowserStateForWorkspace({
+        kind,
+        workspaceId: workOrder.collaborationSpaceId!,
+        state: {
+          deletedFolderIds: currentState.deletedFolderIds,
+          customFolders: nextCustomFolders,
+          innerFolders: currentState.innerFolders,
+          fileStates: currentState.fileStates,
+          boardMessages: currentState.boardMessages,
+        },
+      });
+    }),
+  );
+
+  return {
+    collaborationSpaceId: workOrder.collaborationSpaceId,
+    presets: WORK_ORDER_STAGE_FOLDER_PRESETS,
+  };
+}
+
+export async function uploadWorkOrderStageAssets(
+  input: WorkOrderStageAssetUploadInput,
+) {
+  const workOrder = await getWorkOrderById(input.workOrderId);
+
+  if (!workOrder) {
+    return null;
+  }
+
+  if (!workOrder.collaborationSpaceId) {
+    throw new Error("WORKSPACE_REQUIRED");
+  }
+
+  const preset =
+    WORK_ORDER_STAGE_FOLDER_PRESETS.find((item) => item.stage === input.stage) ?? null;
+
+  if (!preset) {
+    throw new Error("INVALID_STAGE");
+  }
+
+  await ensureWorkOrderStageFolders(input.workOrderId);
+
+  const sharedState = await getSharedBrowserStateForWorkspace(
+    workOrder.collaborationSpaceId,
+    "document",
+  );
+  const nextFileStates = [...sharedState.fileStates];
+  const existingFileIds = new Set(nextFileStates.map((state) => state.fileId));
+  const db = getDb();
+  const uploadedAssets: Array<{
+    id: string;
+    kind: ContentKind;
+    title: string;
+    updatedAt: string;
+  }> = [];
+
+  for (const file of input.files) {
+    const kind = inferContentKindFromFile(file);
+    const uploaded = await createUploadedAsset({
+      kind,
+      file,
+      user: input.actor,
+      workspaceId: workOrder.collaborationSpaceId,
+      folderId: preset.folderId,
+    });
+
+    if (!existingFileIds.has(uploaded.asset.id)) {
+      nextFileStates.push({
+        fileId: uploaded.asset.id,
+        folderId: preset.folderId,
+        subfolderId: null,
+      });
+      existingFileIds.add(uploaded.asset.id);
+    }
+
+    await db.insert(workOrderDocumentLinks).values({
+      id: crypto.randomUUID(),
+      workOrderId: input.workOrderId,
+      linkType: preset.linkType,
+      targetType: "asset",
+      targetId: uploaded.asset.id,
+      linkedWorkspaceId: workOrder.collaborationSpaceId,
+      relationNote: `上传到「${preset.folderName}」`,
+      linkedByUserId: input.actor.id,
+      metadata: {
+        stage: input.stage,
+        stageLabel: stageLabel(input.stage),
+        folderId: preset.folderId,
+        folderName: preset.folderName,
+        uploadSource: "work-order-detail",
+      },
+      createdAt: now(),
+      updatedAt: now(),
+    });
+
+    uploadedAssets.push({
+      id: uploaded.asset.id,
+      kind: uploaded.asset.kind,
+      title: uploaded.asset.title,
+      updatedAt: uploaded.asset.updatedAt,
+    });
+  }
+
+  await saveSharedBrowserStateForWorkspace({
+    kind: "document",
+    workspaceId: workOrder.collaborationSpaceId,
+    state: {
+      deletedFolderIds: sharedState.deletedFolderIds,
+      customFolders: sharedState.customFolders,
+      innerFolders: sharedState.innerFolders,
+      fileStates: nextFileStates,
+      boardMessages: sharedState.boardMessages,
+    },
+  });
+
+  return {
+    collaborationSpaceId: workOrder.collaborationSpaceId,
+    preset,
+    uploadedAssets,
+  };
 }
 
 function sortMissingItemsForDetail<

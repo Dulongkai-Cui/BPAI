@@ -548,10 +548,16 @@ function IconFile({
   compact?: boolean;
 }) {
   const fileName = (sampleFileName || title || "").trim().toLowerCase();
-  const visualKind = fileName.endsWith(".pdf") ? "pdf" : kind;
+  const visualKind = fileName.endsWith(".pdf")
+    ? "pdf"
+    : fileName.endsWith(".dwg") || fileName.endsWith(".dxf")
+      ? "cad"
+      : kind;
   const accent =
     visualKind === "pdf"
       ? "border-rose-100 bg-rose-50 text-rose-600"
+      : visualKind === "cad"
+        ? "border-slate-200 bg-slate-50 text-slate-700"
       : visualKind === "document"
       ? "text-blue-600 bg-blue-50"
       : visualKind === "sheet"
@@ -585,6 +591,33 @@ function IconFile({
             }`}
           >
             PDF
+          </span>
+        </div>
+      ) : visualKind === "cad" ? (
+        <div className="relative flex items-center justify-center">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={compact ? "h-5 w-5" : "h-8 w-8"}
+          >
+            <path d="M5.5 18.5 18.5 5.5" />
+            <path d="m15.75 4.75 3.5 3.5" />
+            <path d="M4.75 15.75 8.25 19.25" />
+            <path d="M8.75 19.25H4.75v-4" />
+            <path d="M15.5 8.5 19 12" />
+          </svg>
+          <span
+            className={`absolute rounded-full bg-current font-bold tracking-[0.18em] text-white ${
+              compact
+                ? "-bottom-1 px-1.5 py-[1px] text-[5px]"
+                : "-bottom-1.5 px-2 py-0.5 text-[7px]"
+            }`}
+          >
+            CAD
           </span>
         </div>
       ) : (

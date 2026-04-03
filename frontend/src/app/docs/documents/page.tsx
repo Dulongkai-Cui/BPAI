@@ -306,7 +306,7 @@ export default async function DocumentsPage() {
           contentSectionDescription="选择文件夹后，在这里查看对应内容。"
           newItemLabel="新建文档"
           uploadLabel="上传文件"
-          uploadAccept=".txt,.md,.doc,.docx,.pdf,.csv,.xls,.xlsx,.ppt,.pptx,.pps,.ppsx,.odp"
+          uploadAccept=".txt,.md,.doc,.docx,.pdf,.csv,.xls,.xlsx,.ppt,.pptx,.pps,.ppsx,.odp,.dwg,.dxf"
           uploadKind="auto"
           browserStateKind="document"
           newItemHref="/docs/documents/new"

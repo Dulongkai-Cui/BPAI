@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OnlyOfficeDocEditorClient } from "@/components/onlyoffice/onlyoffice-doc-editor-client";
 import { OnlyOfficeSheetEditorClient } from "@/components/onlyoffice/onlyoffice-sheet-editor-client";
@@ -45,6 +46,63 @@ function isPresentationFile(fileName: string) {
     normalizedName.endsWith(".pps") ||
     normalizedName.endsWith(".ppsx") ||
     normalizedName.endsWith(".odp")
+  );
+}
+
+function isOnlyOfficeDocumentFile(fileName: string) {
+  const normalizedName = fileName.toLowerCase();
+
+  return (
+    normalizedName.endsWith(".doc") ||
+    normalizedName.endsWith(".docx") ||
+    normalizedName.endsWith(".txt") ||
+    normalizedName.endsWith(".md") ||
+    normalizedName.endsWith(".pdf")
+  );
+}
+
+function renderGenericAssetPage(params: {
+  documentTitle: string;
+  fileType?: string;
+  documentUrl: string;
+}) {
+  const fileTypeLabel = params.fileType?.toUpperCase() || "FILE";
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(191,219,254,0.15),transparent_28%),linear-gradient(180deg,#f5f8ff_0%,#f8fbff_48%,#eef3fb_100%)] px-6 py-8">
+      <div className="mx-auto max-w-[920px] rounded-[32px] border border-slate-200 bg-white p-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold tracking-[0.2em] text-slate-600">
+            {fileTypeLabel}
+          </span>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+            已上传到文档空间
+          </span>
+        </div>
+        <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950">
+          {params.documentTitle}
+        </h1>
+        <div className="mt-3 text-sm leading-6 text-slate-500">
+          当前文件已收进文档空间。这个类型暂时不走 OnlyOffice 在线编辑，先支持上传、管理和下载，后面再接 CAD 模块。
+        </div>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a
+            href={params.documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-2xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            下载文件
+          </a>
+          <Link
+            href="/docs/documents"
+            className="inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
+          >
+            返回文档空间
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -148,6 +206,14 @@ export default async function DocumentWorkspacePage({
       return renderSlideEditor({
         documentTitle: uploadedDocumentAsset.title,
         documentKey: buildOnlyOfficeAssetKey("document", uploadedDocumentAsset.id),
+        documentUrl: buildAssetFileUrl("document", uploadedDocumentAsset.id),
+        fileType,
+      });
+    }
+
+    if (!isOnlyOfficeDocumentFile(uploadedDocumentAsset.storedFileName)) {
+      return renderGenericAssetPage({
+        documentTitle: uploadedDocumentAsset.title,
         documentUrl: buildAssetFileUrl("document", uploadedDocumentAsset.id),
         fileType,
       });

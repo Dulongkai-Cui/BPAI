@@ -64,15 +64,23 @@ function ArrowButton({
 
 export function WorkOrderStageStrip({
   stage,
+  selectedStage,
+  onStageSelect,
   tone = "default",
 }: {
   stage: string;
+  selectedStage?: string;
+  onStageSelect?: (stage: string) => void;
   tone?: "default" | "alert";
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const activeIndex = useMemo(() => resolveStageIndex(stage), [stage]);
+  const selectedIndex = useMemo(
+    () => resolveStageIndex(selectedStage ?? stage),
+    [selectedStage, stage],
+  );
 
   useEffect(() => {
     const element = containerRef.current;
@@ -124,36 +132,44 @@ export function WorkOrderStageStrip({
           {stageSteps.map((item, index) => {
             const reached = index <= activeIndex;
             const connectorReached = index < activeIndex;
+            const selected = index === selectedIndex;
+            const circleClass = reached
+              ? tone === "alert"
+                ? `flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white text-red-600 transition ${selected ? "ring-4 ring-white/20" : ""} ${onStageSelect ? "cursor-pointer" : "cursor-default"}`
+                : `flex h-7 w-7 items-center justify-center rounded-full border-2 border-blue-600 bg-blue-600 text-white transition ${selected ? "scale-105 ring-4 ring-blue-100" : ""} ${onStageSelect ? "cursor-pointer hover:scale-105" : "cursor-default"}`
+              : tone === "alert"
+                ? `flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/40 bg-transparent text-white/50 transition ${selected ? "ring-4 ring-white/10" : ""} ${onStageSelect ? "cursor-pointer hover:border-white/60 hover:text-white/70" : "cursor-default"}`
+                : `flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-300 bg-white text-slate-300 transition ${selected ? "border-blue-300 ring-4 ring-blue-50" : ""} ${onStageSelect ? "cursor-pointer hover:border-blue-200 hover:text-blue-400" : "cursor-default"}`;
+            const labelClass = selected
+              ? tone === "alert"
+                ? "text-[11px] font-semibold text-white"
+                : "text-[11px] font-bold text-blue-700"
+              : reached
+                ? tone === "alert"
+                  ? "text-[11px] font-semibold text-white"
+                  : "text-[11px] font-semibold text-blue-600"
+                : tone === "alert"
+                  ? "text-[11px] font-semibold text-white/65"
+                  : "text-[11px] font-semibold text-slate-400";
 
             return (
               <div key={item.key} className="flex items-start gap-2">
                 <div className="flex min-w-[56px] flex-col items-center gap-1">
-                  <div
-                    className={
-                      reached
-                        ? tone === "alert"
-                          ? "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-white text-red-600"
-                          : "flex h-7 w-7 items-center justify-center rounded-full border-2 border-blue-600 bg-blue-600 text-white"
-                        : tone === "alert"
-                          ? "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/40 bg-transparent text-white/50"
-                          : "flex h-7 w-7 items-center justify-center rounded-full border-2 border-slate-300 bg-white text-slate-300"
-                    }
+                  <button
+                    type="button"
+                    onClick={() => onStageSelect?.(item.key)}
+                    className={circleClass}
+                    aria-label={`切换到${item.label}节点`}
                   >
                     <span className="text-[10px] font-black">•</span>
-                  </div>
-                  <span
-                    className={
-                      reached
-                        ? tone === "alert"
-                          ? "text-[11px] font-semibold text-white"
-                          : "text-[11px] font-semibold text-blue-600"
-                        : tone === "alert"
-                          ? "text-[11px] font-semibold text-white/65"
-                          : "text-[11px] font-semibold text-slate-400"
-                    }
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onStageSelect?.(item.key)}
+                    className={`${labelClass} ${onStageSelect ? "cursor-pointer" : "cursor-default"}`}
                   >
                     {item.label}
-                  </span>
+                  </button>
                 </div>
 
                 {index < stageSteps.length - 1 ? (

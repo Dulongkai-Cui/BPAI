@@ -329,24 +329,65 @@ async function resolveDefaultPlacementContext(asset: StoredContentAsset) {
   }
 
   const scope = workspace.kind === "collaboration" ? "workspace" : "personal";
-  const systemKey = scope === "workspace" ? "workspace-recent-uploads" : asset.folderId ?? "recent-uploads";
+  const preferredFolderKey = asset.folderId?.trim() ?? "";
+  let rootFolder: { id: string } | undefined;
 
-  const rootFolderQuery = db
-    .select({
-      id: folderNodes.id,
-    })
-    .from(folderNodes)
-    .where(
-      and(
-        eq(folderNodes.workspaceId, asset.workspaceId),
-        eq(folderNodes.contentKind, asset.kind),
-        eq(folderNodes.scope, scope),
-        eq(folderNodes.systemKey, systemKey),
-      ),
-    )
-    .limit(1);
+  if (preferredFolderKey) {
+    const [matchedBySystemKey] = await db
+      .select({
+        id: folderNodes.id,
+      })
+      .from(folderNodes)
+      .where(
+        and(
+          eq(folderNodes.workspaceId, asset.workspaceId),
+          eq(folderNodes.contentKind, asset.kind),
+          eq(folderNodes.scope, scope),
+          eq(folderNodes.systemKey, preferredFolderKey),
+        ),
+      )
+      .limit(1);
 
-  const [rootFolder] = await rootFolderQuery;
+    rootFolder = matchedBySystemKey;
+
+    if (!rootFolder) {
+      const [matchedByLegacyId] = await db
+        .select({
+          id: folderNodes.id,
+        })
+        .from(folderNodes)
+        .where(
+          eq(
+            folderNodes.id,
+            buildRootFolderNodeId(scope, asset.kind, asset.workspaceId, preferredFolderKey),
+          ),
+        )
+        .limit(1);
+
+      rootFolder = matchedByLegacyId;
+    }
+  }
+
+  if (!rootFolder) {
+    const fallbackSystemKey =
+      scope === "workspace" ? "workspace-recent-uploads" : "recent-uploads";
+    const [fallbackRootFolder] = await db
+      .select({
+        id: folderNodes.id,
+      })
+      .from(folderNodes)
+      .where(
+        and(
+          eq(folderNodes.workspaceId, asset.workspaceId),
+          eq(folderNodes.contentKind, asset.kind),
+          eq(folderNodes.scope, scope),
+          eq(folderNodes.systemKey, fallbackSystemKey),
+        ),
+      )
+      .limit(1);
+
+    rootFolder = fallbackRootFolder;
+  }
 
   if (!rootFolder) {
     return null;

@@ -5,9 +5,12 @@ import type { ReactNode } from "react";
 import { requireCurrentUser } from "@/lib/auth/server";
 import { WorkOrderCardActions } from "@/components/work-order/work-order-card-actions";
 import { DispatchAssignmentButton } from "@/components/work-order/dispatch-assignment-button";
-import { WorkOrderStageStrip } from "@/components/work-order/work-order-stage-strip";
+import { WorkOrderProgressEditor } from "@/components/work-order/work-order-progress-editor";
+import { WorkOrderStageSelectionProvider } from "@/components/work-order/work-order-stage-selection-context";
+import { WorkOrderStageAssetPanel } from "@/components/work-order/work-order-stage-asset-panel";
 import {
   ensureCanViewWorkOrder,
+  ensureWorkOrderStageFolders,
   getWorkOrderCreationOptions,
   getWorkOrderDetailById,
 } from "@/lib/work-order/server";
@@ -16,6 +19,7 @@ type WorkOrderDetail = NonNullable<
   Awaited<ReturnType<typeof getWorkOrderDetailById>>
 >;
 type CreationOptions = Awaited<ReturnType<typeof getWorkOrderCreationOptions>>;
+type StageFolderSetup = Awaited<ReturnType<typeof ensureWorkOrderStageFolders>>;
 type PillTone = "slate" | "blue" | "amber" | "emerald" | "red" | "violet";
 
 function stageLabel(stage: string) {
@@ -556,23 +560,14 @@ function DetailHeader({
       </div>
 
       <div className="mt-6 space-y-4">
-        <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <div className="text-sm font-semibold text-slate-600">
-              {progressLabel(detail.workOrder.stage)}
-            </div>
-            <div className={`text-[1.9rem] font-black ${accent.value}`}>{progress}%</div>
-          </div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
-            <div
-              className={`h-full rounded-full ${accent.line}`}
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          <div className="mt-5">
-            <WorkOrderStageStrip stage={detail.workOrder.stage} />
-          </div>
-        </div>
+        <WorkOrderProgressEditor
+          workOrderId={detail.workOrder.id}
+          stage={detail.workOrder.stage}
+          label={progressLabel(detail.workOrder.stage)}
+          initialProgress={progress}
+          lineClassName={accent.line}
+          valueClassName={accent.value}
+        />
 
         <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[24px] border border-slate-200 bg-white p-4">
@@ -621,6 +616,7 @@ function DetailHeader({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function OverviewSection({ detail }: { detail: WorkOrderDetail }) {
   return (
     <SectionCard title="工单总览">
@@ -661,6 +657,48 @@ function OverviewSection({ detail }: { detail: WorkOrderDetail }) {
         </div>
       </div>
     </SectionCard>
+  );
+}
+
+function StageUploadSection({
+  detail,
+  stagePresets,
+}: {
+  detail: WorkOrderDetail;
+  stagePresets: StageFolderSetup["presets"];
+}) {
+  const stageLinks = detail.documentLinks.map((item) => {
+    const metadata =
+      item.metadata && typeof item.metadata === "object"
+        ? (item.metadata as Record<string, unknown>)
+        : null;
+
+    return {
+      id: item.id,
+      title: item.targetTitle,
+      relationNote: firstFilled(item.relationNote, item.targetDescription),
+      stage: typeof metadata?.stage === "string" ? metadata.stage : null,
+      folderName: typeof metadata?.folderName === "string" ? metadata.folderName : null,
+      updatedAtLabel: formatDateTime(item.updatedAt),
+    };
+  });
+
+  return (
+    <WorkOrderStageAssetPanel
+      workOrderId={detail.workOrder.id}
+      workOrderNo={detail.workOrder.workOrderNo}
+      projectName={detail.workOrder.projectName ?? ""}
+      siteName={detail.workOrder.siteName ?? ""}
+      siteAddress={detail.workOrder.siteAddress ?? ""}
+      collaborationSpaceId={detail.collaborationSpace?.id ?? null}
+      collaborationSpaceName={detail.collaborationSpace?.name ?? null}
+      currentStage={detail.workOrder.stage}
+      stagePresets={stagePresets.map((preset) => ({
+        ...preset,
+        label: stageLabel(preset.stage),
+      }))}
+      stageLinks={stageLinks}
+    />
   );
 }
 
@@ -1087,9 +1125,11 @@ function DocumentsSection({ detail }: { detail: WorkOrderDetail }) {
 function WorkOrderDetailPageInner({
   detail,
   creationOptions,
+  stagePresets,
 }: {
   detail: WorkOrderDetail;
   creationOptions: CreationOptions;
+  stagePresets: StageFolderSetup["presets"];
 }) {
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,rgba(191,219,254,0.22),transparent_26%),linear-gradient(180deg,#eef4ff_0%,#f8fbff_38%,#edf3fb_100%)] px-2 py-4 sm:px-4">
@@ -1097,19 +1137,21 @@ function WorkOrderDetailPageInner({
         <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.6fr)_minmax(0,1.4fr)]">
           <CadViewport detail={detail} />
 
-          <div className="space-y-6">
-            <DetailHeader detail={detail} creationOptions={creationOptions} />
-
+          <WorkOrderStageSelectionProvider initialStage={detail.workOrder.stage}>
             <div className="space-y-6">
-              <OverviewSection detail={detail} />
-              <MaterialsSection detail={detail} />
-              <CollaborationSpaceSection detail={detail} />
-              <SourceSection detail={detail} />
-              <DispatchSection detail={detail} creationOptions={creationOptions} />
-              <DeliverySection detail={detail} />
-              <DocumentsSection detail={detail} />
+              <DetailHeader detail={detail} creationOptions={creationOptions} />
+
+              <div className="space-y-6">
+                <StageUploadSection detail={detail} stagePresets={stagePresets} />
+                <MaterialsSection detail={detail} />
+                <CollaborationSpaceSection detail={detail} />
+                <SourceSection detail={detail} />
+                <DispatchSection detail={detail} creationOptions={creationOptions} />
+                <DeliverySection detail={detail} />
+                <DocumentsSection detail={detail} />
+              </div>
             </div>
-          </div>
+          </WorkOrderStageSelectionProvider>
         </div>
       </div>
     </div>
@@ -1139,19 +1181,22 @@ export default async function WorkOrderDetailPage({
     throw error;
   }
 
-  const [detail, creationOptions] = await Promise.all([
-    getWorkOrderDetailById(workOrderId),
-    getWorkOrderCreationOptions(currentUser.id),
-  ]);
+  const detail = await getWorkOrderDetailById(workOrderId);
 
   if (!detail) {
     notFound();
   }
 
+  const [creationOptions, stageFolderSetup] = await Promise.all([
+    getWorkOrderCreationOptions(currentUser.id),
+    ensureWorkOrderStageFolders(workOrderId),
+  ]);
+
   return (
     <WorkOrderDetailPageInner
       detail={detail}
       creationOptions={creationOptions}
+      stagePresets={stageFolderSetup.presets}
     />
   );
 }

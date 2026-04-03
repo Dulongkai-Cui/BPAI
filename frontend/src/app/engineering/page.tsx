@@ -1,15 +1,108 @@
 import Link from "next/link";
+import type { ComponentType, SVGProps } from "react";
 
 import { getEngineeringHubSummary } from "@/lib/engineering/server";
 
 const HUB_BG =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuDUpEyUKLAmloKOtXMhv6vnfFyzYsKmpvE5ug2vYpiDjR2O7cLfu7VqWVUWTQ8QLxCR5CVcVXBTswrOKFFakk1TEbzKq5WWGjaDOnw88fvjh1v7OIDKw7VVjxb8Y9qmXVbcRwTIR2rDwACgzMdqtpcxxtVeYWy4xMdM9q0Zfzej3SlYW2ZpH5HFGbxvIzsGOusnMkRbqsUJuSLGgyVIVJhqQggCM_duVHxPU7ScaeNB1W9NafPi30ueO_v7rtUAeWZpPy0n1o6RPQ";
 
+type IconProps = SVGProps<SVGSVGElement>;
+
+function OfficeIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M3 21h18" />
+      <path d="M5 21V7l7-4 7 4v14" />
+      <path d="M9 10h.01" />
+      <path d="M9 14h.01" />
+      <path d="M15 10h.01" />
+      <path d="M15 14h.01" />
+      <path d="M11 21v-4h2v4" />
+    </svg>
+  );
+}
+
+function OperationsIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M14.5 4.5a3.2 3.2 0 0 0 4 4l-5.7 5.7-2.3-2.3z" />
+      <path d="M3.5 20.5l5.8-5.8 2.3 2.3-5.8 5.8H3.5z" />
+      <path d="M6.8 5.2l12 12" />
+      <path d="M5 6.8l2.5-2.5 3.2 3.2-2.5 2.5z" />
+      <path d="M15.5 16.5l2.2 2.2" />
+    </svg>
+  );
+}
+
+function AuditIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M9 3h6l5 5v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h2z" />
+      <path d="M9 12l2 2 4-4" />
+      <path d="M14 3v5h5" />
+    </svg>
+  );
+}
+
+function MonitorIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <rect x="3" y="5" width="18" height="12" rx="2" />
+      <path d="M8 21h8" />
+      <path d="M12 17v4" />
+      <circle cx="12" cy="11" r="3" />
+    </svg>
+  );
+}
+
+function WarehouseIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M3 10l9-6 9 6" />
+      <path d="M5 10v10h14V10" />
+      <path d="M9 20v-4h6v4" />
+      <path d="M8 13h.01" />
+      <path d="M16 13h.01" />
+    </svg>
+  );
+}
+
+function DesignIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M4 20l7-7" />
+      <path d="M14 4l6 6" />
+      <path d="M13 5l6 6" />
+      <path d="M3 21l4-1 11-11-3-3L4 17l-1 4z" />
+    </svg>
+  );
+}
+
+function FinanceIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M7 10h.01" />
+      <path d="M17 14h.01" />
+    </svg>
+  );
+}
+
+function SystemIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M12 3l7 3v5c0 4.5-2.9 8.5-7 10-4.1-1.5-7-5.5-7-10V6l7-3z" />
+      <path d="M9.5 12l1.7 1.7 3.3-3.7" />
+    </svg>
+  );
+}
+
 type HubCard = {
   eyebrow: string;
   title: string;
   color: string;
-  mark: string;
+  icon: ComponentType<IconProps>;
   href?: string;
 };
 
@@ -18,50 +111,50 @@ const hubCards: HubCard[] = [
     eyebrow: "ADMIN",
     title: "办公室",
     color: "bg-[#3867ad]",
-    mark: "井",
+    icon: OfficeIcon,
   },
   {
     eyebrow: "OPERATIONS",
     title: "工程组",
     color: "bg-[#667087]",
-    mark: "工",
+    icon: OperationsIcon,
     href: "/engineering/board",
   },
   {
     eyebrow: "COMPLIANCE",
     title: "送审中心",
     color: "bg-[#629be9]",
-    mark: "审",
+    icon: AuditIcon,
   },
   {
     eyebrow: "MONITORING",
     title: "现场施工监控",
     color: "bg-[#129d73]",
-    mark: "监",
+    icon: MonitorIcon,
   },
   {
     eyebrow: "LOGISTICS",
     title: "仓库",
     color: "bg-[#233046]",
-    mark: "仓",
+    icon: WarehouseIcon,
   },
   {
     eyebrow: "R&D",
     title: "设计院",
     color: "bg-[#7a5e86]",
-    mark: "设",
+    icon: DesignIcon,
   },
   {
     eyebrow: "FINANCE",
     title: "会计部",
     color: "bg-[#e68500]",
-    mark: "财",
+    icon: FinanceIcon,
   },
   {
     eyebrow: "SYSTEM",
     title: "系统后台",
     color: "bg-[#8b8b8b]",
-    mark: "系",
+    icon: SystemIcon,
     href: "/engineering/system-backend",
   },
 ];
@@ -96,6 +189,7 @@ export default async function EngineeringHubPage() {
           <div className="mx-auto max-w-[1180px]">
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
               {hubCards.map((card) => {
+                const CornerIcon = card.icon;
                 const content = (
                   <div
                     className={`${card.color} relative flex min-h-[284px] flex-col justify-end overflow-hidden p-8 text-white shadow-2xl transition duration-300 group-hover:-translate-y-1`}
@@ -104,8 +198,8 @@ export default async function EngineeringHubPage() {
                         "polygon(5% 0%, 100% 0%, 100% 90%, 95% 100%, 0% 100%, 0% 10%)",
                     }}
                   >
-                    <span className="absolute top-4 right-4 text-5xl font-black text-white/18">
-                      {card.mark}
+                    <span className="absolute top-4 right-4 text-white/18">
+                      <CornerIcon className="h-14 w-14 rotate-12" />
                     </span>
                     <div className="relative z-10">
                       <div className="text-sm font-black tracking-[0.18em] text-white/80">

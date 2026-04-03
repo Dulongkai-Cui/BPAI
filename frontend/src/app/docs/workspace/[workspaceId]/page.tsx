@@ -296,7 +296,7 @@ export default async function WorkspaceDetailPage({
           contentSectionDescription="选择文件夹后，在这里继续整理对应资料。"
           newItemLabel="新建文档"
           uploadLabel="上传资料"
-          uploadAccept=".txt,.md,.doc,.docx,.pdf,.csv,.xls,.xlsx,.ppt,.pptx,.pps,.ppsx,.odp"
+          uploadAccept=".txt,.md,.doc,.docx,.pdf,.csv,.xls,.xlsx,.ppt,.pptx,.pps,.ppsx,.odp,.dwg,.dxf"
           uploadKind="auto"
           browserStateKind="document"
           newItemHref="/docs/documents/new"
