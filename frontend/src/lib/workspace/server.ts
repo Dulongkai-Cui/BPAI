@@ -2,7 +2,15 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import type { AuthenticatedUser } from "@/lib/auth/types";
-import { mutateAppStore, readAppStore } from "@/lib/auth/server";
+import type {
+  StoredAssignedSystemForm,
+  StoredAssignedSystemFormState,
+} from "@/lib/auth/types";
+import {
+  getBootstrapAccountSummary,
+  mutateAppStore,
+  readAppStore,
+} from "@/lib/auth/server";
 import type {
   StoredCollaborationSpace,
   StoredCollaborationSpaceMembers,
@@ -23,11 +31,13 @@ import {
   collaborationSpaces,
   collaborationUpdates,
   normalizeWorkspaceEmail,
+  systemFormScopes,
   workspaceDetailSeeds,
   workspaceMemberProfiles,
   type AssignedSystemForm,
   type CollaborationSpace,
   type CollaborationUpdate,
+  type SystemFormScope,
   type WorkspaceDetailSeed,
   type WorkspaceMemberProfile,
 } from "@/lib/workspace/mock-data";
@@ -59,6 +69,17 @@ function buildCollaborationSpaceId(name: string) {
   return `space-${safeSeed || "custom"}-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
 }
 
+function buildAssignedSystemFormId(title: string) {
+  const safeSeed = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 18);
+
+  return `sysform-${safeSeed || "custom"}-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+}
+
 function formatWorkspaceUpdatedAt(iso: string) {
   const diffMs = Date.now() - Date.parse(iso);
 
@@ -82,6 +103,18 @@ function formatWorkspaceUpdatedAt(iso: string) {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(iso));
+}
+
+function formatSystemFormUpdatedAt(iso: string) {
+  return formatWorkspaceUpdatedAt(iso);
+}
+
+function isSystemFormAdmin(user: AuthenticatedUser) {
+  return (
+    user.roleKey === "system_admin" ||
+    normalizeWorkspaceEmail(user.email) ===
+      normalizeWorkspaceEmail(getBootstrapAccountSummary().email)
+  );
 }
 
 function mapStoredSpaceToCollaborationSpace(
@@ -148,15 +181,31 @@ export async function getCollaborationSpaces() {
   const memberStateMap = new Map(
     store.collaborationSpaceMembers.map((state) => [state.workspaceId, state]),
   );
+  const systemFormCountBySpaceId = new Map<string, number>();
+  for (const form of store.assignedSystemForms) {
+    systemFormCountBySpaceId.set(
+      form.spaceId,
+      (systemFormCountBySpaceId.get(form.spaceId) ?? 0) + 1,
+    );
+  }
   const storedSpaces = [...store.collaborationSpaces]
     .filter((space) => !dissolvedSpaceIds.has(space.id))
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    .map((space) =>
-      mapStoredSpaceToCollaborationSpace(space, memberStateMap.get(space.id) ?? null),
-    );
+    .map((space) => {
+      const mapped = mapStoredSpaceToCollaborationSpace(space, memberStateMap.get(space.id) ?? null);
+      return {
+        ...mapped,
+        systemFormCount: (collaborationSpaces.find((item) => item.id === mapped.id)?.systemFormCount ?? 0) +
+          (systemFormCountBySpaceId.get(mapped.id) ?? 0),
+      };
+    });
   const seededSpaces = collaborationSpaces
     .filter((space) => !dissolvedSpaceIds.has(space.id))
-    .map((space) => mergeSpaceWithMemberState(space, memberStateMap.get(space.id) ?? null));
+    .map((space) => ({
+      ...mergeSpaceWithMemberState(space, memberStateMap.get(space.id) ?? null),
+      systemFormCount:
+        space.systemFormCount + (systemFormCountBySpaceId.get(space.id) ?? 0),
+    }));
 
   return [...storedSpaces, ...seededSpaces];
 }
@@ -184,12 +233,32 @@ export async function getSpacesForUser(email: string) {
   };
 }
 
-export function getAssignedFormsForUser(email: string): AssignedSystemForm[] {
+export async function getAssignedFormsForUser(email: string): Promise<AssignedSystemForm[]> {
   const normalizedEmail = normalizeWorkspaceEmail(email);
+  const store = await readAppStore();
+  const storedForms = store.assignedSystemForms
+    .filter((form) => normalizeWorkspaceEmail(form.assigneeEmail) === normalizedEmail)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .map((form) => ({
+      id: form.id,
+      title: form.title,
+      spaceId: form.spaceId,
+      assigneeEmail: form.assigneeEmail,
+      assignerName: form.assignerName,
+      formType: form.formType,
+      state: form.state,
+      updatedAt: formatSystemFormUpdatedAt(form.updatedAt),
+    }));
 
-  return assignedSystemForms.filter(
+  const seededForms = assignedSystemForms.filter(
     (form) => normalizeWorkspaceEmail(form.assigneeEmail) === normalizedEmail,
   );
+
+  return [...storedForms, ...seededForms];
+}
+
+export function getSystemFormScopes(): SystemFormScope[] {
+  return systemFormScopes;
 }
 
 export function getUpdatesForSpaceIds(spaceIds: string[]): CollaborationUpdate[] {
@@ -428,6 +497,83 @@ export async function createCollaborationSpace(params: {
   });
 
   return mapStoredSpaceToCollaborationSpace(nextSpace, null);
+}
+
+export async function createAssignedSystemForm(params: {
+  actor: AuthenticatedUser;
+  title: string;
+  spaceId?: string;
+  assigneeEmail: string;
+  formType: string;
+  state?: StoredAssignedSystemFormState;
+}) {
+  if (!isSystemFormAdmin(params.actor)) {
+    throw new Error("FORBIDDEN");
+  }
+
+  const title = params.title.trim();
+  const formType = params.formType.trim();
+
+  if (!title) {
+    throw new Error("INVALID_TITLE");
+  }
+
+  if (!formType) {
+    throw new Error("INVALID_FORM_TYPE");
+  }
+
+  const scope =
+    systemFormScopes.find((item) => item.id === params.spaceId) ??
+    systemFormScopes[0] ??
+    null;
+
+  if (!scope) {
+    throw new Error("SYSTEM_SCOPE_NOT_FOUND");
+  }
+
+  const normalizedAssigneeEmail = normalizeWorkspaceEmail(params.assigneeEmail);
+  const store = await readAppStore();
+  const knownEmails = new Set(
+    store.users.map((user) => normalizeWorkspaceEmail(user.email)),
+  );
+  const isKnownUser = knownEmails.has(normalizedAssigneeEmail);
+
+  if (!isKnownUser) {
+    throw new Error("ASSIGNEE_NOT_FOUND");
+  }
+
+  const timestamp = nowIso();
+  const nextForm = {
+    id: buildAssignedSystemFormId(title),
+    title,
+    spaceId: scope.id,
+    assigneeEmail: normalizedAssigneeEmail,
+    assignerEmail: normalizeWorkspaceEmail(params.actor.email),
+    assignerName: params.actor.name,
+    formType,
+    state: params.state ?? "已分配",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  } satisfies StoredAssignedSystemForm;
+
+  await mutateAppStore((nextStore) => ({
+    store: {
+      ...nextStore,
+      assignedSystemForms: [nextForm, ...nextStore.assignedSystemForms],
+    },
+    result: nextForm,
+  }));
+
+  return {
+    id: nextForm.id,
+    title: nextForm.title,
+    spaceId: nextForm.spaceId,
+    assigneeEmail: nextForm.assigneeEmail,
+    assignerName: nextForm.assignerName,
+    formType: nextForm.formType,
+    state: nextForm.state,
+    updatedAt: formatSystemFormUpdatedAt(nextForm.updatedAt),
+  } satisfies AssignedSystemForm;
 }
 
 export async function dissolveCollaborationSpace(params: {

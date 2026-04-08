@@ -14,6 +14,11 @@ import {
   saveSharedBrowserStateForWorkspace,
   type BrowserCustomFolderState,
 } from "@/lib/content/browser-state";
+import {
+  isCadFileName,
+  normalizeCadAssetKind,
+  type CadAssetKind,
+} from "@/lib/content/cad";
 import { createUploadedAsset, type ContentKind } from "@/lib/content/server";
 import { getDb } from "@/lib/db/client";
 import {
@@ -567,6 +572,23 @@ function stageLabel(stage: WorkOrderStage) {
   };
 
   return labels[stage];
+}
+
+const PRIMARY_CAD_STAGES: WorkOrderStage[] = [
+  "source_intake",
+  "registration",
+  "drawing_delivery",
+];
+
+function extractStageFromLinkMetadata(metadata: unknown): WorkOrderStage | null {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const stage = (metadata as { stage?: unknown }).stage;
+  return typeof stage === "string" && workOrderStageEnum.enumValues.includes(stage as WorkOrderStage)
+    ? (stage as WorkOrderStage)
+    : null;
 }
 
 function calculateMaterialCompleteness(input: {
@@ -1760,6 +1782,57 @@ export async function getWorkOrderDetailById(id: string) {
   const workspaceMap = new Map(workspaceRows.map((row) => [row.id, row]));
   const squadMap = new Map(squadRows.map((row) => [row.id, row]));
   const collaborationSpace = collaborationSpaceRows[0] ?? null;
+  const detailDocumentLinks = documentLinkRows.map((row) => {
+    const linkedAsset = row.targetType === "asset" ? assetMap.get(row.targetId) : null;
+    const linkedFolder =
+      row.targetType === "folder_node" ? folderMap.get(row.targetId) : null;
+    const linkedWorkspace = row.linkedWorkspaceId
+      ? (workspaceMap.get(row.linkedWorkspaceId) ?? null)
+      : null;
+
+    return {
+      ...row,
+      linkedByUserName: row.linkedByUserId
+        ? (userMap.get(row.linkedByUserId)?.name ?? null)
+        : null,
+      linkedWorkspaceName: linkedWorkspace?.name ?? null,
+      targetTitle:
+        linkedAsset?.title ?? linkedFolder?.name ?? row.relationNote ?? row.targetId,
+      targetKind: linkedAsset?.kind ?? linkedFolder?.contentKind ?? null,
+      targetWorkspaceId:
+        linkedAsset?.workspaceId ?? linkedFolder?.workspaceId ?? row.linkedWorkspaceId,
+      targetDescription: linkedFolder?.description ?? null,
+      targetDeletedAt: linkedAsset?.trashedAt ?? linkedFolder?.deletedAt ?? null,
+      stage: extractStageFromLinkMetadata(row.metadata),
+    };
+  });
+  const primaryCadLink =
+    [...detailDocumentLinks]
+      .filter((item) => {
+        const normalizedKind = normalizeCadAssetKind(item.targetKind);
+
+        return (
+          item.targetType === "asset" &&
+          !item.targetDeletedAt &&
+          normalizedKind !== null &&
+          isCadFileName(item.targetTitle) &&
+          item.stage !== null &&
+          PRIMARY_CAD_STAGES.includes(item.stage)
+        );
+      })
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())[0] ?? null;
+  const primaryCadAsset =
+    primaryCadLink && normalizeCadAssetKind(primaryCadLink.targetKind)
+      ? {
+          assetId: primaryCadLink.targetId,
+          kind: normalizeCadAssetKind(primaryCadLink.targetKind) as CadAssetKind,
+          fileName: primaryCadLink.targetTitle,
+          stage: primaryCadLink.stage as WorkOrderStage,
+          stageLabel: stageLabel(primaryCadLink.stage as WorkOrderStage),
+          relationNote: primaryCadLink.relationNote,
+          updatedAt: primaryCadLink.updatedAt,
+        }
+      : null;
   const detailMissingItems = sortMissingItemsForDetail(missingRows).map((row) => ({
     ...row,
     ownerUserName: row.ownerUserId ? (userMap.get(row.ownerUserId)?.name ?? null) : null,
@@ -1838,29 +1911,8 @@ export async function getWorkOrderDetailById(id: string) {
         (row) => row.status === "resolved" || row.status === "waived",
       ),
     },
-    documentLinks: documentLinkRows.map((row) => {
-      const linkedAsset = row.targetType === "asset" ? assetMap.get(row.targetId) : null;
-      const linkedFolder =
-        row.targetType === "folder_node" ? folderMap.get(row.targetId) : null;
-      const linkedWorkspace = row.linkedWorkspaceId
-        ? (workspaceMap.get(row.linkedWorkspaceId) ?? null)
-        : null;
-
-      return {
-        ...row,
-        linkedByUserName: row.linkedByUserId
-          ? (userMap.get(row.linkedByUserId)?.name ?? null)
-          : null,
-        linkedWorkspaceName: linkedWorkspace?.name ?? null,
-        targetTitle:
-          linkedAsset?.title ?? linkedFolder?.name ?? row.relationNote ?? row.targetId,
-        targetKind: linkedAsset?.kind ?? linkedFolder?.contentKind ?? null,
-        targetWorkspaceId:
-          linkedAsset?.workspaceId ?? linkedFolder?.workspaceId ?? row.linkedWorkspaceId,
-        targetDescription: linkedFolder?.description ?? null,
-        targetDeletedAt: linkedAsset?.trashedAt ?? linkedFolder?.deletedAt ?? null,
-      };
-    }),
+    documentLinks: detailDocumentLinks,
+    primaryCadAsset,
     permissions: {
       canView: true,
       canManage: true,

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { requireCurrentUser } from "@/lib/auth/server";
+import { buildCadLabUrl } from "@/lib/content/cad";
 import { WorkOrderCardActions } from "@/components/work-order/work-order-card-actions";
 import { DispatchAssignmentButton } from "@/components/work-order/dispatch-assignment-button";
 import { WorkOrderProgressEditor } from "@/components/work-order/work-order-progress-editor";
@@ -258,28 +259,6 @@ function progressLabel(stage: string) {
   }
 }
 
-function hashNumber(seed: string) {
-  let value = 0;
-
-  for (const char of seed) {
-    value = (value * 33 + char.charCodeAt(0)) % 100000;
-  }
-
-  return value;
-}
-
-function modelMetrics(detail: WorkOrderDetail) {
-  const seed = hashNumber(detail.workOrder.id);
-
-  return {
-    x: (seed % 180 + 28).toFixed(2),
-    y: ((seed * 1.37) % 120 + 16).toFixed(2),
-    z: ((seed * 0.29) % 24 + 3).toFixed(2),
-    scale: 100 + (seed % 4) * 50,
-    rev: String((seed % 8) + 1).padStart(2, "0"),
-  };
-}
-
 function TonePill({
   children,
   tone = "slate",
@@ -341,20 +320,7 @@ function EmptyBox({ text }: { text: string }) {
   );
 }
 
-function ModelToolButton({ label }: { label: string }) {
-  return (
-    <button
-      type="button"
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/8 text-white/80 backdrop-blur transition hover:bg-white/12"
-      aria-label={label}
-    >
-      <span className="text-sm font-bold">{label}</span>
-    </button>
-  );
-}
-
 function CadViewport({ detail }: { detail: WorkOrderDetail }) {
-  const metrics = modelMetrics(detail);
   const completeness = clampPercent(detail.workOrder.materialCompleteness);
   const openMissingCount = detail.missingItems.open.length;
   const title = firstFilled(
@@ -362,6 +328,15 @@ function CadViewport({ detail }: { detail: WorkOrderDetail }) {
     detail.workOrder.projectName,
     detail.workOrder.title,
   );
+  const primaryCadAsset = detail.primaryCadAsset;
+  const cadLabUrl = primaryCadAsset
+    ? buildCadLabUrl({
+        kind: primaryCadAsset.kind,
+        assetId: primaryCadAsset.assetId,
+        fileName: primaryCadAsset.fileName,
+        embed: true,
+      })
+    : null;
 
   return (
     <section className="relative overflow-hidden rounded-[32px] border border-slate-200 bg-[#151d2c] shadow-[0_28px_90px_rgba(15,23,42,0.16)] xl:sticky xl:top-4 xl:h-[calc(100vh-6rem)]">
@@ -369,50 +344,36 @@ function CadViewport({ detail }: { detail: WorkOrderDetail }) {
       <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.25)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.25)_1px,transparent_1px)] [background-size:26px_26px]" />
 
       <div className="absolute inset-0">
-        <svg viewBox="0 0 900 1100" className="h-full w-full">
-          <defs>
-            <radialGradient id="cadGlow" cx="50%" cy="48%" r="48%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.2" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <rect x="0" y="0" width="900" height="1100" fill="url(#cadGlow)" />
-          <g fill="none" stroke="#dbeafe" strokeOpacity="0.4">
-            <ellipse cx="455" cy="608" rx="260" ry="215" strokeWidth="2.4" />
-            <ellipse cx="455" cy="608" rx="230" ry="182" strokeWidth="1.5" />
-            <ellipse cx="455" cy="608" rx="185" ry="138" strokeWidth="1.2" />
-            <path d="M208 700c92 34 187 49 286 49 112 0 209-19 293-56" strokeWidth="3" />
-            <path d="M214 755c82 26 165 38 248 38 125 0 219-18 302-58" strokeWidth="2.4" />
-            <path d="M277 498c62-55 121-79 178-79 54 0 103 18 150 56 47 37 84 93 112 170" strokeWidth="2.2" />
-            <path d="M273 537c70-43 136-64 198-64 60 0 114 18 163 54 49 36 86 87 110 152" strokeWidth="1.3" />
-            <path d="M233 840c119 55 244 80 372 76 89-3 173-20 252-51" strokeWidth="1.8" />
-            <path d="M324 393h266" strokeWidth="1.4" strokeOpacity="0.25" />
-            <path d="M294 436h324" strokeWidth="1.1" strokeOpacity="0.22" />
-            <path d="M242 912c86 34 178 50 272 50 103 0 202-20 296-60" strokeWidth="1.2" strokeOpacity="0.28" />
-            {Array.from({ length: 12 }).map((_, index) => {
-              const x = 240 + index * 34;
-              return (
-                <path
-                  key={`v-${x}`}
-                  d={`M${x} 432c8 190 22 326 42 408`}
-                  strokeWidth="1"
-                  strokeOpacity="0.18"
-                />
-              );
-            })}
-            {Array.from({ length: 10 }).map((_, index) => {
-              const startY = 470 + index * 34;
-              return (
-                <path
-                  key={`h-${startY}`}
-                  d={`M245 ${startY}c96 22 197 33 302 33 76 0 150-7 224-21`}
-                  strokeWidth="1"
-                  strokeOpacity="0.16"
-                />
-              );
-            })}
-          </g>
-        </svg>
+        {cadLabUrl ? (
+          <iframe
+            title={`${title} CAD preview`}
+            src={cadLabUrl}
+            className="h-full w-full border-0"
+          />
+        ) : (
+          <svg viewBox="0 0 900 1100" className="h-full w-full">
+            <defs>
+              <radialGradient id="cadGlow" cx="50%" cy="48%" r="48%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <rect x="0" y="0" width="900" height="1100" fill="url(#cadGlow)" />
+            <g fill="none" stroke="#dbeafe" strokeOpacity="0.4">
+              <ellipse cx="455" cy="608" rx="260" ry="215" strokeWidth="2.4" />
+              <ellipse cx="455" cy="608" rx="230" ry="182" strokeWidth="1.5" />
+              <ellipse cx="455" cy="608" rx="185" ry="138" strokeWidth="1.2" />
+              <path d="M208 700c92 34 187 49 286 49 112 0 209-19 293-56" strokeWidth="3" />
+              <path d="M214 755c82 26 165 38 248 38 125 0 219-18 302-58" strokeWidth="2.4" />
+              <path d="M277 498c62-55 121-79 178-79 54 0 103 18 150 56 47 37 84 93 112 170" strokeWidth="2.2" />
+              <path d="M273 537c70-43 136-64 198-64 60 0 114 18 163 54 49 36 86 87 110 152" strokeWidth="1.3" />
+              <path d="M233 840c119 55 244 80 372 76 89-3 173-20 252-51" strokeWidth="1.8" />
+              <path d="M324 393h266" strokeWidth="1.4" strokeOpacity="0.25" />
+              <path d="M294 436h324" strokeWidth="1.1" strokeOpacity="0.22" />
+              <path d="M242 912c86 34 178 50 272 50 103 0 202-20 296-60" strokeWidth="1.2" strokeOpacity="0.28" />
+            </g>
+          </svg>
+        )}
       </div>
 
       <div className="relative z-10 flex min-h-[560px] flex-col justify-between p-5 xl:h-full">
@@ -423,17 +384,28 @@ function CadViewport({ detail }: { detail: WorkOrderDetail }) {
             </div>
             <div className="mt-2 text-sm font-bold text-white">{title}</div>
             <div className="mt-3 text-[11px] leading-6 text-white/65">
-              坐标: X {metrics.x} / Y {metrics.y} / Z {metrics.z}
-              <br />
-              比例: 1:{metrics.scale} · 版本: REV-{metrics.rev}
+              {primaryCadAsset ? (
+                <>
+                  当前文件: {primaryCadAsset.fileName}
+                  <br />
+                  默认来自 {primaryCadAsset.stageLabel} 节点的首个 CAD 文件
+                </>
+              ) : (
+                <>
+                  当前还没有来源 / 登记 / 图纸节点的 CAD 文件。
+                  <br />
+                  上传第一个 DWG / DXF 后会自动显示在这里。
+                </>
+              )}
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <ModelToolButton label="放" />
-            <ModelToolButton label="旋" />
-            <ModelToolButton label="层" />
-          </div>
+          {primaryCadAsset ? (
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur">
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-300" />
+              当前为查看模式，优先使用鼠标滚轮缩放
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -667,7 +639,7 @@ function StageUploadSection({
   detail: WorkOrderDetail;
   stagePresets: StageFolderSetup["presets"];
 }) {
-  const stageLinks = detail.documentLinks.map((item) => {
+  const stageLinks = detail.documentLinks.map((item: WorkOrderDetail["documentLinks"][number]) => {
     const metadata =
       item.metadata && typeof item.metadata === "object"
         ? (item.metadata as Record<string, unknown>)
@@ -1089,7 +1061,7 @@ function DocumentsSection({ detail }: { detail: WorkOrderDetail }) {
     >
       {detail.documentLinks.length > 0 ? (
         <div className="space-y-3">
-          {detail.documentLinks.map((item) => (
+          {detail.documentLinks.map((item: WorkOrderDetail["documentLinks"][number]) => (
             <article
               key={item.id}
               className="rounded-[22px] border border-slate-200 bg-white px-4 py-4"

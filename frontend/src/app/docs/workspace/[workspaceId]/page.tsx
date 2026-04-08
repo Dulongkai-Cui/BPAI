@@ -17,6 +17,7 @@ import {
   type BrowserFileState,
   type BrowserInnerFolderState,
 } from "@/lib/content/browser-state";
+import { buildCadViewerHref, isCadFileName } from "@/lib/content/cad";
 import {
   formatAssetUpdatedAt,
   listAssetsForUser,
@@ -211,10 +212,20 @@ export default async function WorkspaceDetailPage({
       updatedAt: formatAssetUpdatedAt(asset.updatedAt),
       folderId: "workspace-recent-uploads",
       tag: "上传",
-      href: appendReturnTo(`/docs/documents/${asset.id}`, returnToHref),
+      href: appendReturnTo(
+        isCadFileName(asset.storedFileName)
+          ? buildCadViewerHref({
+              kind: asset.kind,
+              assetId: asset.id,
+              fileName: asset.originalFileName,
+            })
+          : `/docs/documents/${asset.id}`,
+        returnToHref,
+      ),
       kind: asset.kind,
       source: "asset" as const,
       storageKind: asset.kind,
+      sampleFileName: asset.storedFileName,
     })),
     ...seed.sampleFiles.map((file) => ({
       ...file,

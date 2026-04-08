@@ -287,6 +287,7 @@ function createSeedStore(): AppStore {
     workspaceBrowserStates: [],
     collaborationSpaces: [],
     collaborationSpaceMembers: [],
+    assignedSystemForms: [],
     dissolvedCollaborationSpaceIds: [],
   };
 }
@@ -309,6 +310,9 @@ function normalizeStore(store: Partial<AppStore>) {
       : [],
     collaborationSpaceMembers: Array.isArray(store.collaborationSpaceMembers)
       ? store.collaborationSpaceMembers
+      : [],
+    assignedSystemForms: Array.isArray(store.assignedSystemForms)
+      ? store.assignedSystemForms
       : [],
     dissolvedCollaborationSpaceIds: Array.isArray(store.dissolvedCollaborationSpaceIds)
       ? store.dissolvedCollaborationSpaceIds
@@ -501,6 +505,12 @@ function mergeAppStores(primary: AppStore, fallback: AppStore): AppStore {
     collaborationSpaceMembers: mergeCollectionById(
       primary.collaborationSpaceMembers,
       fallback.collaborationSpaceMembers,
+      (item) => item.id,
+      preferByUpdatedAt,
+    ),
+    assignedSystemForms: mergeCollectionById(
+      primary.assignedSystemForms,
+      fallback.assignedSystemForms,
       (item) => item.id,
       preferByUpdatedAt,
     ),

@@ -766,6 +766,7 @@ export async function readAppStoreFromPostgres() {
       workspaceBrowserStates: storedSharedStates,
       collaborationSpaces: storedCollaborationSpaces,
       collaborationSpaceMembers: storedCollaborationMemberStates,
+      assignedSystemForms: [],
       dissolvedCollaborationSpaceIds: collaborationSpaceRows
         .filter((row) => row.dissolvedAt)
         .map((row) => row.id),

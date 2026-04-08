@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { OnlyOfficeDocEditorClient } from "@/components/onlyoffice/onlyoffice-doc-editor-client";
 import { OnlyOfficeSheetEditorClient } from "@/components/onlyoffice/onlyoffice-sheet-editor-client";
 import { OnlyOfficeSlideEditorClient } from "@/components/onlyoffice/onlyoffice-slide-editor-client";
 import { requireCurrentUser } from "@/lib/auth/server";
+import {
+  buildCadViewerHref,
+  isCadFileName,
+} from "@/lib/content/cad";
 import {
   buildOnlyOfficeAssetKey,
   getAssetById,
@@ -13,7 +17,13 @@ import { getDocumentById, getSheetById } from "@/lib/docs/mock-data";
 
 type DocumentWorkspacePageProps = {
   params: Promise<{ docId: string }>;
+  searchParams?: Promise<{ returnTo?: string | string[] }>;
 };
+
+function resolveReturnTo(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && candidate.startsWith("/") ? candidate : undefined;
+}
 
 function buildSampleFileUrl(fileName: string) {
   const baseUrl =
@@ -65,6 +75,7 @@ function renderGenericAssetPage(params: {
   documentTitle: string;
   fileType?: string;
   documentUrl: string;
+  cadLabUrl?: string;
 }) {
   const fileTypeLabel = params.fileType?.toUpperCase() || "FILE";
 
@@ -83,7 +94,8 @@ function renderGenericAssetPage(params: {
           {params.documentTitle}
         </h1>
         <div className="mt-3 text-sm leading-6 text-slate-500">
-          当前文件已收进文档空间。这个类型暂时不走 OnlyOffice 在线编辑，先支持上传、管理和下载，后面再接 CAD 模块。
+          当前文件已收进文档空间。这个类型暂时不走 OnlyOffice 在线编辑，先支持上传、管理、下载和
+          CAD 实验室验证。
         </div>
         <div className="mt-8 flex flex-wrap gap-3">
           <a
@@ -94,6 +106,16 @@ function renderGenericAssetPage(params: {
           >
             下载文件
           </a>
+          {params.cadLabUrl ? (
+            <a
+              href={params.cadLabUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100"
+            >
+              在 CAD 实验室打开
+            </a>
+          ) : null}
           <Link
             href="/docs/documents"
             className="inline-flex rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
@@ -171,9 +193,12 @@ function renderSlideEditor(params: {
 
 export default async function DocumentWorkspacePage({
   params,
+  searchParams,
 }: DocumentWorkspacePageProps) {
   await requireCurrentUser();
   const { docId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const returnTo = resolveReturnTo(resolvedSearchParams?.returnTo);
 
   if (docId === "new") {
     return renderDocEditor({
@@ -212,10 +237,22 @@ export default async function DocumentWorkspacePage({
     }
 
     if (!isOnlyOfficeDocumentFile(uploadedDocumentAsset.storedFileName)) {
+      if (isCadFileName(uploadedDocumentAsset.storedFileName)) {
+        redirect(
+          buildCadViewerHref({
+            kind: "document",
+            assetId: uploadedDocumentAsset.id,
+            fileName: uploadedDocumentAsset.originalFileName,
+            returnTo,
+          }),
+        );
+      }
+
       return renderGenericAssetPage({
         documentTitle: uploadedDocumentAsset.title,
         documentUrl: buildAssetFileUrl("document", uploadedDocumentAsset.id),
         fileType,
+        cadLabUrl: undefined,
       });
     }
 

@@ -7,6 +7,7 @@ const onlyOfficeHost = process.env.NEXT_PUBLIC_ONLYOFFICE_SERVER_URL
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  allowedDevOrigins: ["dev.bpai.local"],
   async headers() {
     return [
       {

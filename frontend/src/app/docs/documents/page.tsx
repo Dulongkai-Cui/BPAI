@@ -10,6 +10,7 @@ import {
   getSharedBrowserStateForWorkspace,
   type BrowserInnerFolderState,
 } from "@/lib/content/browser-state";
+import { buildCadViewerHref, isCadFileName } from "@/lib/content/cad";
 import { formatAssetUpdatedAt, listAssetsForUser } from "@/lib/content/server";
 import {
   documentFolders,
@@ -258,10 +259,17 @@ export default async function DocumentsPage() {
       updatedAt: formatAssetUpdatedAt(asset.updatedAt),
       folderId: "recent-uploads",
       tag: "上传",
-      href: `/docs/documents/${asset.id}`,
-      kind: resolveFileKindFromName(asset.title, asset.kind),
+      href: isCadFileName(asset.storedFileName)
+        ? buildCadViewerHref({
+            kind: asset.kind,
+            assetId: asset.id,
+            fileName: asset.originalFileName,
+          })
+        : `/docs/documents/${asset.id}`,
+      kind: resolveFileKindFromName(asset.storedFileName, asset.kind),
       source: "asset" as const,
       storageKind: asset.kind,
+      sampleFileName: asset.storedFileName,
     })),
     ...visibleDocumentItems.map((item) => ({
       id: item.id,

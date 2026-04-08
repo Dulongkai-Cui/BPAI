@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { CreateCollaborationSpaceButton } from "@/components/workspace/create-collaboration-space-button";
+import { CreateSystemFormButton } from "@/components/workspace/create-system-form-button";
 import { DissolveCollaborationSpaceButton } from "@/components/workspace/dissolve-collaboration-space-button";
 import {
+  getBootstrapAccountSummary,
   getBootstrapAccountSummaries,
   requireCurrentUser,
 } from "@/lib/auth/server";
@@ -13,6 +15,7 @@ import {
 import {
   getAssignedFormsForUser,
   getCollaborationSpaces,
+  getSystemFormScopes,
   getWorkspaceCreationContactOptions,
   getSpacesForUser,
   getUpdatesForSpaceIds,
@@ -76,6 +79,7 @@ function getFormStateClasses(state: FormState) {
 
 export default async function DocsWorkspacePage() {
   const currentUser = await requireCurrentUser();
+  const primaryAccount = getBootstrapAccountSummary();
   const accounts = getBootstrapAccountSummaries();
   const accountMap = new Map(
     accounts.map((account) => [normalizeWorkspaceEmail(account.email), account]),
@@ -83,11 +87,29 @@ export default async function DocsWorkspacePage() {
   const allSpaces = await getCollaborationSpaces();
   const { createdSpaces, joinedSpaces } = await getSpacesForUser(currentUser.email);
   const creationContactOptions = await getWorkspaceCreationContactOptions(currentUser.email);
-  const myForms = getAssignedFormsForUser(currentUser.email);
+  const myForms = await getAssignedFormsForUser(currentUser.email);
+  const systemFormScopes = getSystemFormScopes();
   const myUpdates = getUpdatesForSpaceIds(
     [...createdSpaces, ...joinedSpaces].map((space) => space.id),
   );
   const spaceMap = new Map(allSpaces.map((space) => [space.id, space]));
+  const systemScopeMap = new Map(systemFormScopes.map((scope) => [scope.id, scope]));
+  const canManageSystemForms =
+    currentUser.roleKey === "system_admin" ||
+    normalizeWorkspaceEmail(currentUser.email) ===
+      normalizeWorkspaceEmail(primaryAccount.email);
+  const systemFormSpaces = systemFormScopes.map((scope) => ({
+    id: scope.id,
+    name: scope.name,
+    summary: scope.summary,
+    tone: scope.tone,
+    memberOptions: accounts.map((account) => ({
+      email: account.email,
+      name: account.name,
+      roleLabel: account.roleLabel,
+      teamLabel: account.teamLabel,
+    })),
+  }));
 
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,rgba(191,219,254,0.30),transparent_30%),radial-gradient(circle_at_top_right,rgba(254,240,138,0.18),transparent_24%),linear-gradient(180deg,#eef4ff_0%,#f8faff_36%,#eef3fb_100%)]">
@@ -150,15 +172,25 @@ export default async function DocsWorkspacePage() {
                   我需要处理的工单 / 系统表单
                 </h2>
               </div>
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                {myForms.length} 张表单
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {canManageSystemForms ? (
+                  <CreateSystemFormButton
+                    spaces={systemFormSpaces}
+                  />
+                ) : null}
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  {myForms.length} 张表单
+                </div>
               </div>
             </div>
 
             <div className="mt-6 grid gap-4 xl:grid-cols-3">
               {myForms.map((form) => {
                 const space = spaceMap.get(form.spaceId);
-                const tone = getToneClasses(space?.tone ?? "blue");
+                const systemScope = systemScopeMap.get(form.spaceId);
+                const tone = getToneClasses(systemScope?.tone ?? space?.tone ?? "blue");
+                const ownerLabel = systemScope?.name ?? space?.name ?? "系统表单后台";
+                const isSystemScope = Boolean(systemScope);
 
                 return (
                   <article
@@ -181,21 +213,26 @@ export default async function DocsWorkspacePage() {
                       {form.title}
                     </h3>
                     <div className="mt-4 space-y-2 text-sm text-slate-600">
-                      <p>所属空间：{space?.name}</p>
+                      <p>{isSystemScope ? "所属系统后台" : "所属空间"}：{ownerLabel}</p>
                       <p>分配人：{form.assignerName}</p>
+                      {isSystemScope ? <p>当前权限：仅编辑，不可上传 / 删除</p> : null}
                       <p>最近更新：{form.updatedAt}</p>
                     </div>
                     <div className="mt-5 flex flex-wrap gap-3">
                       <button className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700">
                         进入表单
                       </button>
-                      {space ? (
+                      {space && !isSystemScope ? (
                         <Link
                           href={getWorkspaceHref(space.id)}
                           className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:text-blue-700"
                         >
                           查看空间
                         </Link>
+                      ) : isSystemScope ? (
+                        <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-500">
+                          由主账号 / 老板 / AI 管理
+                        </div>
                       ) : null}
                     </div>
                   </article>

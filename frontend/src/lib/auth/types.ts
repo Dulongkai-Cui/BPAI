@@ -166,6 +166,25 @@ export type StoredCollaborationSpace = {
   updatedAt: string;
 };
 
+export type StoredAssignedSystemFormState =
+  | "处理中"
+  | "待确认"
+  | "已分配"
+  | "本周重点";
+
+export type StoredAssignedSystemForm = {
+  id: string;
+  title: string;
+  spaceId: string;
+  assigneeEmail: string;
+  assignerEmail: string;
+  assignerName: string;
+  formType: string;
+  state: StoredAssignedSystemFormState;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AppStore = {
   version: 1;
   users: StoredUser[];
@@ -178,6 +197,7 @@ export type AppStore = {
   workspaceBrowserStates: StoredSharedWorkspaceBrowserState[];
   collaborationSpaces: StoredCollaborationSpace[];
   collaborationSpaceMembers: StoredCollaborationSpaceMembers[];
+  assignedSystemForms: StoredAssignedSystemForm[];
   dissolvedCollaborationSpaceIds: string[];
 };
 

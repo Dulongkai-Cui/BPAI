@@ -50,17 +50,6 @@ const navItems = [
     ),
   },
   {
-    href: "/docs/cad",
-    label: "我的CAD",
-    icon: (
-      <SidebarIcon>
-        <path d="M5.25 17.75 12 6.25l6.75 11.5Z" />
-        <path d="M12 6.25v11.5" />
-        <path d="M8.9 11.75h6.2" />
-      </SidebarIcon>
-    ),
-  },
-  {
     href: "/docs/workspace",
     label: "合作空间",
     icon: (

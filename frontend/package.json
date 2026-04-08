@@ -16,18 +16,35 @@
     "db:seed:work-orders": "node ./scripts/db-seed-work-orders.mjs",
     "smoke:engineering": "node ./scripts/engineering-backend-smoke.mjs",
     "smoke:work-orders": "node ./scripts/work-order-backend-smoke.mjs",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "cad:lab:sync-assets": "node ./scripts/cad-lab-sync-assets.mjs",
+    "cad:lab:dev": "npm run cad:lab:sync-assets && vite --config cad-lab/vite.config.ts",
+    "cad:lab:publish": "node ./scripts/cad-lab-publish.mjs",
+    "cad:lab:build": "npm run cad:lab:sync-assets && vite build --config cad-lab/vite.config.ts && npm run cad:lab:publish"
   },
   "engines": {
     "node": ">=20.9.0"
   },
   "dependencies": {
+    "@amap/amap-jsapi-loader": "^1.0.1",
+    "@element-plus/icons-vue": "^2.3.2",
+    "@mlightcad/cad-simple-viewer": "^1.4.11",
+    "@mlightcad/cad-viewer": "^1.4.11",
+    "@mlightcad/data-model": "^1.7.14",
+    "@types/leaflet": "^1.9.21",
+    "@vueuse/core": "^11.3.0",
     "drizzle-orm": "^0.45.2",
+    "element-plus": "^2.13.6",
+    "leaflet": "^1.9.4",
+    "lodash-es": "^4.17.21",
     "next": "16.2.1",
     "pg": "^8.20.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "three": "^0.172.0",
+    "vue": "^3.5.32",
+    "vue-i18n": "^10.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -35,10 +52,12 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-vue": "^6.0.5",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^7.3.1"
   }
 }

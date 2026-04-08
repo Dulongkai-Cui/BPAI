@@ -30,6 +30,14 @@ export type AssignedSystemForm = {
   updatedAt: string;
 };
 
+export type SystemFormScope = {
+  id: string;
+  name: string;
+  summary: string;
+  tone: SpaceTone;
+  managerLabel: string;
+};
+
 export type CollaborationUpdate = {
   id: string;
   title: string;
@@ -134,7 +142,7 @@ export const assignedSystemForms: AssignedSystemForm[] = [
   {
     id: "form-work-orders-ledger",
     title: "工单台账",
-    spaceId: "space-bridge-review",
+    spaceId: "sys-space-workorders",
     assigneeEmail: "dulongkai.cui@akane.waseda.jp",
     assignerName: "林敏",
     formType: "业务台账",
@@ -144,7 +152,7 @@ export const assignedSystemForms: AssignedSystemForm[] = [
   {
     id: "form-review-package",
     title: "送审资料总表",
-    spaceId: "space-design-review",
+    spaceId: "sys-space-review",
     assigneeEmail: "li.gong@bpai.local",
     assignerName: "Dulongkai Cui",
     formType: "送审表单",
@@ -154,7 +162,7 @@ export const assignedSystemForms: AssignedSystemForm[] = [
   {
     id: "form-team-status",
     title: "施工队状态表",
-    spaceId: "space-field-execution",
+    spaceId: "sys-space-execution",
     assigneeEmail: "zhou.yu@bpai.local",
     assignerName: "Dulongkai Cui",
     formType: "执行表单",
@@ -164,7 +172,7 @@ export const assignedSystemForms: AssignedSystemForm[] = [
   {
     id: "form-storage-ledger",
     title: "仓库表",
-    spaceId: "space-storage-ops",
+    spaceId: "sys-space-warehouse",
     assigneeEmail: "lin.min@bpai.local",
     assignerName: "Dulongkai Cui",
     formType: "库存主表",
@@ -174,12 +182,43 @@ export const assignedSystemForms: AssignedSystemForm[] = [
   {
     id: "form-missing-materials",
     title: "材料缺项表",
-    spaceId: "space-storage-ops",
+    spaceId: "sys-space-warehouse",
     assigneeEmail: "dulongkai.cui@akane.waseda.jp",
     assignerName: "林敏",
     formType: "异常追踪",
     state: "已分配",
     updatedAt: "昨天 15:10",
+  },
+];
+
+export const systemFormScopes: SystemFormScope[] = [
+  {
+    id: "sys-space-workorders",
+    name: "工单系统后台",
+    summary: "用于工单总表、业务台账和派单底表的受控维护。",
+    tone: "blue",
+    managerLabel: "开发者 / 老板 / AI",
+  },
+  {
+    id: "sys-space-review",
+    name: "送审系统后台",
+    summary: "用于送审主表、联审总表和确认底表的受控维护。",
+    tone: "violet",
+    managerLabel: "开发者 / 老板 / AI",
+  },
+  {
+    id: "sys-space-execution",
+    name: "执行系统后台",
+    summary: "用于施工队状态表、执行跟踪表和异常底表的受控维护。",
+    tone: "emerald",
+    managerLabel: "开发者 / 老板 / AI",
+  },
+  {
+    id: "sys-space-warehouse",
+    name: "仓储系统后台",
+    summary: "用于仓库主表、材料缺项表和库存总表的受控维护。",
+    tone: "amber",
+    managerLabel: "开发者 / 老板 / AI",
   },
 ];
 
