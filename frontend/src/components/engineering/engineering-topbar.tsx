@@ -12,7 +12,7 @@ const topNavItems = [
   { href: "/engineering", label: "工程队" },
   { href: "/work-orders", label: "工单" },
   { href: "/docs/documents", label: "文档档案室" },
-  { href: "/ai", label: "AI宿舍" },
+  { href: "/ai-dorm", label: "AI宿舍" },
 ];
 
 type EngineeringTopbarProps = {

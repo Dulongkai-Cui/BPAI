@@ -79,6 +79,54 @@ export const workspaceMemberRoleEnum = pgEnum("workspace_member_role", [
   "viewer",
 ]);
 
+export const conversationThreadStatusEnum = pgEnum(
+  "conversation_thread_status",
+  ["active", "archived"],
+);
+
+export const conversationMessageRoleEnum = pgEnum("conversation_message_role", [
+  "system",
+  "user",
+  "assistant",
+  "tool",
+]);
+
+export const conversationSummaryKindEnum = pgEnum(
+  "conversation_summary_kind",
+  ["rolling", "snapshot"],
+);
+
+export const memoryScopeKindEnum = pgEnum("memory_scope_kind", [
+  "user",
+  "thread",
+  "workspace",
+  "collaboration_space",
+  "system_form",
+  "document",
+  "work_order",
+]);
+
+export const executionTaskStatusEnum = pgEnum("execution_task_status", [
+  "pending",
+  "planned",
+  "delegated",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const executionExecutorKindEnum = pgEnum("execution_executor_kind", [
+  "bp_ask",
+  "kimi",
+  "longxia",
+  "system",
+]);
+
+export const executionResultStatusEnum = pgEnum("execution_result_status", [
+  "ready",
+  "failed",
+]);
+
 export const workOrderStageEnum = pgEnum("work_order_stage", [
   "source_intake",
   "registration",
@@ -271,6 +319,201 @@ export const sessions = pgTable(
   (table) => [
     index("sessions_user_idx").on(table.userId),
     index("sessions_expires_idx").on(table.expiresAt),
+  ],
+);
+
+export const conversationThreads = pgTable(
+  "conversation_threads",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    status: conversationThreadStatusEnum("status").notNull().default("active"),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    index("conversation_threads_user_idx").on(table.userId),
+    index("conversation_threads_workspace_idx").on(table.workspaceId),
+    index("conversation_threads_status_idx").on(table.status),
+    index("conversation_threads_last_message_idx").on(table.lastMessageAt),
+  ],
+);
+
+export const conversationMessages = pgTable(
+  "conversation_messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => conversationThreads.id, { onDelete: "cascade" }),
+    role: conversationMessageRoleEnum("role").notNull(),
+    sequence: integer("sequence").notNull(),
+    content: text("content").notNull(),
+    tokenEstimate: integer("token_estimate").notNull().default(0),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("conversation_messages_thread_sequence_unique").on(
+      table.threadId,
+      table.sequence,
+    ),
+    index("conversation_messages_thread_idx").on(table.threadId),
+    index("conversation_messages_role_idx").on(table.role),
+    index("conversation_messages_created_idx").on(table.createdAt),
+  ],
+);
+
+export const conversationSummaries = pgTable(
+  "conversation_summaries",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => conversationThreads.id, { onDelete: "cascade" }),
+    kind: conversationSummaryKindEnum("kind").notNull().default("rolling"),
+    summaryText: text("summary_text").notNull(),
+    messageCount: integer("message_count").notNull(),
+    fromSequence: integer("from_sequence").notNull(),
+    toSequence: integer("to_sequence").notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    index("conversation_summaries_thread_idx").on(table.threadId),
+    index("conversation_summaries_kind_idx").on(table.kind),
+    index("conversation_summaries_thread_to_sequence_idx").on(
+      table.threadId,
+      table.toSequence,
+    ),
+  ],
+);
+
+export const memoryFacts = pgTable(
+  "memory_facts",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    threadId: text("thread_id").references(() => conversationThreads.id, {
+      onDelete: "cascade",
+    }),
+    workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    sourceMessageId: text("source_message_id").references(
+      () => conversationMessages.id,
+      { onDelete: "set null" },
+    ),
+    scopeKind: memoryScopeKindEnum("scope_kind").notNull(),
+    scopeId: text("scope_id").notNull(),
+    factType: text("fact_type").notNull(),
+    factKey: text("fact_key").notNull(),
+    factValue: text("fact_value").notNull(),
+    confidence: integer("confidence").notNull().default(70),
+    lastConfirmedAt: timestamp("last_confirmed_at", { withTimezone: true }),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("memory_facts_scope_key_unique").on(
+      table.scopeKind,
+      table.scopeId,
+      table.factKey,
+    ),
+    index("memory_facts_user_idx").on(table.userId),
+    index("memory_facts_thread_idx").on(table.threadId),
+    index("memory_facts_workspace_idx").on(table.workspaceId),
+    index("memory_facts_scope_idx").on(table.scopeKind, table.scopeId),
+    index("memory_facts_type_idx").on(table.factType),
+  ],
+);
+
+export const executionTasks = pgTable(
+  "execution_tasks",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => conversationThreads.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    sourceMessageId: text("source_message_id").references(
+      () => conversationMessages.id,
+      { onDelete: "set null" },
+    ),
+    status: executionTaskStatusEnum("status").notNull().default("planned"),
+    executorKind: executionExecutorKindEnum("executor_kind")
+      .notNull()
+      .default("bp_ask"),
+    primaryIntent: text("primary_intent").notNull(),
+    targetDomain: text("target_domain").notNull(),
+    executionMode: text("execution_mode").notNull(),
+    goal: text("goal").notNull(),
+    confidence: integer("confidence").notNull().default(0),
+    needsMemory: boolean("needs_memory").notNull().default(false),
+    needsTools: boolean("needs_tools").notNull().default(false),
+    requiresWrite: boolean("requires_write").notNull().default(false),
+    requiresConfirmation: boolean("requires_confirmation")
+      .notNull()
+      .default(false),
+    targetRefs: jsonb("target_refs")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    constraints: jsonb("constraints")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    index("execution_tasks_thread_idx").on(table.threadId),
+    index("execution_tasks_user_idx").on(table.userId),
+    index("execution_tasks_status_idx").on(table.status),
+    index("execution_tasks_executor_idx").on(table.executorKind),
+  ],
+);
+
+export const executionResults = pgTable(
+  "execution_results",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => executionTasks.id, { onDelete: "cascade" }),
+    status: executionResultStatusEnum("status").notNull().default("ready"),
+    summaryText: text("summary_text").notNull(),
+    responseText: text("response_text").notNull(),
+    structuredPayload: jsonb("structured_payload")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("execution_results_task_unique").on(table.taskId),
+    index("execution_results_status_idx").on(table.status),
   ],
 );
 
