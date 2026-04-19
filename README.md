@@ -32,14 +32,13 @@ BPAI 是一套面向工程型组织的 AI 原生工作平台，用来把“需�
 </p>
 <p align="center">
   <img src="./项目图片/CAD看图.png" alt="CAD看图" width="49%" />
-  <img src="./项目图片/协同地图.png" alt="协同地图" width="49%" />
 </p>
 
 ### 调度与执行
 
 <p align="center">
-  <img src="./项目图片/BP问问.png" alt="BP问问" width="49%" />
   <img src="./项目图片/工单管理.png" alt="工单管理" width="49%" />
+  <img src="./项目图片/协同地图.png" alt="协同地图" width="49%" />
 </p>
 <p align="center">
   <img src="./项目图片/工程队管理面板.png" alt="工程队管理面板" width="49%" />
@@ -48,7 +47,10 @@ BPAI 是一套面向工程型组织的 AI 原生工作平台，用来把“需�
 ### AI 能力
 
 <p align="center">
+  <img src="./项目图片/BP问问.png" alt="BP问问" width="49%" />
   <img src="./项目图片/AI宿舍.png" alt="AI宿舍" width="49%" />
+</p>
+<p align="center">
   <img src="./项目图片/AI员工.png" alt="AI员工" width="49%" />
 </p>
 
