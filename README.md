@@ -1,70 +1,156 @@
-# BPAI Frontend Docker Setup
+# BPAI
 
-This repository now uses a frontend-first structure for local development.
+BPAI 是一套面向工程型组织的 AI 原生工作平台，用来把“需求理解、任务调度、工单推进、文档协作、AI 执行、过程留痕”收束到同一个系统里。
 
-## Recommended structure
+它不是单独的聊天工具，也不是单独的工单系统或资料库，而是围绕真实业务协同链路设计的一体化工作台。当前仓库已经形成 `BP问问`、`工单`、`文档档案室`、`工程队`、`AI宿舍`、`总览` 六个主模块，并以 `Next.js + PostgreSQL + OnlyOffice + OpenClaw` 为主干持续演进。
+
+## 项目定位
+
+- 统一入口：用户优先从自然语言需求进入系统，而不是先判断该去哪个后台页面。
+- 状态闭环：任务应当落到工单、执行记录、协作对象上，而不是停留在聊天结果里。
+- 内容协作：文档、表格、CAD、附件不是“附件区”，而是业务过程的一部分。
+- 受控 AI：AI 默认参与理解、整理、起草、执行，但不默认无边界直写正式对象。
+
+## 当前模块
+
+| 模块 | 作用 | 主要路由 |
+| --- | --- | --- |
+| BP问问 | 统一入口、意图理解、任务调度 | `/bp-ask` |
+| 总览 | 观察全局状态、预警与设置 | `/dashboard` |
+| 工程队 | 承接组织化执行与成员编队 | `/engineering` |
+| 工单 | 承接状态、责任、阶段推进 | `/work-orders` |
+| 文档档案室 | 承接文档、表格、CAD 与协作资产 | `/docs` |
+| AI宿舍 | 承接 AI 任务、工作流、Skills、AI 员工与 OpenClaw 发射入口 | `/ai-dorm` |
+
+## 技术栈
+
+- Web：Next.js 16、React 19、TypeScript、Tailwind CSS 4
+- 数据：PostgreSQL / PostGIS、Drizzle ORM
+- 文档协作：OnlyOffice Document Server
+- AI 执行侧：OpenClaw 网关、多 agent 状态目录、任务调度接口
+- CAD 实验区：Vite、Vue 3、Element Plus、Three.js、mlightcad
+- 开发环境：Docker Compose、Node.js 20+
+
+## 仓库结构
 
 ```text
 BPAI/
+|-- frontend/                   # 主应用；当前主要开发都在这里
+|   |-- src/app/                # 页面与 API 路由
+|   |-- src/lib/                # 业务域能力、数据访问、服务封装
+|   |-- cad-lab/                # CAD 实验区
+|   `-- scripts/                # 数据库与 smoke scripts
 |-- docker/
-|   `-- frontend-dev-entrypoint.sh
-|-- frontend/
-|   |-- .env.local.example
-|   |-- package.json
-|   |-- tsconfig.json
-|   |-- next.config.ts
-|   `-- src/
-|       `-- app/
-|-- Dockerfile
-|-- docker-compose.yml
-`-- .dockerignore
+|   `-- openclaw/               # OpenClaw 共享配置与多实例状态目录
+|-- explanatory_memorandum/     # 产品说明手册与架构使用文档
+|-- AI_Dev_Memo/                # 开发过程记录与产品骨架资料
+|-- Construction_ Specification/# 建设规范与过程材料
+|-- docker-compose.dev.yml      # 本地开发编排
+|-- docker-compose.yml          # 基础前端镜像编排
+`-- README.md
 ```
 
-## Before first start
+当前运行主路径以 `frontend/` 和 `docker-compose.dev.yml` 为主，仓库里也保留了一些原型、过程文档和参考目录。
 
-Copy the example environment file:
+## 快速开始
 
-```bash
-cp frontend/.env.local.example frontend/.env.local
-```
+### 方式一：推荐使用 Docker 开发环境
 
-On Windows PowerShell:
+1. 复制环境变量模板。
 
 ```powershell
 Copy-Item frontend/.env.local.example frontend/.env.local
 ```
 
-## Start the frontend
+2. 启动开发环境。
 
-```bash
-docker compose up --build
+```powershell
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-Open `http://localhost:3000`.
+3. 打开服务。
 
-## Stop the environment
+- 前端：`http://localhost:3001`
+- OnlyOffice：`http://localhost:8080`
+- PostgreSQL：`localhost:5433`
 
-```bash
-docker compose down
+如果你需要把 OpenClaw 一起拉起来，可以使用：
+
+```powershell
+docker compose -f docker-compose.dev.yml --profile openclaw up --build
 ```
 
-## Dependency management
+### 方式二：直接在前端目录运行
 
-Install new packages inside the container so the host machine stays clean:
+适合只改前端或脚本逻辑时使用，但前提是你已经准备好数据库等依赖。
 
-```bash
-docker compose exec frontend npm install <package-name>
+```powershell
+cd frontend
+Copy-Item .env.local.example .env.local
+npm install
+npm run db:migrate
+npm run dev
 ```
 
-If you change `package.json` or `package-lock.json`, restart the frontend service:
+运行要求：
 
-```bash
-docker compose restart frontend
+- Node.js `>= 20.9.0`
+- 可用的 PostgreSQL 数据库
+- 需要 AI 能力时，补充 `KIMI_API_KEY` 等环境变量
+
+## 核心环境变量
+
+`frontend/.env.local.example` 当前提供了最基础的一组变量：
+
+```env
+NEXT_PUBLIC_APP_NAME=BPAI
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+DATABASE_URL=postgresql://bpai:bpai@localhost:5433/bpai_dev
+KIMI_API_KEY=your-kimi-api-key
+KIMI_BASE_URL=https://api.moonshot.cn/v1
+KIMI_MODEL=kimi-k2.5
 ```
 
-## Notes
+如果你要启用 AI宿舍里的 OpenClaw 入口，还需要配合 `docker-compose.dev.yml` 中的 `OPENCLAW_*` 网关变量。
 
-- Source code is bind-mounted from `./frontend` into the container.
-- `node_modules` stays inside the Docker volume `frontend_node_modules`.
-- Next.js build cache stays inside the Docker volume `frontend_next`.
-- This setup is intentionally frontend-only for now. Backend, database, and other services can be added later in the same `docker-compose.yml`.
+## 常用命令
+
+在 `frontend/` 目录下：
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run typecheck
+npm run db:check
+npm run db:migrate
+npm run db:seed:work-orders
+npm run smoke:bp-ask
+npm run smoke:bp-ask:dispatch
+npm run smoke:engineering
+npm run smoke:work-orders
+npm run cad:lab:dev
+npm run cad:lab:build
+```
+
+## 当前状态
+
+这个项目已经不是静态原型，而是一个持续迭代中的工作平台骨架，当前重点在把以下主链跑稳：
+
+1. 用户从 `BP问问` 进入系统。
+2. 需求被拆成工单、文档协作或 AI 执行任务。
+3. 结果回落到工单、资料对象或执行记录中。
+4. 管理者再从 `总览`、`工程队`、`AI宿舍` 观察状态和资源。
+
+## 当前边界
+
+- 仓库里仍同时保留正式工程、原型目录和过程资料，主运行路径不是所有顶层目录。
+- 文件存储当前仍以本地磁盘为主，适合开发和演示，距离正式云存储还有演进空间。
+- `AI宿舍` 的部分能力已接入 OpenClaw 发射链路，但整体仍处于“真实能力 + 结构蓝图”并存阶段。
+- AI 回写应理解为受控能力，不应默认视作无审查的正式写入。
+
+## 文档
+
+- 产品说明手册：[explanatory_memorandum/BPAI_产品说明手册_架构设计与使用指南_2026-04-16.md](explanatory_memorandum/BPAI_产品说明手册_架构设计与使用指南_2026-04-16.md)
+
+如果你把这个仓库当作品集展示，建议先看产品说明手册，再结合 `frontend/src/app/` 和 `frontend/src/lib/` 阅读主链实现。
