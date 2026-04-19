@@ -18,6 +18,7 @@ import {
   executionResults,
   executionTasks,
 } from "@/lib/db/schema";
+import { getOpenClawConsoleEntryForAgent } from "@/lib/ai-dorm/openclaw";
 
 type JsonRecord = Record<string, unknown> | null;
 type WorkflowNodeKind =
@@ -38,6 +39,12 @@ type AgentBlueprint = {
   ownerLabel: string;
   protocolSummary: string;
   capabilityTags: string[];
+};
+
+type AgentConsoleEntry = {
+  href: string;
+  label: string;
+  note: string;
 };
 
 type SkillBlueprint = {
@@ -117,6 +124,7 @@ export type AiDormAgentCard = {
   protocolSummary: string;
   capabilityTags: string[];
   recentTaskCount: number;
+  consoleEntry: AgentConsoleEntry | null;
 };
 
 export type AiDormSkillCard = {
@@ -585,6 +593,20 @@ function isCompletedLike(taskStatus: string, resultStatus: string | null) {
   return taskStatus === "completed" || resultStatus === "ready";
 }
 
+function getAgentConsoleEntry(agentId: string): AgentConsoleEntry | null {
+  return getOpenClawConsoleEntryForAgent(agentId);
+
+  if (agentId !== "work-order-longxia") {
+    return null;
+  }
+
+  return {
+    href: "/api/ai-dorm/openclaw/launch",
+    label: "OpenClaw 控制台",
+    note: "以工单龙虾身份打开",
+  };
+}
+
 function labelIntent(value: string) {
   return value in PRIMARY_INTENT_LABELS
     ? PRIMARY_INTENT_LABELS[value as PrimaryIntent]
@@ -773,6 +795,7 @@ export async function getAiDormAgents(userId: string): Promise<AiDormAgentCard[]
       (count, domain) => count + (domainCount.get(domain) ?? 0),
       0,
     ),
+    consoleEntry: getAgentConsoleEntry(agent.id),
   }));
 }
 

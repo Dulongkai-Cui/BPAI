@@ -29,8 +29,10 @@ pnpm-debug.log*
 frontend/.bpai/
 tmp-*.html
 tmp-*.txt
+tmp-*.json
 tmp_*.html
 tmp_*.txt
+tmp_*.json
 *_cookies.txt
 engineering_cookies.txt
 tmp_chili3d_official/

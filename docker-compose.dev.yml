@@ -29,6 +29,18 @@ services:
       NEXT_PUBLIC_ONLYOFFICE_FILE_BASE_URL: "http://bpai-front-dev:3000"
       ONLYOFFICE_INTERNAL_BASE_URL: "http://bpai-onlyoffice"
       DATABASE_URL: "postgresql://bpai:bpai@postgres:5432/bpai_dev"
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN:-bpai-sidecar-openclaw-token}"
+      OPENCLAW_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_PORT:-18889}/"
+      OPENCLAW_WORK_ORDER_GATEWAY_TOKEN: "${OPENCLAW_WORK_ORDER_GATEWAY_TOKEN:-bpai-sidecar-openclaw-token}"
+      OPENCLAW_WORK_ORDER_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_PORT:-18889}/"
+      OPENCLAW_DOCUMENT_GATEWAY_TOKEN: "${OPENCLAW_DOCUMENT_GATEWAY_TOKEN:-bpai-document-openclaw-token}"
+      OPENCLAW_DOCUMENT_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_DOCUMENT_PORT:-18989}/"
+      OPENCLAW_DRAWING_GATEWAY_TOKEN: "${OPENCLAW_DRAWING_GATEWAY_TOKEN:-bpai-drawing-openclaw-token}"
+      OPENCLAW_DRAWING_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_DRAWING_PORT:-19089}/"
+      OPENCLAW_ALERT_GATEWAY_TOKEN: "${OPENCLAW_ALERT_GATEWAY_TOKEN:-bpai-alert-openclaw-token}"
+      OPENCLAW_ALERT_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_ALERT_PORT:-19189}/"
+      OPENCLAW_REPORT_GATEWAY_TOKEN: "${OPENCLAW_REPORT_GATEWAY_TOKEN:-bpai-report-openclaw-token}"
+      OPENCLAW_REPORT_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_REPORT_PORT:-19289}/"
     ports:
       - "${FRONTEND_DEV_PORT:-3001}:3000"
     volumes:
@@ -56,6 +68,201 @@ services:
       interval: 10s
       timeout: 5s
       retries: 30
+
+  openclaw-gateway:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: bpai-openclaw
+    profiles:
+      - openclaw
+    env_file:
+      - ./docker/openclaw/state/.env
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_GATEWAY_TOKEN:-bpai-sidecar-openclaw-token}"
+    entrypoint: ["node"]
+    command:
+      - openclaw.mjs
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --token
+      - ${OPENCLAW_GATEWAY_TOKEN:-bpai-sidecar-openclaw-token}
+      - --bind
+      - lan
+      - --port
+      - "18789"
+    ports:
+      - "127.0.0.1:${OPENCLAW_PORT:-18889}:18789"
+    volumes:
+      - ./docker/openclaw/state:/home/node/.openclaw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  openclaw-document:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: bpai-openclaw-document
+    profiles:
+      - openclaw
+    env_file:
+      - ./docker/openclaw/state/.env
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_DOCUMENT_GATEWAY_TOKEN:-bpai-document-openclaw-token}"
+    entrypoint: ["node"]
+    command:
+      - openclaw.mjs
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --token
+      - ${OPENCLAW_DOCUMENT_GATEWAY_TOKEN:-bpai-document-openclaw-token}
+      - --bind
+      - lan
+      - --port
+      - "18789"
+    ports:
+      - "127.0.0.1:${OPENCLAW_DOCUMENT_PORT:-18989}:18789"
+    volumes:
+      - ./docker/openclaw/state-document:/home/node/.openclaw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  openclaw-drawing:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: bpai-openclaw-drawing
+    profiles:
+      - openclaw
+    env_file:
+      - ./docker/openclaw/state/.env
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_DRAWING_GATEWAY_TOKEN:-bpai-drawing-openclaw-token}"
+    entrypoint: ["node"]
+    command:
+      - openclaw.mjs
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --token
+      - ${OPENCLAW_DRAWING_GATEWAY_TOKEN:-bpai-drawing-openclaw-token}
+      - --bind
+      - lan
+      - --port
+      - "18789"
+    ports:
+      - "127.0.0.1:${OPENCLAW_DRAWING_PORT:-19089}:18789"
+    volumes:
+      - ./docker/openclaw/state-drawing:/home/node/.openclaw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  openclaw-alert:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: bpai-openclaw-alert
+    profiles:
+      - openclaw
+    env_file:
+      - ./docker/openclaw/state/.env
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_ALERT_GATEWAY_TOKEN:-bpai-alert-openclaw-token}"
+    entrypoint: ["node"]
+    command:
+      - openclaw.mjs
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --token
+      - ${OPENCLAW_ALERT_GATEWAY_TOKEN:-bpai-alert-openclaw-token}
+      - --bind
+      - lan
+      - --port
+      - "18789"
+    ports:
+      - "127.0.0.1:${OPENCLAW_ALERT_PORT:-19189}:18789"
+    volumes:
+      - ./docker/openclaw/state-alert:/home/node/.openclaw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  openclaw-report:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: bpai-openclaw-report
+    profiles:
+      - openclaw
+    env_file:
+      - ./docker/openclaw/state/.env
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: "${OPENCLAW_REPORT_GATEWAY_TOKEN:-bpai-report-openclaw-token}"
+    entrypoint: ["node"]
+    command:
+      - openclaw.mjs
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --token
+      - ${OPENCLAW_REPORT_GATEWAY_TOKEN:-bpai-report-openclaw-token}
+      - --bind
+      - lan
+      - --port
+      - "18789"
+    ports:
+      - "127.0.0.1:${OPENCLAW_REPORT_PORT:-19289}:18789"
+    volumes:
+      - ./docker/openclaw/state-report:/home/node/.openclaw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
 volumes:
   bpai-postgres-data:

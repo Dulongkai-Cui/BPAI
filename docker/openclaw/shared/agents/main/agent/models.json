@@ -1,0 +1,93 @@
+{
+  "providers": {
+    "moonshot": {
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "kimi-k2.5",
+          "name": "Kimi K2.5",
+          "reasoning": false,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 262144,
+          "maxTokens": 262144,
+          "api": "openai-completions",
+          "compat": {
+            "supportsUsageInStreaming": true
+          }
+        }
+      ],
+      "apiKey": "MOONSHOT_API_KEY"
+    },
+    "codex": {
+      "baseUrl": "https://chatgpt.com/backend-api",
+      "auth": "token",
+      "api": "openai-codex-responses",
+      "models": [
+        {
+          "id": "gpt-5.4",
+          "name": "gpt-5.4",
+          "api": "openai-codex-responses",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 272000,
+          "maxTokens": 128000,
+          "compat": {
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true
+          }
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "name": "GPT-5.4-Mini",
+          "api": "openai-codex-responses",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 272000,
+          "maxTokens": 128000,
+          "compat": {
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true
+          }
+        },
+        {
+          "id": "gpt-5.2",
+          "name": "gpt-5.2",
+          "api": "openai-codex-responses",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 272000,
+          "maxTokens": 128000,
+          "compat": {
+            "supportsReasoningEffort": true,
+            "supportsUsageInStreaming": true
+          }
+        }
+      ]
+    }
+  }
+}

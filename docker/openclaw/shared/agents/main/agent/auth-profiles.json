@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "profiles": {
+    "moonshot:default": {
+      "type": "api_key",
+      "provider": "moonshot",
+      "keyRef": {
+        "source": "env",
+        "provider": "default",
+        "id": "MOONSHOT_API_KEY"
+      }
+    }
+  }
+}
