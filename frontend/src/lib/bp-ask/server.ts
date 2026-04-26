@@ -2911,6 +2911,256 @@ export async function runOpenClawForUser(
   };
 }
 
+function isNaturalOpenClawCommand(prompt: string) {
+  const lower = prompt.toLowerCase();
+
+  return (
+    lower.includes("openclaw") &&
+    /继续|执行|下发|提交|发送|发给|交给|启动|跑|sidecar/.test(prompt)
+  );
+}
+
+function extractWorkOrderNoFromPrompt(prompt: string) {
+  const matched = prompt.match(/\bWO-\d{8}-\d{3}\b/i);
+
+  return matched?.[0]?.toUpperCase() ?? "";
+}
+
+async function findLatestOpenClawExecutionResultIdForPrompt(params: {
+  user: AuthenticatedUser;
+  thread: ThreadRow;
+  prompt: string;
+}) {
+  const targetWorkOrderNo = extractWorkOrderNoFromPrompt(params.prompt);
+  const db = getDb();
+  const taskRows = await db
+    .select()
+    .from(executionTasks)
+    .where(
+      and(
+        eq(executionTasks.threadId, params.thread.id),
+        eq(executionTasks.userId, params.user.id),
+      ),
+    )
+    .orderBy(desc(executionTasks.updatedAt))
+    .limit(20);
+
+  for (const taskRow of taskRows) {
+    const resultRows = await db
+      .select()
+      .from(executionResults)
+      .where(eq(executionResults.taskId, taskRow.id))
+      .orderBy(desc(executionResults.updatedAt))
+      .limit(5);
+
+    for (const resultRow of resultRows) {
+      const structuredPayload = asRecord(resultRow.structuredPayload);
+
+      if (!structuredPayload || !isOpenClawExecutionApproved(structuredPayload)) {
+        continue;
+      }
+
+      const payloadWorkOrderNo = readWorkflowWorkOrderNo(structuredPayload);
+
+      if (
+        targetWorkOrderNo &&
+        payloadWorkOrderNo &&
+        payloadWorkOrderNo.toUpperCase() !== targetWorkOrderNo
+      ) {
+        continue;
+      }
+
+      return resultRow.id;
+    }
+  }
+
+  return null;
+}
+
+function buildNaturalOpenClawAssistantText(params: {
+  userName: string;
+  executionPreview?: DispatchExecutionPreview;
+  errorCode?: string;
+}) {
+  if (params.errorCode) {
+    const reason =
+      params.errorCode === "OPENCLAW_CONFIRMATION_REQUIRED"
+        ? "当前 workflow 还没有完成 OpenClaw 前置人工确认。"
+        : params.errorCode === "OPENCLAW_WORK_ORDER_NOT_FOUND"
+          ? "当前 workflow 结果里没有可下发的工单编号。"
+          : params.errorCode === "NATURAL_OPENCLAW_RESULT_NOT_FOUND"
+            ? "我没有在当前对话里找到已经通过确认、可继续 OpenClaw 的工单受理流程。"
+            : `OpenClaw 执行没有完成，错误码：${params.errorCode}。`;
+
+    return [
+      `${params.userName}，这句我已经识别成“继续 OpenClaw 执行”。`,
+      reason,
+      "你可以先在这条对话里跑完工单受理流程、完成全部人工确认和草案写回，再继续下发 OpenClaw。",
+    ].join("\n");
+  }
+
+  const openClawRuns = params.executionPreview?.openClawRuns ?? [];
+  const latestRun = openClawRuns.at(-1);
+  const submitMode = latestRun?.submitEnabled ? "submitted" : "probe_only";
+  const status = latestRun?.status ?? "unknown";
+
+  return [
+    `${params.userName}，我已经按这句话继续执行 OpenClaw sidecar。`,
+    `OpenClaw 状态：${status}；下发模式：${submitMode}。`,
+    latestRun?.summaryText ?? "OpenClaw 已执行，但当前没有返回额外摘要。",
+    "安全边界：OpenClaw sidecar 不直接写 BPAI 业务数据，后续结果仍要回到 artifacts、候选写回或人工确认链路。",
+  ].join("\n");
+}
+
+async function appendNaturalOpenClawAssistantMessage(params: {
+  user: AuthenticatedUser;
+  thread: ThreadRow;
+  prompt: string;
+  userMessageId: string;
+  currentSequence: number;
+  executionResultId?: string;
+  executionPreview?: DispatchExecutionPreview;
+  insight?: InsightBlock;
+  errorCode?: string;
+}) {
+  const db = getDb();
+  const now = nowDate();
+  const assistantText = buildNaturalOpenClawAssistantText({
+    userName: params.user.name,
+    executionPreview: params.executionPreview,
+    errorCode: params.errorCode,
+  });
+  const assistantMessageId = buildId("message-assistant");
+
+  const [assistantMessageRow] = await db
+    .insert(conversationMessages)
+    .values({
+      id: assistantMessageId,
+      threadId: params.thread.id,
+      role: "assistant",
+      sequence: params.currentSequence + 2,
+      content: assistantText,
+      tokenEstimate: estimateTokenCount(assistantText),
+      metadata: {
+        insight: params.insight ?? null,
+        executionPreview: params.executionPreview ?? null,
+        executionResultId: params.executionResultId ?? null,
+        executionRoute: params.executionResultId ? "workflow" : "dispatch_plan",
+        naturalAction: "openclaw_continue",
+        errorCode: params.errorCode ?? null,
+      },
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  const nextTitle =
+    params.currentSequence === 0
+      ? threadTitleFromPrompt(params.prompt)
+      : params.thread.title;
+  const lastPreview = params.errorCode
+    ? "OpenClaw sidecar 未完成"
+    : "OpenClaw sidecar 已继续执行";
+
+  const [updatedThread] = await db
+    .update(conversationThreads)
+    .set({
+      title: nextTitle,
+      lastMessageAt: now,
+      metadata: {
+        ...(asRecord(params.thread.metadata) ?? {}),
+        lastMessagePreview: previewFromText(lastPreview),
+      },
+      updatedAt: now,
+    })
+    .where(eq(conversationThreads.id, params.thread.id))
+    .returning();
+
+  const messages = await getMessagesForThread(params.thread.id);
+  const rollingSummaryRow = await replaceRollingSummary({
+    threadId: params.thread.id,
+    messages,
+    latestAssistantText: assistantText,
+    latestInsight: params.insight ?? null,
+  });
+
+  await upsertMemoryFact({
+    userId: params.user.id,
+    threadId: params.thread.id,
+    workspaceId: params.thread.workspaceId ?? null,
+    sourceMessageId: params.userMessageId,
+    scopeKind: "thread",
+    scopeId: params.thread.id,
+    factType: "action",
+    factKey: "last_openclaw_action",
+    factValue: assistantText,
+    confidence: params.errorCode ? 66 : 86,
+    metadata: {
+      source: "bp_ask",
+      assistantMessageId: assistantMessageRow.id,
+      executionResultId: params.executionResultId ?? null,
+    },
+  });
+
+  const summary = mapThreadSummary(updatedThread ?? params.thread);
+
+  return {
+    summary,
+    thread: {
+      ...summary,
+      messages,
+      rollingSummary: rollingSummaryRow?.summaryText ?? null,
+    } satisfies BpAskThreadDetail,
+  };
+}
+
+async function handleNaturalOpenClawCommand(params: {
+  user: AuthenticatedUser;
+  thread: ThreadRow;
+  prompt: string;
+  userMessageId: string;
+  currentSequence: number;
+}) {
+  if (!isNaturalOpenClawCommand(params.prompt)) {
+    return null;
+  }
+
+  const executionResultId = await findLatestOpenClawExecutionResultIdForPrompt({
+    user: params.user,
+    thread: params.thread,
+    prompt: params.prompt,
+  });
+
+  if (!executionResultId) {
+    return appendNaturalOpenClawAssistantMessage({
+      ...params,
+      errorCode: "NATURAL_OPENCLAW_RESULT_NOT_FOUND",
+    });
+  }
+
+  try {
+    const result = await runOpenClawForUser(params.user, params.thread.id, {
+      executionResultId,
+    });
+    const sourceMessage = result.thread.messages.find(
+      (message) => message.executionResultId === executionResultId,
+    );
+
+    return appendNaturalOpenClawAssistantMessage({
+      ...params,
+      executionResultId,
+      executionPreview: sourceMessage?.executionPreview,
+      insight: sourceMessage?.insight,
+    });
+  } catch (error) {
+    return appendNaturalOpenClawAssistantMessage({
+      ...params,
+      executionResultId,
+      errorCode: error instanceof Error ? error.message : "OPENCLAW_FAILED",
+    });
+  }
+}
+
 export async function previewDispatchForUser(
   user: AuthenticatedUser,
   prompt: string,
@@ -3001,6 +3251,18 @@ export async function appendMessageToThreadForUser(
       updatedAt: now,
     })
     .returning();
+
+  const naturalOpenClawResult = await handleNaturalOpenClawCommand({
+    user,
+    thread,
+    prompt: normalizedPrompt,
+    userMessageId: userMessageRow.id,
+    currentSequence,
+  });
+
+  if (naturalOpenClawResult) {
+    return naturalOpenClawResult;
+  }
 
   const recentMemoryRows = await getRecentMemoryFactsForUser(user.id, thread.id);
   const recentMessages = await getMessagesForThread(thread.id);

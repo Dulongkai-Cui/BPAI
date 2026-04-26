@@ -492,6 +492,36 @@ async function main() {
     );
     const openClawLatestMessage = openClawRun.json?.thread?.messages?.at(-1);
     const openClawRuns = openClawLatestMessage?.executionPreview?.openClawRuns ?? [];
+    const naturalOpenClawRun = await requestJson(
+      `/api/bp-ask/threads/${threadId}/messages`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          prompt: "让 WO-20260401-001 继续 OpenClaw 执行",
+        }),
+      },
+      cookieHeader,
+    );
+    const naturalOpenClawLatestMessage =
+      naturalOpenClawRun.json?.thread?.messages?.at(-1);
+    const naturalOpenClawRuns =
+      naturalOpenClawLatestMessage?.executionPreview?.openClawRuns ?? [];
+    assert(
+      naturalOpenClawLatestMessage?.text?.includes("OpenClaw sidecar"),
+      "natural OpenClaw command did not create a visible assistant reply",
+    );
+    assert(
+      naturalOpenClawRuns.length >= 2,
+      "natural OpenClaw command did not append a sidecar run",
+    );
+    assert(
+      naturalOpenClawRuns.at(-1)?.status === "completed",
+      "natural OpenClaw command did not complete",
+    );
+    assert(
+      naturalOpenClawRuns.at(-1)?.submitEnabled === openClawRuns[0]?.submitEnabled,
+      "natural OpenClaw command submit mode mismatched the direct API mode",
+    );
     assert(openClawRuns.length === 1, "OpenClaw 执行结果未写入 executionPreview");
     assert(
       openClawRuns[0]?.status === "completed",
@@ -531,9 +561,11 @@ async function main() {
             (row) => row.status,
           ),
           changedObjects: appliedLatestMessage.executionPreview.changedObjects,
-          openClawRunStatuses: openClawRuns.map((run) => run.status),
-          openClawErrorCodes: openClawRuns.map((run) => run.errorCode ?? null),
-          openClawSubmitModes: openClawRuns.map((run) =>
+          openClawRunStatuses: naturalOpenClawRuns.map((run) => run.status),
+          openClawErrorCodes: naturalOpenClawRuns.map(
+            (run) => run.errorCode ?? null,
+          ),
+          openClawSubmitModes: naturalOpenClawRuns.map((run) =>
             run.submitEnabled ? "submitted" : "probe_only",
           ),
           agentId: agentRun.agentId,
