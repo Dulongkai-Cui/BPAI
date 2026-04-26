@@ -181,12 +181,22 @@ M1 的目标不是开放 AI 任意改工单，而是跑通第一条可审计、�
 -> BP问问记录 changedObjects 与草案 applied 状态
 ```
 
-M1 当前白名单：
+M1/M2 当前白名单与真实动作：
 
 | 用户意图 | 写回草案 operation | 正式写回字段 |
 | --- | --- | --- |
 | 修改工单下一步 | `draft_next_action` | `work_orders.next_action` |
 | 追加风险跟进 | `draft_risk_followup` | `work_orders.metadata.bpAskRiskFollowups` |
+| 修改优先级 | `draft_priority` | `work_orders.priority` |
+| 修改阶段/节点 | `draft_stage` | `work_orders.stage` |
+| 修改状态 | `draft_status` | `work_orders.status` |
+| 归档/软删除工单 | `archive_work_order` | `work_orders.status = archived` + `work_orders.archived_at` |
+
+M2 额外已开放的直接真实动作：
+
+| 用户意图 | Tool | 真实改变 |
+| --- | --- | --- |
+| 新建 demo 工单 | `work_order.create` | 新增 `work_orders` 记录，并写入 source intake / 初始缺项 |
 
 M1 安全边界：
 
@@ -194,12 +204,18 @@ M1 安全边界：
 - 草案必须从 `draft` 审阅到 `ready` 后才能正式写回。
 - 正式写回只允许 `ready` 草案和白名单 operation。
 - OpenClaw 不直接写 BPAI 业务表；如需变更，只能返回候选结果，再进入草案和白名单写回。
-- 非白名单字段，例如 `status`、`stage`、负责人、派单、附件、删除，仍不开放自然语言写回。
+- 新建 demo 工单当前允许由 BP问问直接执行，但必须记录 `changedObjects`。
+- 非白名单字段，例如负责人、派单、附件、物理删除，仍不开放自然语言写回。
 
 M1 验收：
 
 - `npm run smoke:bp-ask:writeback`
 - 验证点包括：自然语言创建草案、草案阶段不改 `work_orders.next_action`、批准后进入 `ready`、正式写回后进入 `applied`、工单真源字段发生变化、`changedObjects` 记录 `work_orders.next_action`。
+
+M2 验收：
+
+- `npm run smoke:bp-ask:work-order-mutation`
+- 验证点包括：自然语言生成优先级/阶段/状态草案、正式写回后真实修改 `work_orders.priority/stage/status`、归档写入 `work_orders.archived_at`、自然语言新建 demo 工单真实写入 `work_orders`，并在 smoke 结束后还原 demo 数据。
 
 ## 9. 建议第一条最小闭环
 

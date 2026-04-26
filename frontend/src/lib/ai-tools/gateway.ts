@@ -14,12 +14,14 @@ import {
   workOrders,
 } from "@/lib/db/schema";
 import {
+  createWorkOrder,
   getWorkOrderDetailById,
   listWorkOrders,
 } from "@/lib/work-order/server";
 
 export const AI_TOOL_NAMES = [
   "work_order.read",
+  "work_order.create",
   "work_order.writeback_draft.create",
   "work_order.writeback.apply",
   "openclaw.work_order.execute",
@@ -49,6 +51,11 @@ export type AiToolRunRecord = {
 };
 
 type WorkOrderReadResult = Pick<
+  AiToolRunRecord,
+  "status" | "summaryText" | "structuredPayload" | "errorCode"
+>;
+
+type WorkOrderCreateResult = Pick<
   AiToolRunRecord,
   "status" | "summaryText" | "structuredPayload" | "errorCode"
 >;
@@ -91,6 +98,15 @@ type AppliedWritebackChange = {
   noOpReason?: string;
 };
 
+const WORK_ORDER_WRITEBACK_OPERATIONS = [
+  "draft_next_action",
+  "draft_risk_followup",
+  "draft_priority",
+  "draft_stage",
+  "draft_status",
+  "archive_work_order",
+] as const;
+
 const WORK_ORDER_STAGE_LABELS: Record<string, string> = {
   source_intake: "来源登记",
   registration: "工单登记",
@@ -120,6 +136,10 @@ const WORK_ORDER_PRIORITY_LABELS: Record<string, string> = {
   high: "高",
   urgent: "紧急",
 };
+
+const WORK_ORDER_STAGE_VALUES = new Set(Object.keys(WORK_ORDER_STAGE_LABELS));
+const WORK_ORDER_STATUS_VALUES = new Set(Object.keys(WORK_ORDER_STATUS_LABELS));
+const WORK_ORDER_PRIORITY_VALUES = new Set(Object.keys(WORK_ORDER_PRIORITY_LABELS));
 
 const WORK_ORDER_WARNING_LABELS: Record<string, string> = {
   normal: "正常",
@@ -153,6 +173,26 @@ function readMetadataArray(record: Record<string, unknown>, key: string) {
 
 function findRiskFollowupByValue(items: unknown[], value: string) {
   return items.find((item) => isRecord(item) && readString(item, "value") === value);
+}
+
+function isAllowedWritebackOperation(value: string) {
+  return (WORK_ORDER_WRITEBACK_OPERATIONS as readonly string[]).includes(value);
+}
+
+function validateWorkOrderWritebackValue(operation: string, value: string) {
+  if (operation === "draft_priority") {
+    return WORK_ORDER_PRIORITY_VALUES.has(value);
+  }
+
+  if (operation === "draft_stage") {
+    return WORK_ORDER_STAGE_VALUES.has(value);
+  }
+
+  if (operation === "draft_status") {
+    return WORK_ORDER_STATUS_VALUES.has(value);
+  }
+
+  return Boolean(value);
 }
 
 function normalizeWorkOrderNo(value: string) {
@@ -360,6 +400,108 @@ async function runWorkOrderRead(input: Record<string, unknown>): Promise<WorkOrd
       },
       matched: true,
       workOrder,
+    },
+  };
+}
+
+async function runWorkOrderCreate(
+  context: AiToolExecutionContext,
+  input: Record<string, unknown>,
+): Promise<WorkOrderCreateResult> {
+  const title = readString(input, "title");
+  const sourceSummary = readString(input, "sourceSummary") || title;
+  const projectName = readString(input, "projectName");
+  const siteName = readString(input, "siteName");
+  const nextAction = readString(input, "nextAction");
+  const priority = readString(input, "priority") || "normal";
+  const stage = readString(input, "stage") || "registration";
+
+  if (!title) {
+    return {
+      status: "failed",
+      summaryText: "work_order.create 缺少 title，无法创建工单。",
+      structuredPayload: {
+        workOrder: null,
+        changedObjects: [],
+      },
+      errorCode: "INVALID_WORK_ORDER_CREATE_INPUT",
+    };
+  }
+
+  if (!WORK_ORDER_PRIORITY_VALUES.has(priority)) {
+    return {
+      status: "failed",
+      summaryText: `work_order.create 的优先级 ${priority} 不在允许范围内。`,
+      structuredPayload: {
+        title,
+        priority,
+        workOrder: null,
+        changedObjects: [],
+      },
+      errorCode: "INVALID_WORK_ORDER_PRIORITY",
+    };
+  }
+
+  if (!WORK_ORDER_STAGE_VALUES.has(stage)) {
+    return {
+      status: "failed",
+      summaryText: `work_order.create 的阶段 ${stage} 不在允许范围内。`,
+      structuredPayload: {
+        title,
+        stage,
+        workOrder: null,
+        changedObjects: [],
+      },
+      errorCode: "INVALID_WORK_ORDER_STAGE",
+    };
+  }
+
+  const created = await createWorkOrder({
+    title,
+    createdByUserId: context.user.id,
+    sourceType: "manual",
+    sourceSummary,
+    projectName,
+    siteName,
+    currentStage: stage as Parameters<typeof createWorkOrder>[0]["currentStage"],
+    priority: priority as Parameters<typeof createWorkOrder>[0]["priority"],
+    nextAction,
+    latestProgressSummary:
+      readString(input, "latestProgressSummary") ||
+      `由 BP问问根据自然语言创建：${sourceSummary}`,
+    metadata: {
+      bpAskCreated: true,
+      createdByBpAskAt: new Date().toISOString(),
+      createdByBpAskUserId: context.user.id,
+      createdByBpAskUserName: context.user.name,
+      sourcePrompt: readString(input, "sourcePrompt"),
+    },
+  });
+
+  if (!created) {
+    return {
+      status: "failed",
+      summaryText: "work_order.create 未能创建工单。",
+      structuredPayload: {
+        title,
+        workOrder: null,
+        changedObjects: [],
+      },
+      errorCode: "WORK_ORDER_CREATE_FAILED",
+    };
+  }
+
+  const detail = await getWorkOrderDetailById(created.id);
+  const workOrder = buildWorkOrderPayload(created, detail);
+  const changedObjects = [`work_order/${workOrder.workOrderNo}/created`];
+
+  return {
+    status: "completed",
+    summaryText: `已创建工单 ${workOrder.workOrderNo}「${workOrder.title}」，优先级为「${workOrder.priorityLabel}」，节点为「${workOrder.stageLabel}」。`,
+    structuredPayload: {
+      workOrder,
+      changedObjects,
+      businessWritebackApplied: true,
     },
   };
 }
@@ -628,7 +770,7 @@ async function runWorkOrderWritebackApply(
   const unsupportedDraft = selectedDrafts.find(
     (draft) =>
       draft.objectType !== "work_order" ||
-      !["draft_next_action", "draft_risk_followup"].includes(draft.operation),
+      !isAllowedWritebackOperation(draft.operation),
   );
 
   if (unsupportedDraft) {
@@ -645,6 +787,29 @@ async function runWorkOrderWritebackApply(
         changedObjects: [],
       },
       errorCode: "WRITEBACK_OPERATION_NOT_ALLOWED",
+    };
+  }
+
+  const invalidValueDraft = selectedDrafts.find(
+    (draft) =>
+      !validateWorkOrderWritebackValue(draft.operation, draft.proposedValue),
+  );
+
+  if (invalidValueDraft) {
+    return {
+      status: "failed",
+      summaryText: `写回草案 ${invalidValueDraft.id} 的值 ${invalidValueDraft.proposedValue} 不适用于操作 ${invalidValueDraft.operation}。`,
+      structuredPayload: {
+        taskId,
+        resultId,
+        draftIds,
+        blockedDraftId: invalidValueDraft.id,
+        blockedOperation: invalidValueDraft.operation,
+        blockedValue: invalidValueDraft.proposedValue,
+        appliedDrafts: [],
+        changedObjects: [],
+      },
+      errorCode: "WRITEBACK_VALUE_NOT_ALLOWED",
     };
   }
 
@@ -686,7 +851,7 @@ async function runWorkOrderWritebackApply(
           applied: !unchanged,
           ...(unchanged ? { noOpReason: "unchanged" } : {}),
         });
-      } else {
+      } else if (draft.operation === "draft_risk_followup") {
         const metadata = {
           ...(workOrder.metadata ?? {}),
         };
@@ -743,6 +908,127 @@ async function runWorkOrderWritebackApply(
           nextValue: nextFollowups,
           applied: !unchanged,
           ...(unchanged ? { noOpReason: "duplicate_followup" } : {}),
+        });
+      } else if (draft.operation === "draft_priority") {
+        const unchanged = workOrder.priority === draft.proposedValue;
+
+        if (!unchanged) {
+          await tx
+            .update(workOrders)
+            .set({
+              priority: draft.proposedValue as typeof workOrder.priority,
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
+
+        changes.push({
+          draftId: draft.id,
+          objectType: draft.objectType,
+          objectRef: draft.objectRef,
+          operation: draft.operation,
+          fieldPath: "work_orders.priority",
+          previousValue: workOrder.priority,
+          nextValue: draft.proposedValue,
+          applied: !unchanged,
+          ...(unchanged ? { noOpReason: "unchanged" } : {}),
+        });
+      } else if (draft.operation === "draft_stage") {
+        const unchanged = workOrder.stage === draft.proposedValue;
+
+        if (!unchanged) {
+          await tx
+            .update(workOrders)
+            .set({
+              stage: draft.proposedValue as typeof workOrder.stage,
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
+
+        changes.push({
+          draftId: draft.id,
+          objectType: draft.objectType,
+          objectRef: draft.objectRef,
+          operation: draft.operation,
+          fieldPath: "work_orders.stage",
+          previousValue: workOrder.stage,
+          nextValue: draft.proposedValue,
+          applied: !unchanged,
+          ...(unchanged ? { noOpReason: "unchanged" } : {}),
+        });
+      } else if (draft.operation === "draft_status") {
+        const unchanged = workOrder.status === draft.proposedValue;
+
+        if (!unchanged) {
+          await tx
+            .update(workOrders)
+            .set({
+              status: draft.proposedValue as typeof workOrder.status,
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
+
+        changes.push({
+          draftId: draft.id,
+          objectType: draft.objectType,
+          objectRef: draft.objectRef,
+          operation: draft.operation,
+          fieldPath: "work_orders.status",
+          previousValue: workOrder.status,
+          nextValue: draft.proposedValue,
+          applied: !unchanged,
+          ...(unchanged ? { noOpReason: "unchanged" } : {}),
+        });
+      } else if (draft.operation === "archive_work_order") {
+        const archivedAt = workOrder.archivedAt ? new Date(workOrder.archivedAt) : null;
+        const statusAlreadyArchived = workOrder.status === "archived";
+        const archivedAtAlreadySet = Boolean(archivedAt);
+        const metadata = {
+          ...(workOrder.metadata ?? {}),
+          bpAskArchived: {
+            draftId: draft.id,
+            appliedAt: now.toISOString(),
+            appliedByUserId: context.user.id,
+            appliedByUserName: context.user.name,
+            source: "work_order.writeback.apply",
+          },
+        };
+
+        if (!statusAlreadyArchived || !archivedAtAlreadySet) {
+          await tx
+            .update(workOrders)
+            .set({
+              status: "archived",
+              archivedAt: archivedAt ?? now,
+              metadata,
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
+
+        changes.push({
+          draftId: draft.id,
+          objectType: draft.objectType,
+          objectRef: draft.objectRef,
+          operation: draft.operation,
+          fieldPath: "work_orders.status",
+          previousValue: workOrder.status,
+          nextValue: "archived",
+          applied: !statusAlreadyArchived,
+          ...(statusAlreadyArchived ? { noOpReason: "unchanged" } : {}),
+        });
+        changes.push({
+          draftId: draft.id,
+          objectType: draft.objectType,
+          objectRef: draft.objectRef,
+          operation: draft.operation,
+          fieldPath: "work_orders.archived_at",
+          previousValue: toIsoOrNull(workOrder.archivedAt),
+          nextValue: toIsoOrNull(archivedAt ?? now),
+          applied: !archivedAtAlreadySet,
+          ...(archivedAtAlreadySet ? { noOpReason: "already_archived" } : {}),
         });
       }
 
@@ -927,6 +1213,8 @@ export async function runAiTool(
     const result =
       request.toolName === "work_order.read"
         ? await runWorkOrderRead(input)
+        : request.toolName === "work_order.create"
+          ? await runWorkOrderCreate(context, input)
         : request.toolName === "work_order.writeback_draft.create"
           ? await runWorkOrderWritebackDraftCreate(context, input)
         : request.toolName === "work_order.writeback.apply"

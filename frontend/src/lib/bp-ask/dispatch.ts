@@ -783,6 +783,14 @@ function shouldClarify(
     ["workflow_execute", "agent_delegate", "create_object"].includes(intent) &&
     !hasExplicitRef
   ) {
+    if (
+      intent === "create_object" &&
+      targetDomain === "work_order" &&
+      includesAny(prompt, ["工单", "派单", "回单", "异常工单"])
+    ) {
+      return false;
+    }
+
     return true;
   }
 
