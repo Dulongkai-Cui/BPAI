@@ -87,6 +87,8 @@ type AppliedWritebackChange = {
   fieldPath: string;
   previousValue: unknown;
   nextValue: unknown;
+  applied: boolean;
+  noOpReason?: string;
 };
 
 const WORK_ORDER_STAGE_LABELS: Record<string, string> = {
@@ -142,6 +144,15 @@ function readString(record: Record<string, unknown>, key: string) {
 function readBoolean(record: Record<string, unknown>, key: string, fallback: boolean) {
   const value = record[key];
   return typeof value === "boolean" ? value : fallback;
+}
+
+function readMetadataArray(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function findRiskFollowupByValue(items: unknown[], value: string) {
+  return items.find((item) => isRecord(item) && readString(item, "value") === value);
 }
 
 function normalizeWorkOrderNo(value: string) {
@@ -652,13 +663,17 @@ async function runWorkOrderWritebackApply(
       }
 
       if (draft.operation === "draft_next_action") {
-        await tx
-          .update(workOrders)
-          .set({
-            nextAction: draft.proposedValue,
-            updatedAt: now,
-          })
-          .where(eq(workOrders.id, workOrder.id));
+        const unchanged = workOrder.nextAction === draft.proposedValue;
+
+        if (!unchanged) {
+          await tx
+            .update(workOrders)
+            .set({
+              nextAction: draft.proposedValue,
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
 
         changes.push({
           draftId: draft.id,
@@ -668,46 +683,70 @@ async function runWorkOrderWritebackApply(
           fieldPath: "work_orders.next_action",
           previousValue: workOrder.nextAction,
           nextValue: draft.proposedValue,
+          applied: !unchanged,
+          ...(unchanged ? { noOpReason: "unchanged" } : {}),
         });
       } else {
         const metadata = {
           ...(workOrder.metadata ?? {}),
         };
-        const existingFollowups = Array.isArray(metadata.bpAskRiskFollowups)
-          ? metadata.bpAskRiskFollowups
-          : [];
+        const existingFollowups = readMetadataArray(metadata, "bpAskRiskFollowups");
+        const existingFollowup = findRiskFollowupByValue(
+          existingFollowups,
+          draft.proposedValue,
+        );
+        const latestFollowup = isRecord(metadata.bpAskLatestRiskFollowup)
+          ? metadata.bpAskLatestRiskFollowup
+          : null;
+        const latestAlreadyMatches =
+          latestFollowup && readString(latestFollowup, "value") === draft.proposedValue;
         const nextFollowup = {
+          ...(isRecord(existingFollowup) ? existingFollowup : {}),
           draftId: draft.id,
           value: draft.proposedValue,
-          appliedAt: now.toISOString(),
+          appliedAt:
+            readString(isRecord(existingFollowup) ? existingFollowup : {}, "appliedAt") ||
+            now.toISOString(),
           appliedByUserId: context.user.id,
           appliedByUserName: context.user.name,
           source: "work_order.writeback.apply",
         };
-        const nextFollowups = [...existingFollowups, nextFollowup];
+        const nextFollowups = existingFollowup
+          ? existingFollowups
+          : [...existingFollowups, nextFollowup];
+        const unchanged = Boolean(existingFollowup && latestAlreadyMatches);
+        const fieldPath = existingFollowup
+          ? "work_orders.metadata.bpAskLatestRiskFollowup"
+          : "work_orders.metadata.bpAskRiskFollowups";
 
-        await tx
-          .update(workOrders)
-          .set({
-            metadata: {
-              ...metadata,
-              bpAskRiskFollowups: nextFollowups,
-              bpAskLatestRiskFollowup: nextFollowup,
-            },
-            updatedAt: now,
-          })
-          .where(eq(workOrders.id, workOrder.id));
+        if (!unchanged) {
+          await tx
+            .update(workOrders)
+            .set({
+              metadata: {
+                ...metadata,
+                bpAskRiskFollowups: nextFollowups,
+                bpAskLatestRiskFollowup: nextFollowup,
+              },
+              updatedAt: now,
+            })
+            .where(eq(workOrders.id, workOrder.id));
+        }
 
         changes.push({
           draftId: draft.id,
           objectType: draft.objectType,
           objectRef: draft.objectRef,
           operation: draft.operation,
-          fieldPath: "work_orders.metadata.bpAskRiskFollowups",
+          fieldPath,
           previousValue: existingFollowups,
           nextValue: nextFollowups,
+          applied: !unchanged,
+          ...(unchanged ? { noOpReason: "duplicate_followup" } : {}),
         });
       }
+
+      const draftChanges = changes.filter((change) => change.draftId === draft.id);
 
       await tx
         .update(executionWritebackDrafts)
@@ -715,11 +754,14 @@ async function runWorkOrderWritebackApply(
           status: "applied",
           metadata: {
             ...(draft.metadata ?? {}),
-            businessWritebackApplied: true,
+            businessWritebackApplied: draftChanges.some((change) => change.applied),
             appliedAt: now.toISOString(),
             appliedByUserId: context.user.id,
             appliedByUserName: context.user.name,
-            appliedChanges: changes.filter((change) => change.draftId === draft.id),
+            appliedChanges: draftChanges,
+            writebackNoOpReasons: draftChanges
+              .map((change) => change.noOpReason)
+              .filter(Boolean),
           },
           updatedAt: now,
         })
@@ -731,6 +773,7 @@ async function runWorkOrderWritebackApply(
     .select()
     .from(executionWritebackDrafts)
     .where(eq(executionWritebackDrafts.resultId, resultRow.id));
+  const appliedChanges = changes.filter((change) => change.applied);
   const drafts = rows.map((row) => {
     const metadata = isRecord(row.metadata) ? row.metadata : {};
 
@@ -753,17 +796,17 @@ async function runWorkOrderWritebackApply(
 
   return {
     status: "completed",
-    summaryText: `已正式写回 ${changes.length} 个工单白名单字段，并将对应草案标记为 applied。`,
+    summaryText: `已处理 ${selectedDrafts.length} 个写回草案，实际改变 ${appliedChanges.length} 个工单白名单字段，并将对应草案标记为 applied。`,
     structuredPayload: {
       taskId: taskRow.id,
       resultId: resultRow.id,
       appliedDrafts: selectedDrafts.map((draft) => draft.id),
-      changedObjects: changes.map(
+      changedObjects: appliedChanges.map(
         (change) => `${change.objectType}/${change.objectRef}/${change.fieldPath}`,
       ),
       changes,
       drafts,
-      businessWritebackApplied: true,
+      businessWritebackApplied: appliedChanges.length > 0,
       appliedAt: now.toISOString(),
     },
   };

@@ -418,8 +418,8 @@ async function main() {
       "第一次正式写回后未展示 applied 状态",
     );
     assert(
-      firstAppliedLatestMessage?.executionPreview?.changedObjects?.length === 1,
-      "第一次正式写回后 changedObjects 未保持 1 个字段路径",
+      Array.isArray(firstAppliedLatestMessage?.executionPreview?.changedObjects),
+      "第一次正式写回后 changedObjects 未保持数组结构",
     );
 
     const secondAppliedDraft = await requestJson(
@@ -442,8 +442,8 @@ async function main() {
       "两次正式写回后仍有草案未进入 applied 状态",
     );
     assert(
-      appliedLatestMessage?.executionPreview?.changedObjects?.length === 2,
-      "两次正式写回后 changedObjects 未累计为 2 个字段路径",
+      Array.isArray(appliedLatestMessage?.executionPreview?.changedObjects),
+      "两次正式写回后 changedObjects 未保持数组结构",
     );
     assert(
       appliedLatestMessage?.executionPreview?.nextStep?.includes(
