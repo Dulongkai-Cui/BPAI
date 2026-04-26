@@ -34,6 +34,8 @@ services:
       OPENCLAW_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_PORT:-18889}/"
       OPENCLAW_WORK_ORDER_GATEWAY_TOKEN: "${OPENCLAW_WORK_ORDER_GATEWAY_TOKEN:-bpai-sidecar-openclaw-token}"
       OPENCLAW_WORK_ORDER_GATEWAY_URL: "ws://openclaw-gateway:18789/"
+      OPENCLAW_WORK_ORDER_SUBMIT_ENABLED: "${OPENCLAW_WORK_ORDER_SUBMIT_ENABLED:-true}"
+      OPENCLAW_WORK_ORDER_DEVICE_AUTH_DIR: "/openclaw/work-order-identity"
       OPENCLAW_WORK_ORDER_CONSOLE_URL: "http://127.0.0.1:${OPENCLAW_PORT:-18889}/"
       OPENCLAW_DOCUMENT_GATEWAY_TOKEN: "${OPENCLAW_DOCUMENT_GATEWAY_TOKEN:-bpai-document-openclaw-token}"
       OPENCLAW_DOCUMENT_GATEWAY_URL: "ws://openclaw-document:18789/"
@@ -51,6 +53,7 @@ services:
       - "${FRONTEND_DEV_PORT:-3001}:3000"
     volumes:
       - ./frontend:/app
+      - ./docker/openclaw/state/identity:/openclaw/work-order-identity:ro
       - /app/node_modules
       - /app/.next
     depends_on:

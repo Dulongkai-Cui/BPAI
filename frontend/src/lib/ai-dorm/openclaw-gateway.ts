@@ -1,7 +1,9 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
+import { createPublicKey, randomBytes, sign as signPayload } from "node:crypto";
+import { readFileSync } from "node:fs";
 import net from "node:net";
+import { join } from "node:path";
 
 import { getOpenClawGatewayConnection } from "@/lib/ai-dorm/openclaw";
 
@@ -53,10 +55,14 @@ type GatewayCallResult = {
 const OPENCLAW_OPERATOR_SCOPES = [
   "operator.read",
   "operator.write",
-  "operator.admin",
-  "operator.approvals",
-  "operator.pairing",
 ];
+
+type OpenClawDeviceAuth = {
+  deviceId: string;
+  deviceToken: string;
+  publicKey: string;
+  privateKeyPem: string;
+};
 
 function readSubmitEnabled(agentId: OpenClawAgentId) {
   const specificName =
@@ -73,6 +79,100 @@ function buildId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random()
     .toString(16)
     .slice(2, 10)}`;
+}
+
+function base64Url(buffer: Buffer) {
+  return buffer
+    .toString("base64")
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/g, "");
+}
+
+function readJsonFile(pathname: string) {
+  return JSON.parse(readFileSync(pathname, "utf8").replace(/^\uFEFF/, "")) as
+    | Record<string, unknown>
+    | null;
+}
+
+function readOpenClawDeviceAuth(agentId: OpenClawAgentId) {
+  const specificName =
+    agentId === "work-order-longxia"
+      ? "OPENCLAW_WORK_ORDER_DEVICE_AUTH_DIR"
+      : "";
+  const authDir =
+    (specificName ? process.env[specificName] : undefined) ??
+    process.env.OPENCLAW_DEVICE_AUTH_DIR;
+
+  if (!authDir) {
+    return null;
+  }
+
+  try {
+    const device = readJsonFile(join(authDir, "device.json"));
+    const auth = readJsonFile(join(authDir, "device-auth.json"));
+    const deviceId = typeof device?.deviceId === "string" ? device.deviceId : "";
+    const publicKeyPem =
+      typeof device?.publicKeyPem === "string" ? device.publicKeyPem : "";
+    const privateKeyPem =
+      typeof device?.privateKeyPem === "string" ? device.privateKeyPem : "";
+    const tokens = toRecord(auth?.tokens);
+    const operatorToken = toRecord(tokens.operator);
+    const deviceToken =
+      typeof operatorToken.token === "string" ? operatorToken.token : "";
+
+    if (!deviceId || !publicKeyPem || !privateKeyPem || !deviceToken) {
+      return null;
+    }
+
+    const publicDer = Buffer.from(
+      createPublicKey(publicKeyPem).export({
+        format: "der",
+        type: "spki",
+      }),
+    );
+
+    return {
+      deviceId,
+      deviceToken,
+      publicKey: base64Url(publicDer.subarray(-32)),
+      privateKeyPem,
+    } satisfies OpenClawDeviceAuth;
+  } catch {
+    return null;
+  }
+}
+
+function buildOpenClawDeviceSignature(params: {
+  auth: OpenClawDeviceAuth;
+  gatewayToken: string;
+  nonce: string;
+}) {
+  const signedAt = Date.now();
+  const signatureBase = [
+    "v2",
+    params.auth.deviceId,
+    "gateway-client",
+    "backend",
+    "operator",
+    OPENCLAW_OPERATOR_SCOPES.join(","),
+    String(signedAt),
+    params.gatewayToken,
+    params.nonce,
+  ].join("|");
+  const signature = signPayload(
+    null,
+    Buffer.from(signatureBase),
+    params.auth.privateKeyPem,
+  );
+
+  return {
+    id: params.auth.deviceId,
+    publicKey: params.auth.publicKey,
+    signature: base64Url(signature),
+    signedAt,
+    nonce: params.nonce,
+  };
 }
 
 function normalizeGatewayError(error: unknown) {
@@ -319,6 +419,7 @@ function buildOpenClawMessage(request: OpenClawRunRequest) {
 async function callOpenClawGateway(params: {
   gatewayUrl: string;
   token: string;
+  deviceAuth?: OpenClawDeviceAuth | null;
   requests: OpenClawGatewayRequest[];
   timeoutMs?: number;
 }) {
@@ -380,7 +481,22 @@ async function callOpenClawGateway(params: {
       });
     }
 
-    async function sendConnect() {
+    async function sendConnect(nonce: string) {
+      const auth: Record<string, string> = {
+        token: params.token,
+      };
+      const device = params.deviceAuth
+        ? buildOpenClawDeviceSignature({
+            auth: params.deviceAuth,
+            gatewayToken: params.token,
+            nonce,
+          })
+        : null;
+
+      if (params.deviceAuth) {
+        auth.deviceToken = params.deviceAuth.deviceToken;
+      }
+
       const hello = await sendRequest("connect", {
         minProtocol: 3,
         maxProtocol: 3,
@@ -394,9 +510,8 @@ async function callOpenClawGateway(params: {
         role: "operator",
         scopes: OPENCLAW_OPERATOR_SCOPES,
         caps: ["tool-events"],
-        auth: {
-          token: params.token,
-        },
+        auth,
+        ...(device ? { device } : {}),
         userAgent: "BPAI OpenClaw Adapter",
         locale: "zh-CN",
       });
@@ -427,7 +542,10 @@ async function callOpenClawGateway(params: {
       const record = toRecord(message);
 
       if (record.type === "event" && record.event === "connect.challenge") {
-        void sendConnect().catch(fail);
+        const payload = toRecord(record.payload);
+        const nonce = typeof payload.nonce === "string" ? payload.nonce : "";
+
+        void sendConnect(nonce).catch(fail);
         return;
       }
 
@@ -513,6 +631,7 @@ async function runGatewayCall(
   const [hello, health, submission] = await callOpenClawGateway({
     gatewayUrl: connection.gatewayUrl,
     token: connection.token,
+    deviceAuth: readOpenClawDeviceAuth(request.agentId),
     requests,
   });
 

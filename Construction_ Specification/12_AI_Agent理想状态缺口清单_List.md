@@ -48,7 +48,7 @@ BP问问作为大总管
 | P1-02 | Tool Gateway 最小实现 | 已最小落地，具备统一输入、结果和 toolRuns 结构 | 统一权限、输入校验、审计、结果结构 | `frontend/src/lib/ai-tools/gateway.ts` |
 | P1-03 | Skill Runner 最小实现 | 已最小落地 `skill-work-order-summary`，内部调用 `work_order.read` | 让“工单摘要 Skill”从卡片变成可执行能力 | `frontend/src/lib/ai-dorm/skill-runner.ts` |
 | P1-04 | Workflow Matcher | 已最小落地，当前支持工单目标匹配 `workflow-work-order-intake` | 复杂任务需要先匹配现成工作流 | `frontend/src/lib/ai-dorm/workflow-matcher.ts` |
-| P1-05 | Workflow Runner 最小实现 | 已最小落地，当前支持 `input -> 工单摘要 Skill -> 工单龙虾 dry-run -> waiting_confirmation -> confirmation evaluation -> post-confirmation dry-run -> 写回草案落库 -> 草案审阅 -> 白名单正式写回 -> OpenClaw probe-only -> output`，确认项支持同意/拒绝/暂缓记录与结果评估；写回草案支持批准待写回 / 拒绝 / 取消；正式写回仅允许 ready 草案和白名单字段；OpenClaw 当前默认只做 sidecar health 探测，不直接下发执行 | 跑通 input -> skill -> agent dry-run -> human confirmation -> output 的第一条链，并具备进入 OpenClaw 的安全入口 | `frontend/src/lib/ai-dorm/workflow-runner.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
+| P1-05 | Workflow Runner 最小实现 | 已最小落地，当前支持 `input -> 工单摘要 Skill -> 工单龙虾 dry-run -> waiting_confirmation -> confirmation evaluation -> post-confirmation dry-run -> 写回草案落库 -> 草案审阅 -> 白名单正式写回 -> OpenClaw chat.send -> output`，确认项支持同意/拒绝/暂缓记录与结果评估；写回草案支持批准待写回 / 拒绝 / 取消；正式写回仅允许 ready 草案和白名单字段；OpenClaw 可通过开关在 probe-only 与真实下发之间切换 | 跑通 input -> skill -> agent dry-run -> human confirmation -> output 的第一条链，并具备进入 OpenClaw 的安全入口 | `frontend/src/lib/ai-dorm/workflow-runner.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
 | P1-06 | AI宿舍消费 task 的动作入口 | `/ai-dorm/tasks` 可看任务，但不能执行/试运行 | execution task 需要有后场承接动作 | 新增 `/api/ai-dorm/tasks/[taskId]/run` |
 | P1-07 | execution result 结构扩展约定 | 已在 payload 中写入 `executionRoute`、`toolRuns`、`skillRuns`、`changedObjects`、`artifacts`，并新增 `execution_writeback_drafts` 追踪候选写回草案与审阅状态；尚未建独立 agent/tool run 日志表 | BP问问需要稳定读取 toolRuns、artifacts、changedObjects 和可审计草案 | 先写约定，再决定是否建表 |
 | P1-08 | 最小端到端回归 | 已新增 `smoke:bp-ask:skill` 与 `smoke:bp-ask:workflow`，覆盖 BP问问 -> Skill / Workflow -> Tool -> Result | 防止工作流接入后破坏 BP问问主链 | `frontend/scripts/bp-ask-skill-runner-smoke.mjs`、`frontend/scripts/bp-ask-workflow-runner-smoke.mjs` |
@@ -61,8 +61,8 @@ BP问问作为大总管
 | P2-02 | Skill Registry 持久化 | `SKILL_BLUEPRINTS` 写在代码里 | Skill 需要版本、草案、测试、发布状态 | `ai_skills` 表或 manifest 文件 |
 | P2-03 | Workflow Registry 持久化 | `WORKFLOW_BLUEPRINTS` 写在代码里 | 工作流需要启用状态、节点配置、匹配规则 | `ai_workflows` 表或 manifest 文件 |
 | P2-04 | Agent Run / Tool Run 日志 | 当前只有 execution result | 排查复杂执行时需要逐步日志 | `ai_agent_runs`、`ai_tool_runs` 或 payload 过渡 |
-| P2-05 | LongxiaAdapter | 已新增最小 dry-run adapter，当前支持 `work-order-longxia` 生成承接预案、待确认项和候选写回；OpenClaw Gateway Adapter 已能 probe-only 连通 sidecar | 龙虾外包执行需要逐步从 dry-run 进入可审计的外部执行链 | `frontend/src/lib/ai-dorm/longxia-adapter.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
-| P2-06 | OpenClaw 任务协议 | 已落地最小协议：`openclaw.work_order.execute` 通过 WebSocket `connect/health` 探测 sidecar，并把 `openClawRuns` 写回 execution result；真实 `chat.send` 由 `OPENCLAW_WORK_ORDER_SUBMIT_ENABLED` 开关控制 | 需要能把 task payload 安全发给 sidecar 或 gateway，同时避免绕过 BP问问确认与白名单写回 | `frontend/src/lib/ai-dorm/openclaw-gateway.ts`、`frontend/src/app/api/bp-ask/threads/[threadId]/openclaw/route.ts` |
+| P2-05 | LongxiaAdapter | 已新增最小 dry-run adapter，当前支持 `work-order-longxia` 生成承接预案、待确认项和候选写回；OpenClaw Gateway Adapter 已能连通 sidecar 并真实 `chat.send` 下发任务 | 龙虾外包执行需要逐步从 dry-run 进入可审计的外部执行链 | `frontend/src/lib/ai-dorm/longxia-adapter.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
+| P2-06 | OpenClaw 任务协议 | 已落地最小协议：`openclaw.work_order.execute` 通过 WebSocket `connect/health/chat.send` 对接 sidecar，并把 `openClawRuns` 写回 execution result；真实 `chat.send` 由 `OPENCLAW_WORK_ORDER_SUBMIT_ENABLED` 开关控制，Docker dev 已启用 work-order 下发 | 需要能把 task payload 安全发给 sidecar 或 gateway，同时避免绕过 BP问问确认与白名单写回 | `frontend/src/lib/ai-dorm/openclaw-gateway.ts`、`frontend/src/app/api/bp-ask/threads/[threadId]/openclaw/route.ts` |
 | P2-07 | MCP Gateway | 未落地 | 外部工具和资源不能裸接 BP问问 | `frontend/src/lib/ai-mcp/**` |
 | P2-08 | BPAI CLI | 未落地 | Agent/Skill/MCP 需要调试和治理入口 | `tools/bpai-cli` 或 `frontend/scripts/bpai-*.mjs` |
 | P2-09 | AI宿舍管理动作 | 页面以查看为主 | 需要 enable/disable、validate、test、run、replay | AI宿舍页面与 API |
@@ -115,7 +115,7 @@ BP问问作为大总管
 - 缺工作流 runner。
 - 缺 workflow run 状态。
 - 缺节点执行日志。
-- 人工确认节点已能输出 `waiting_confirmation`、确认请求和候选写回展示，并支持同意/拒绝/暂缓记录、结果评估、全部同意后的续跑 dry-run、写回草案落库、草案审阅、白名单正式写回与 OpenClaw probe-only 连通；仍缺真实 `chat.send` 下发、OpenClaw 执行产物回收与失败重试。
+- 人工确认节点已能输出 `waiting_confirmation`、确认请求和候选写回展示，并支持同意/拒绝/暂缓记录、结果评估、全部同意后的续跑 dry-run、写回草案落库、草案审阅、白名单正式写回与 OpenClaw `chat.send` 下发；仍缺 OpenClaw 执行产物回收与失败重试。
 - 缺失败分支和重试策略。
 - 缺“结果回到 BP问问继续执行”的协议。
 
@@ -125,8 +125,8 @@ BP问问作为大总管
 - 缺 Agent 状态机。
 - 缺 Agent 允许工具列表。
 - 缺 Agent 绑定 Skill / Workflow 的规范。
-- LongxiaAdapter 已有 dry-run 和 OpenClaw probe-only 桥接；仍缺真实执行状态机。
-- OpenClaw 执行 payload 与 result payload 已有最小草案；仍缺正式下发、产物回收、失败重试和 sidecar 权限治理。
+- LongxiaAdapter 已有 dry-run 和 OpenClaw `chat.send` 桥接；仍缺真实执行状态机。
+- OpenClaw 执行 payload 与 result payload 已有最小草案；仍缺产物回收、失败重试和更完整的 sidecar 权限治理。
 - 缺 Agent 执行日志与 artifacts。
 
 ### 7.6 MCP
