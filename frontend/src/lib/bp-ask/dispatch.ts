@@ -20,11 +20,11 @@ import {
   type TargetDomain,
 } from "@/lib/bp-ask/intents";
 import {
-  classifyWithKimi,
-  generateChatReplyWithKimi,
-  hasKimiDispatchSupport,
-  type KimiDispatchClassification,
-} from "@/lib/bp-ask/kimi";
+  classifyWithModel,
+  generateChatReplyWithModel,
+  hasBpAskModelSupport,
+  type ModelDispatchClassification,
+} from "@/lib/bp-ask/model-provider";
 
 export type DispatchContext = {
   user: AuthenticatedUser;
@@ -316,11 +316,11 @@ function extractTargetRefs(prompt: string): RefMap {
   }
 
   const workOrderNo =
-    prompt.match(/\b(?:WO|PG|GD|WK)[-_ ]?\d{4,}\b/i)?.[0] ??
+    prompt.match(/\b(?:WO|PG|GD|WK)(?:[-_ ]?\d+){1,4}\b/i)?.[0] ??
     prompt.match(/\b\d{6,}\b/)?.[0] ??
     null;
   if (workOrderNo) {
-    refs.workOrderNo = workOrderNo;
+    refs.workOrderNo = workOrderNo.replace(/\s+/g, "-").toUpperCase();
   }
 
   const fileName =
@@ -1325,15 +1325,15 @@ function priorityWeight(value: DispatchPriority) {
 
 function combineDecision(
   ruleDecision: DispatchDecision,
-  kimiDecision: DispatchDecision,
+  modelDecision: DispatchDecision,
 ): DispatchDecision {
-  const preferKimi =
-    kimiDecision.confidence >= ruleDecision.confidence + 6 ||
+  const preferModel =
+    modelDecision.confidence >= ruleDecision.confidence + 6 ||
     ruleDecision.primaryIntent === "clarification" ||
     ruleDecision.targetDomain === "cross_domain";
 
-  const primary = preferKimi ? kimiDecision : ruleDecision;
-  const secondary = preferKimi ? ruleDecision : kimiDecision;
+  const primary = preferModel ? modelDecision : ruleDecision;
+  const secondary = preferModel ? ruleDecision : modelDecision;
 
   const combinedRequiresWrite = primary.requiresWrite || secondary.requiresWrite;
   const combinedRequiresConfirmation =
@@ -1381,7 +1381,7 @@ function combineDecision(
     memoryScopes,
     followupQuestion: primary.followupQuestion ?? secondary.followupQuestion,
     priority,
-    reason: `${primary.reason} 模型复核：${kimiDecision.reason}`,
+    reason: `${primary.reason} 模型复核：${modelDecision.reason}`,
   };
 }
 
@@ -1447,7 +1447,7 @@ function buildInsight(decision: DispatchDecision): InsightBlock {
       : decision.suggestedExecutor === "system"
         ? "系统受控写入"
         : decision.suggestedExecutor === "kimi"
-          ? "Kimi 结构化分类"
+          ? "模型结构化分类"
           : "BP问问内部处理";
 
   const findings = [
@@ -1597,7 +1597,6 @@ function buildAssistantText(
   decision: DispatchDecision,
   executionPreview: DispatchExecutionPreview,
   userName: string,
-  prompt: string,
 ) {
   const targetLabel = readTargetLabel(decision);
 
@@ -1672,7 +1671,7 @@ function buildAssistantText(
   ].join(" ");
 }
 
-function shouldUseKimiForChat(decision: DispatchDecision) {
+function shouldUseModelForChat(decision: DispatchDecision) {
   return (
     decision.targetDomain === "bp_ask" &&
     decision.executionMode === "answer_directly" &&
@@ -1682,7 +1681,7 @@ function shouldUseKimiForChat(decision: DispatchDecision) {
   );
 }
 
-function shouldUseKimiForDecision(decision: DispatchDecision) {
+function shouldUseModelForDecision(decision: DispatchDecision) {
   return (
     decision.confidence < 84 ||
     decision.primaryIntent === "clarification" ||
@@ -1700,9 +1699,9 @@ export async function dispatchBpAskPrompt(
   const ruleDecision = buildRuleDecision(normalizedPrompt);
   let decision = ruleDecision;
 
-  if (hasKimiDispatchSupport() && shouldUseKimiForDecision(ruleDecision)) {
+  if (hasBpAskModelSupport() && shouldUseModelForDecision(ruleDecision)) {
     try {
-      const kimiDecision = await classifyWithKimi({
+      const modelDecision = await classifyWithModel({
         prompt: normalizedPrompt,
         rollingSummary: context.rollingSummary,
         recentMessages: context.recentMessages.map((item) => `${item.role}: ${item.text}`),
@@ -1711,14 +1710,14 @@ export async function dispatchBpAskPrompt(
         ),
       });
 
-      if (kimiDecision) {
+      if (modelDecision) {
         decision = combineDecision(
           ruleDecision,
           buildDispatchDecisionFromClassification({
             prompt: normalizedPrompt,
             targetRefs: ruleDecision.targetRefs,
             constraints: ruleDecision.constraints,
-            classification: kimiDecision satisfies KimiDispatchClassification,
+            classification: modelDecision satisfies ModelDispatchClassification,
           }),
         );
       }
@@ -1733,27 +1732,25 @@ export async function dispatchBpAskPrompt(
     decision,
     executionPreview,
     context.user.name,
-    normalizedPrompt,
   );
 
-  if (hasKimiDispatchSupport() && shouldUseKimiForChat(decision)) {
+  if (hasBpAskModelSupport() && shouldUseModelForChat(decision)) {
     try {
-      const kimiChatReply = await generateChatReplyWithKimi({
+      const modelChatReply = await generateChatReplyWithModel({
         prompt: normalizedPrompt,
         userName: context.user.name,
         rollingSummary: context.rollingSummary,
         recentMessages: context.recentMessages.map((item) => `${item.role}: ${item.text}`),
       });
 
-      if (kimiChatReply) {
-        assistantText = kimiChatReply;
+      if (modelChatReply) {
+        assistantText = modelChatReply;
       }
     } catch {
       assistantText = buildAssistantText(
         decision,
         executionPreview,
         context.user.name,
-        normalizedPrompt,
       );
     }
   }

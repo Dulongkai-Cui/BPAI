@@ -21,12 +21,87 @@ export type InsightBlock = {
 };
 
 export type DispatchExecutionPreview = {
-  mode: "simulation";
+  mode: "simulation" | "tool_result" | "skill_result" | "workflow_result";
   title: string;
   summary: string;
   nextStep: string;
   safety: string;
   simulatedActions: string[];
+  toolRuns?: Array<{
+    toolName: string;
+    status: string;
+    summaryText: string;
+  }>;
+  agentRuns?: Array<{
+    agentId: string;
+    mode: string;
+    status: string;
+    summaryText: string;
+  }>;
+  confirmationRequests?: Array<{
+    requestId: string;
+    title: string;
+    description: string;
+    riskLevel: string;
+    status: "waiting" | "approved" | "rejected" | "deferred" | string;
+    decidedAt?: string;
+    decidedByUserName?: string;
+  }>;
+  confirmationEvaluation?: {
+    state:
+      | "not_required"
+      | "waiting_confirmation"
+      | "blocked_by_rejection"
+      | "paused_by_defer"
+      | "ready_to_continue"
+      | string;
+    summary: string;
+    nextStep: string;
+    counts: {
+      total: number;
+      waiting: number;
+      approved: number;
+      rejected: number;
+      deferred: number;
+    };
+  };
+  postConfirmationRun?: {
+    runId: string;
+    mode: "dry_run" | string;
+    status: "completed" | "failed" | string;
+    summaryText: string;
+    planSteps: string[];
+    safeguards: string[];
+    nextStep: string;
+    createdAt: string;
+    createdByUserName: string;
+  };
+  writebackCandidates?: Array<{
+    objectType: string;
+    objectRef: string;
+    operation: string;
+    proposedValue: string;
+    requiresConfirmation: boolean;
+    status: string;
+  }>;
+  writebackDrafts?: Array<{
+    draftId: string;
+    objectType: string;
+    objectRef: string;
+    operation: string;
+    proposedValue: string;
+    requiresConfirmation: boolean;
+    status: string;
+    source?: string;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    reviewedAt?: string | null;
+    reviewedByUserName?: string | null;
+    reviewAction?: string | null;
+    appliedAt?: string | null;
+    appliedByUserName?: string | null;
+  }>;
+  changedObjects?: string[];
 };
 
 export type BpAskMessageRole = "system" | "user" | "assistant" | "tool";
@@ -36,6 +111,7 @@ export type BpAskMessage = {
   role: BpAskMessageRole;
   text: string;
   createdAt: string;
+  executionResultId?: string;
   insight?: InsightBlock;
   executionPreview?: DispatchExecutionPreview;
 };

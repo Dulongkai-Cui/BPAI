@@ -19,6 +19,30 @@ type ThreadMutationResponse = {
   thread: BpAskThreadDetail;
 };
 
+type ConfirmationAction = "approve" | "reject" | "defer";
+type WritebackDraftAction = "approve" | "reject" | "cancel";
+
+type ConfirmationRequestInput = {
+  executionResultId: string;
+  requestId: string;
+  action: ConfirmationAction;
+};
+
+type ContinuationInput = {
+  executionResultId: string;
+};
+
+type WritebackDraftReviewInput = {
+  executionResultId: string;
+  draftId: string;
+  action: WritebackDraftAction;
+};
+
+type WritebackDraftApplyInput = {
+  executionResultId: string;
+  draftId: string;
+};
+
 type PendingUserMessage = {
   id: string;
   text: string;
@@ -55,6 +79,10 @@ export function BpAskShell() {
   const [isLoadingThreads, setIsLoadingThreads] = useState(true);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
+  const [confirmingKey, setConfirmingKey] = useState<string | null>(null);
+  const [continuingKey, setContinuingKey] = useState<string | null>(null);
+  const [reviewingDraftKey, setReviewingDraftKey] = useState<string | null>(null);
+  const [applyingDraftKey, setApplyingDraftKey] = useState<string | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -246,6 +274,130 @@ export function BpAskShell() {
     [activeThreadId, syncThreadSummary],
   );
 
+  const handleConfirmRequest = useCallback(
+    async (input: ConfirmationRequestInput) => {
+      if (!activeThreadId) {
+        return;
+      }
+
+      const key = `${input.executionResultId}:${input.requestId}:${input.action}`;
+      setConfirmingKey(key);
+      setErrorMessage(null);
+
+      try {
+        const result = await requestJson<ThreadMutationResponse>(
+          `/api/bp-ask/threads/${activeThreadId}/confirmations`,
+          {
+            method: "POST",
+            body: JSON.stringify(input),
+          },
+        );
+
+        syncThreadSummary(result.summary);
+        setActiveThread(result.thread);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "记录确认失败。");
+      } finally {
+        setConfirmingKey(null);
+      }
+    },
+    [activeThreadId, syncThreadSummary],
+  );
+
+  const handleContinueWorkflow = useCallback(
+    async (input: ContinuationInput) => {
+      if (!activeThreadId) {
+        return;
+      }
+
+      setContinuingKey(input.executionResultId);
+      setErrorMessage(null);
+
+      try {
+        const result = await requestJson<ThreadMutationResponse>(
+          `/api/bp-ask/threads/${activeThreadId}/continuations`,
+          {
+            method: "POST",
+            body: JSON.stringify(input),
+          },
+        );
+
+        syncThreadSummary(result.summary);
+        setActiveThread(result.thread);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "续跑 dry-run 失败。");
+      } finally {
+        setContinuingKey(null);
+      }
+    },
+    [activeThreadId, syncThreadSummary],
+  );
+
+  const handleReviewWritebackDraft = useCallback(
+    async (input: WritebackDraftReviewInput) => {
+      if (!activeThreadId) {
+        return;
+      }
+
+      const key = `${input.executionResultId}:${input.draftId}:${input.action}`;
+      setReviewingDraftKey(key);
+      setErrorMessage(null);
+
+      try {
+        const result = await requestJson<ThreadMutationResponse>(
+          `/api/bp-ask/threads/${activeThreadId}/writeback-drafts`,
+          {
+            method: "POST",
+            body: JSON.stringify(input),
+          },
+        );
+
+        syncThreadSummary(result.summary);
+        setActiveThread(result.thread);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "写回草案审阅失败。",
+        );
+      } finally {
+        setReviewingDraftKey(null);
+      }
+    },
+    [activeThreadId, syncThreadSummary],
+  );
+
+  const handleApplyWritebackDraft = useCallback(
+    async (input: WritebackDraftApplyInput) => {
+      if (!activeThreadId) {
+        return;
+      }
+
+      const key = `${input.executionResultId}:${input.draftId}:apply`;
+      setApplyingDraftKey(key);
+      setErrorMessage(null);
+
+      try {
+        const result = await requestJson<ThreadMutationResponse>(
+          `/api/bp-ask/threads/${activeThreadId}/writeback-drafts`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              ...input,
+              action: "apply",
+            }),
+          },
+        );
+
+        syncThreadSummary(result.summary);
+        setActiveThread(result.thread);
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "正式写回失败。");
+      } finally {
+        setApplyingDraftKey(null);
+      }
+    },
+    [activeThreadId, syncThreadSummary],
+  );
+
   return (
     <div className="flex h-full min-h-0 bg-slate-100">
       <BpAskSidebar
@@ -276,8 +428,16 @@ export function BpAskShell() {
           }
           isLoadingThread={isLoadingThread}
           isResponding={isResponding}
+          confirmingKey={confirmingKey}
+          continuingKey={continuingKey}
+          reviewingDraftKey={reviewingDraftKey}
+          applyingDraftKey={applyingDraftKey}
           errorMessage={errorMessage}
           onSubmit={handleSubmit}
+          onConfirmRequest={handleConfirmRequest}
+          onContinueWorkflow={handleContinueWorkflow}
+          onReviewWritebackDraft={handleReviewWritebackDraft}
+          onApplyWritebackDraft={handleApplyWritebackDraft}
         />
       </div>
     </div>

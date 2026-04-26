@@ -127,6 +127,11 @@ export const executionResultStatusEnum = pgEnum("execution_result_status", [
   "failed",
 ]);
 
+export const executionWritebackDraftStatusEnum = pgEnum(
+  "execution_writeback_draft_status",
+  ["draft", "ready", "applied", "rejected", "cancelled"],
+);
+
 export const workOrderStageEnum = pgEnum("work_order_stage", [
   "source_intake",
   "registration",
@@ -514,6 +519,57 @@ export const executionResults = pgTable(
   (table) => [
     uniqueIndex("execution_results_task_unique").on(table.taskId),
     index("execution_results_status_idx").on(table.status),
+  ],
+);
+
+export const executionWritebackDrafts = pgTable(
+  "execution_writeback_drafts",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => executionTasks.id, { onDelete: "cascade" }),
+    resultId: text("result_id")
+      .notNull()
+      .references(() => executionResults.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => conversationThreads.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    objectType: text("object_type").notNull(),
+    objectRef: text("object_ref").notNull(),
+    operation: text("operation").notNull(),
+    proposedValue: text("proposed_value").notNull(),
+    requiresConfirmation: boolean("requires_confirmation").notNull().default(true),
+    status: executionWritebackDraftStatusEnum("status").notNull().default("draft"),
+    source: text("source").notNull().default("bp_ask_workflow"),
+    sourceRequestId: text("source_request_id").notNull().default(""),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("execution_writeback_drafts_result_target_unique").on(
+      table.resultId,
+      table.objectType,
+      table.objectRef,
+      table.operation,
+    ),
+    index("execution_writeback_drafts_task_idx").on(table.taskId),
+    index("execution_writeback_drafts_result_idx").on(table.resultId),
+    index("execution_writeback_drafts_thread_idx").on(table.threadId),
+    index("execution_writeback_drafts_user_idx").on(table.userId),
+    index("execution_writeback_drafts_status_idx").on(table.status),
+    index("execution_writeback_drafts_object_idx").on(
+      table.objectType,
+      table.objectRef,
+    ),
   ],
 );
 

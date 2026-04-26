@@ -15,6 +15,8 @@
     "db:migrate": "node ./scripts/db-migrate.mjs",
     "db:seed:work-orders": "node ./scripts/db-seed-work-orders.mjs",
     "smoke:bp-ask:dispatch": "node ./scripts/bp-ask-dispatch-regression.mjs",
+    "smoke:bp-ask:skill": "node ./scripts/bp-ask-skill-runner-smoke.mjs",
+    "smoke:bp-ask:workflow": "node ./scripts/bp-ask-workflow-runner-smoke.mjs",
     "smoke:bp-ask": "node ./scripts/bp-ask-memory-smoke.mjs",
     "smoke:engineering": "node ./scripts/engineering-backend-smoke.mjs",
     "smoke:work-orders": "node ./scripts/work-order-backend-smoke.mjs",

@@ -17,7 +17,7 @@
 - 有 Drizzle 表承载线程、消息、摘要、记忆事实、执行任务、执行结果
 - 有任务筛网：没有明确任务信号时默认普通聊天，明确任务才进入调度链
 - 有规则型调度分类器
-- 有 Kimi/Moonshot 适配：结构化 dispatch 分类增强 + 普通聊天生成
+- 有 DeepSeek / Kimi 可切换模型适配：结构化 dispatch 分类增强 + 普通聊天生成
 - 有模拟执行返回层：`DispatchExecutionPreview`
 - 有前端渐进式任务呈现：普通聊天不显示调度细节，任务细节默认折叠
 - 有发送体验优化：用户消息先即时上屏，assistant 独立显示加载动画
@@ -25,8 +25,8 @@
 
 当前边界：
 - `frontend/package.json` 未见 Anthropic/OpenAI SDK 正式依赖
-- `frontend/.env.local.example` 预留的是 `KIMI_API_KEY` 与 `KIMI_BASE_URL`
-- `dispatch.ts` 引入 `@/lib/bp-ask/kimi`，但当前 Glob 结果未列出 `frontend/src/lib/bp-ask/kimi.ts`；若后续要启用模型增强，先核验该文件是否在当前分支实际存在或是否未提交
+- `frontend/.env.local.example` 预留的是 `DEEPSEEK_*`、`BPASK_MODEL_PROVIDER` 与 Kimi 回退配置
+- `dispatch.ts` 通过 `@/lib/bp-ask/model-provider` 调用当前配置的模型 provider；历史 Kimi 封装仍保留在 `frontend/src/lib/bp-ask/kimi.ts`
 - “AI 宿舍 / 龙虾 / OpenClaw / AI 员工”主要来自 `AI_Dev_Memo/Project_skeleton/**` 的规划文档，不应直接当成当前已实现代码
 
 ## 2. 前端入口
@@ -192,8 +192,8 @@ handleSubmit(prompt)
 - 判断 primary intent / target domain / execution mode / executor / priority
 - 生成模拟执行预案 `DispatchExecutionPreview`
 - 组装 assistantText 与 insight
-- 可选调用 Kimi 分类增强
-- 在普通聊天 / help / 轻量上下文问题上，可选调用 Kimi 生成自然回复
+- 可选调用当前模型 provider 做分类增强
+- 在普通聊天 / help / 轻量上下文问题上，可选调用当前模型 provider 生成自然回复
 
 关键输入类型：
 
@@ -223,13 +223,13 @@ DispatchResult = {
 - 定义调度分类枚举/标签
 - 包括 `PrimaryIntent`、`TargetDomain`、`ExecutionMode`、`DispatchPriority`、`SuggestedExecutor` 等类型与 label
 
-### 5.5 `frontend/src/lib/bp-ask/kimi.ts`
+### 5.5 `frontend/src/lib/bp-ask/model-provider.ts`
 
 职责：
-- 封装 Kimi OpenAI-compatible `/chat/completions` 调用
+- 封装 DeepSeek / Kimi OpenAI-compatible `/chat/completions` 调用
 - 提供两类入口：
-  - `classifyWithKimi`：结构化三分类增强（intent / domain / mode）
-  - `generateChatReplyWithKimi`：普通聊天自然回复
+  - `classifyWithModel`：结构化三分类增强（intent / domain / mode）
+  - `generateChatReplyWithModel`：普通聊天自然回复
 - 固定 BPAI / BP问问 system prompt
 - 失败时回退到本地规则或模板回复
 
@@ -382,6 +382,10 @@ dispatch / insight / 用户消息上下文
 当前 env 预留位：`frontend/.env.local.example`
 
 ```text
+BPASK_MODEL_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
 KIMI_API_KEY=your-kimi-api-key
 KIMI_BASE_URL=https://api.moonshot.cn/v1
 KIMI_MODEL=kimi-k2.5
@@ -389,11 +393,11 @@ KIMI_MODEL=kimi-k2.5
 
 当前 `frontend/package.json` 未见 `@anthropic-ai/sdk`、`openai`、`langchain` 等正式依赖，当前模型调用通过兼容 OpenAI chat/completions 的 HTTP 封装完成。
 
-`kimi.ts` 当前有两类能力：
+`model-provider.ts` 当前有两类能力：
 
 ```text
-classifyWithKimi -> 结构化 dispatch 分类增强
-generateChatReplyWithKimi -> 普通聊天自然回复
+classifyWithModel -> 结构化 dispatch 分类增强
+generateChatReplyWithModel -> 普通聊天自然回复
 ```
 
 普通聊天侧当前已固定 BP问问产品 prompt，要求：
@@ -403,7 +407,9 @@ generateChatReplyWithKimi -> 普通聊天自然回复
 - 不得自称百融云创、ChatGPT、OpenAI 或通用万能 AI 助手
 
 实施建议：
-- 如果要启用 Kimi：确保 Docker / 本地运行环境中存在有效 `KIMI_API_KEY`
+- BP问问“大总管”默认走 DeepSeek：确保 Docker / 本地运行环境中存在有效 `DEEPSEEK_API_KEY`，并使用 `DEEPSEEK_MODEL=deepseek-v4-pro`
+- 如果 BP问问要回退 Kimi：设置 `BPASK_MODEL_PROVIDER=kimi` 并确保存在有效 `KIMI_API_KEY`
+- AI宿舍 / 龙虾员工不跟随 `BPASK_MODEL_PROVIDER`；OpenClaw 侧继续通过 `MOONSHOT_API_KEY` 使用 Kimi
 - 如果要改用 Claude/Anthropic：需要新增独立生成层与分类层封装，并补 env、失败降级策略
 - 不要把 `AI_Dev_Memo` 中的 OpenClaw/龙虾能力直接写成已接通，除非代码中已有真实适配器
 

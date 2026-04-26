@@ -36,7 +36,7 @@ Route Handler
 | engineering | `/api/engineering/members`、`/dispatch-options`、`/squads`、`/squads/[squadId]` | `engineering-team/server.ts`、`engineering/server.ts` |
 | work-orders | `/api/work-orders`、`/[workOrderId]`、`/[workOrderId]/dispatch-executions`、`/[workOrderId]/stage-assets` | `work-order/server.ts` |
 | onlyoffice | `/api/onlyoffice/callback` | `content/server.ts` |
-| bp-ask | `/api/bp-ask/threads`、`/threads/[threadId]`、`/threads/[threadId]/messages`、`/dispatch` | `bp-ask/server.ts`、`bp-ask/dispatch.ts`、`bp-ask/kimi.ts` |
+| bp-ask | `/api/bp-ask/threads`、`/threads/[threadId]`、`/threads/[threadId]/messages`、`/dispatch` | `bp-ask/server.ts`、`bp-ask/dispatch.ts`、`bp-ask/model-provider.ts` |
 | cad-files | `/api/cad-files/[kind]/[assetId]/[...fileName]` | `content/cad.ts` + asset content |
 
 ## 3. 认证域

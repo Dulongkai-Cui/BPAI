@@ -128,7 +128,7 @@ npm run dev
 
 - Node.js `>= 20.9.0`
 - 可用的 PostgreSQL 数据库
-- 需要 AI 能力时，补充 `KIMI_API_KEY` 等环境变量
+- 需要 BP问问“大总管”AI 能力时，优先补充 `DEEPSEEK_API_KEY` 等环境变量；Kimi / Moonshot 仍保留为 BP问问回退与 AI员工侧配置。
 
 ## 核心环境变量
 
@@ -138,12 +138,16 @@ npm run dev
 NEXT_PUBLIC_APP_NAME=BPAI
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 DATABASE_URL=postgresql://bpai:bpai@localhost:5433/bpai_dev
+BPASK_MODEL_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-pro
 KIMI_API_KEY=your-kimi-api-key
 KIMI_BASE_URL=https://api.moonshot.cn/v1
 KIMI_MODEL=kimi-k2.5
 ```
 
-如果你要启用 AI宿舍里的 OpenClaw 入口，还需要配合 `docker-compose.dev.yml` 中的 `OPENCLAW_*` 网关变量。
+`BPASK_MODEL_PROVIDER` 只控制 BP问问；AI宿舍里的龙虾员工继续走 OpenClaw/Moonshot 配置，启用时还需要配合 `docker-compose.dev.yml` 中的 `OPENCLAW_*` 网关变量。
 
 ## 常用命令
 
