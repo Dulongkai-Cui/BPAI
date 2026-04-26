@@ -104,6 +104,17 @@ const WORK_ORDER_WRITEBACK_OPERATIONS = [
   "draft_priority",
   "draft_stage",
   "draft_status",
+  "draft_title",
+  "draft_source_summary",
+  "draft_project_name",
+  "draft_site_name",
+  "draft_site_address",
+  "draft_responsible_team",
+  "draft_progress_summary",
+  "draft_material_completeness",
+  "draft_missing_item_count",
+  "draft_blocking_item_count",
+  "draft_warning_status",
   "archive_work_order",
 ] as const;
 
@@ -147,6 +158,7 @@ const WORK_ORDER_WARNING_LABELS: Record<string, string> = {
   critical: "严重预警",
   resolved: "已解除",
 };
+const WORK_ORDER_WARNING_VALUES = new Set(Object.keys(WORK_ORDER_WARNING_LABELS));
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -192,6 +204,19 @@ function validateWorkOrderWritebackValue(operation: string, value: string) {
     return WORK_ORDER_STATUS_VALUES.has(value);
   }
 
+  if (operation === "draft_warning_status") {
+    return WORK_ORDER_WARNING_VALUES.has(value);
+  }
+
+  if (
+    operation === "draft_material_completeness" ||
+    operation === "draft_missing_item_count" ||
+    operation === "draft_blocking_item_count"
+  ) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed >= 0;
+  }
+
   return Boolean(value);
 }
 
@@ -210,6 +235,57 @@ function toIsoOrNull(value: Date | string | null | undefined) {
 
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function parseNonNegativeInteger(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function parsePercent(value: string) {
+  return Math.min(100, parseNonNegativeInteger(value));
+}
+
+function workOrderTextUpdate(
+  draft: typeof executionWritebackDrafts.$inferSelect,
+  fieldPath: string,
+  previousValue: string,
+  nextValue: string,
+) {
+  const unchanged = previousValue === nextValue;
+
+  return {
+    draftId: draft.id,
+    objectType: draft.objectType,
+    objectRef: draft.objectRef,
+    operation: draft.operation,
+    fieldPath,
+    previousValue,
+    nextValue,
+    applied: !unchanged,
+    ...(unchanged ? { noOpReason: "unchanged" } : {}),
+  } satisfies AppliedWritebackChange;
+}
+
+function workOrderNumberUpdate(
+  draft: typeof executionWritebackDrafts.$inferSelect,
+  fieldPath: string,
+  previousValue: number,
+  nextValue: number,
+) {
+  const unchanged = previousValue === nextValue;
+
+  return {
+    draftId: draft.id,
+    objectType: draft.objectType,
+    objectRef: draft.objectRef,
+    operation: draft.operation,
+    fieldPath,
+    previousValue,
+    nextValue,
+    applied: !unchanged,
+    ...(unchanged ? { noOpReason: "unchanged" } : {}),
+  } satisfies AppliedWritebackChange;
 }
 
 function labelFrom(map: Record<string, string>, value: string | null | undefined) {
@@ -981,6 +1057,75 @@ async function runWorkOrderWritebackApply(
           applied: !unchanged,
           ...(unchanged ? { noOpReason: "unchanged" } : {}),
         });
+      } else if (draft.operation === "draft_title") {
+        await tx
+          .update(workOrders)
+          .set({ title: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.title", workOrder.title, draft.proposedValue));
+      } else if (draft.operation === "draft_source_summary") {
+        await tx
+          .update(workOrders)
+          .set({ sourceSummary: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.source_summary", workOrder.sourceSummary, draft.proposedValue));
+      } else if (draft.operation === "draft_project_name") {
+        await tx
+          .update(workOrders)
+          .set({ projectName: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.project_name", workOrder.projectName, draft.proposedValue));
+      } else if (draft.operation === "draft_site_name") {
+        await tx
+          .update(workOrders)
+          .set({ siteName: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.site_name", workOrder.siteName, draft.proposedValue));
+      } else if (draft.operation === "draft_site_address") {
+        await tx
+          .update(workOrders)
+          .set({ siteAddress: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.site_address", workOrder.siteAddress, draft.proposedValue));
+      } else if (draft.operation === "draft_responsible_team") {
+        await tx
+          .update(workOrders)
+          .set({ currentResponsibleTeam: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.current_responsible_team", workOrder.currentResponsibleTeam, draft.proposedValue));
+      } else if (draft.operation === "draft_progress_summary") {
+        await tx
+          .update(workOrders)
+          .set({ latestProgressSummary: draft.proposedValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.latest_progress_summary", workOrder.latestProgressSummary, draft.proposedValue));
+      } else if (draft.operation === "draft_material_completeness") {
+        const nextValue = parsePercent(draft.proposedValue);
+        await tx
+          .update(workOrders)
+          .set({ materialCompleteness: nextValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderNumberUpdate(draft, "work_orders.material_completeness", workOrder.materialCompleteness, nextValue));
+      } else if (draft.operation === "draft_missing_item_count") {
+        const nextValue = parseNonNegativeInteger(draft.proposedValue);
+        await tx
+          .update(workOrders)
+          .set({ missingItemCount: nextValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderNumberUpdate(draft, "work_orders.missing_item_count", workOrder.missingItemCount, nextValue));
+      } else if (draft.operation === "draft_blocking_item_count") {
+        const nextValue = parseNonNegativeInteger(draft.proposedValue);
+        await tx
+          .update(workOrders)
+          .set({ blockingItemCount: nextValue, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderNumberUpdate(draft, "work_orders.blocking_item_count", workOrder.blockingItemCount, nextValue));
+      } else if (draft.operation === "draft_warning_status") {
+        await tx
+          .update(workOrders)
+          .set({ warningStatus: draft.proposedValue as typeof workOrder.warningStatus, updatedAt: now })
+          .where(eq(workOrders.id, workOrder.id));
+        changes.push(workOrderTextUpdate(draft, "work_orders.warning_status", workOrder.warningStatus, draft.proposedValue));
       } else if (draft.operation === "archive_work_order") {
         const archivedAt = workOrder.archivedAt ? new Date(workOrder.archivedAt) : null;
         const statusAlreadyArchived = workOrder.status === "archived";

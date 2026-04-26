@@ -15,6 +15,10 @@ import { runAiTool, type AiToolRunRecord } from "@/lib/ai-tools/gateway";
 import { dispatchBpAskPrompt } from "@/lib/bp-ask/dispatch";
 import type { DispatchDecision } from "@/lib/bp-ask/intents";
 import {
+  planWorkOrderToolWithModel,
+  type ModelWorkOrderToolPlan,
+} from "@/lib/bp-ask/model-provider";
+import {
   createNewThreadLabel,
   pickThreadAccent,
   previewFromText,
@@ -34,6 +38,7 @@ import {
   executionTasks,
   executionWritebackDrafts,
   memoryFacts,
+  workOrders,
 } from "@/lib/db/schema";
 
 type MessageRow = typeof conversationMessages.$inferSelect;
@@ -84,6 +89,16 @@ type BpAskExecutionPlan = {
   workflowId?: "workflow-work-order-intake";
   createPlan?: BpAskWorkOrderCreatePlan;
   writebackPlan?: BpAskControlledWritebackPlan;
+  directToolInput?: {
+    workOrderNo?: string;
+  };
+  modelToolPlan?: ModelWorkOrderToolPlan;
+};
+
+type BpAskWorkOrderStepPlannerPlan = {
+  workOrderNo: string;
+  summary: string;
+  candidates: BpAskControlledWritebackCandidate[];
 };
 
 type BpAskWorkOrderCreatePlan = {
@@ -100,6 +115,17 @@ type BpAskControlledWritebackOperation =
   | "draft_priority"
   | "draft_stage"
   | "draft_status"
+  | "draft_title"
+  | "draft_source_summary"
+  | "draft_project_name"
+  | "draft_site_name"
+  | "draft_site_address"
+  | "draft_responsible_team"
+  | "draft_progress_summary"
+  | "draft_material_completeness"
+  | "draft_missing_item_count"
+  | "draft_blocking_item_count"
+  | "draft_warning_status"
   | "archive_work_order";
 
 type BpAskControlledWritebackCandidate = {
@@ -165,6 +191,70 @@ const WORK_ORDER_STATUS_FIELD_KEYWORDS = [
   "状态",
   "工单状态",
   "status",
+] as const;
+const WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS = [
+  "标题",
+  "工单标题",
+  "项目名",
+  "项目名称",
+  "站点名",
+  "站点名称",
+  "站址",
+  "地址",
+  "责任团队",
+  "负责团队",
+  "最新进展",
+  "进展摘要",
+  "材料完整度",
+  "完整度",
+  "缺项数",
+  "缺项数量",
+  "阻塞缺项",
+  "预警状态",
+] as const;
+const WORK_ORDER_TITLE_FIELD_KEYWORDS = ["标题", "工单标题", "名称"] as const;
+const WORK_ORDER_SOURCE_SUMMARY_FIELD_KEYWORDS = ["来源摘要", "需求摘要", "来源说明"] as const;
+const WORK_ORDER_PROJECT_NAME_FIELD_KEYWORDS = ["项目名", "项目名称"] as const;
+const WORK_ORDER_SITE_NAME_FIELD_KEYWORDS = ["站点名", "站点名称", "站点"] as const;
+const WORK_ORDER_SITE_ADDRESS_FIELD_KEYWORDS = ["站址", "站点地址", "地址"] as const;
+const WORK_ORDER_RESPONSIBLE_TEAM_FIELD_KEYWORDS = [
+  "责任团队",
+  "负责团队",
+  "当前责任团队",
+] as const;
+const WORK_ORDER_PROGRESS_SUMMARY_FIELD_KEYWORDS = [
+  "最新进展",
+  "进展摘要",
+  "进展",
+] as const;
+const WORK_ORDER_MATERIAL_COMPLETENESS_FIELD_KEYWORDS = [
+  "材料完整度",
+  "完整度",
+] as const;
+const WORK_ORDER_MISSING_ITEM_COUNT_FIELD_KEYWORDS = [
+  "阻塞缺项数",
+  "阻塞缺项",
+  "缺项数",
+  "缺项数量",
+] as const;
+const WORK_ORDER_BLOCKING_ITEM_COUNT_FIELD_KEYWORDS = [
+  "阻塞缺项数",
+  "阻塞缺项",
+] as const;
+const WORK_ORDER_WARNING_STATUS_FIELD_KEYWORDS = [
+  "预警状态",
+  "告警状态",
+] as const;
+const WORK_ORDER_STEP_PLANNER_KEYWORDS = [
+  "整理一下",
+  "整理下",
+  "该补的补",
+  "该推进的推进",
+  "推进一下",
+  "处理一下",
+  "一键整理",
+  "自动处理",
+  "帮我处理",
 ] as const;
 const WORK_ORDER_ARCHIVE_KEYWORDS = [
   "归档",
@@ -297,6 +387,18 @@ const WORK_ORDER_STATUS_VALUE_MAP: Record<string, string> = {
   归档: "archived",
   archived: "archived",
 };
+const WORK_ORDER_WARNING_STATUS_VALUE_MAP: Record<string, string> = {
+  正常: "normal",
+  normal: "normal",
+  预警: "warning",
+  warning: "warning",
+  严重预警: "critical",
+  严重: "critical",
+  critical: "critical",
+  已解除: "resolved",
+  解除: "resolved",
+  resolved: "resolved",
+};
 
 function nowDate() {
   return new Date();
@@ -336,8 +438,91 @@ function readNumber(record: JsonRecord, key: string) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function parseModelInteger(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/-?\d+/);
+
+  if (!match) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(match[0], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function clampModelPercent(value: string | null | undefined) {
+  const parsed = parseModelInteger(value);
+
+  if (parsed === null) {
+    return null;
+  }
+
+  return Math.min(100, Math.max(0, parsed));
+}
+
 function readTargetWorkOrderNo(decision: DispatchDecision) {
   return readString(decision.targetRefs, "workOrderNo");
+}
+
+function normalizeWorkOrderLookupToken(value: string) {
+  return value
+    .replace(/工单/g, "")
+    .replace(/项目/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+async function resolveWorkOrderNoForPrompt(
+  decision: DispatchDecision,
+  prompt: string,
+) {
+  const directWorkOrderNo = readTargetWorkOrderNo(decision);
+
+  if (directWorkOrderNo) {
+    return directWorkOrderNo;
+  }
+
+  if (decision.targetDomain !== "work_order" && !prompt.includes("工单")) {
+    return "";
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      workOrderNo: workOrders.workOrderNo,
+      title: workOrders.title,
+      projectName: workOrders.projectName,
+      siteName: workOrders.siteName,
+      siteAddress: workOrders.siteAddress,
+    })
+    .from(workOrders);
+  const promptToken = normalizeWorkOrderLookupToken(prompt);
+  const scored = rows
+    .map((row) => {
+      const fields = [row.title, row.projectName, row.siteName, row.siteAddress]
+        .filter(Boolean)
+        .map(normalizeWorkOrderLookupToken);
+      const score = fields.reduce((total, field) => {
+        if (!field) {
+          return total;
+        }
+
+        if (promptToken.includes(field) || field.includes(promptToken)) {
+          return total + field.length + 20;
+        }
+
+        const chars = Array.from(new Set(field.split("")));
+        return total + chars.filter((char) => promptToken.includes(char)).length;
+      }, 0);
+
+      return { row, score };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0] && scored[0].score >= 4 ? scored[0].row.workOrderNo : "";
 }
 
 function includesAny(source: string, keywords: readonly string[]) {
@@ -350,6 +535,7 @@ function shouldRunWorkOrderSummarySkill(decision: DispatchDecision, prompt: stri
     decision.requiresWrite ||
     decision.requiresConfirmation ||
     decision.suggestedExecutor === "longxia" ||
+    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS) ||
     !readTargetWorkOrderNo(decision)
   ) {
     return false;
@@ -362,13 +548,14 @@ function shouldRunWorkOrderSummarySkill(decision: DispatchDecision, prompt: stri
   );
 }
 
-function shouldRunDirectWorkOrderRead(decision: DispatchDecision) {
+function shouldRunDirectWorkOrderRead(decision: DispatchDecision, prompt = "") {
   if (
     decision.targetDomain !== "work_order" ||
     decision.executionMode !== "retrieve_then_answer" ||
     decision.requiresWrite ||
     decision.requiresConfirmation ||
-    decision.suggestedExecutor === "longxia"
+    decision.suggestedExecutor === "longxia" ||
+    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS)
   ) {
     return false;
   }
@@ -414,6 +601,39 @@ function trimAtNextWritebackField(value: string) {
         after.startsWith(keyword),
       ) ||
       WORK_ORDER_STATUS_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_TITLE_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_SOURCE_SUMMARY_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_PROJECT_NAME_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_SITE_NAME_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_SITE_ADDRESS_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_RESPONSIBLE_TEAM_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_PROGRESS_SUMMARY_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_MATERIAL_COMPLETENESS_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_MISSING_ITEM_COUNT_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_BLOCKING_ITEM_COUNT_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_WARNING_STATUS_FIELD_KEYWORDS.some((keyword) =>
         after.startsWith(keyword),
       );
 
@@ -596,13 +816,73 @@ function extractWritebackValueAfterField(
   return "";
 }
 
+function extractMappedWritebackValue(
+  prompt: string,
+  fieldKeywords: readonly string[],
+  map: Record<string, string>,
+) {
+  return (
+    normalizeMappedWritebackValue(
+      extractWritebackValueAfterField(prompt, fieldKeywords),
+      map,
+    ) || extractMappedValueNearField(prompt, fieldKeywords, map)
+  );
+}
+
+function extractWritebackIntegerAfterField(
+  prompt: string,
+  fieldKeywords: readonly string[],
+) {
+  for (const keyword of fieldKeywords) {
+    const index = prompt.indexOf(keyword);
+
+    if (index === -1) {
+      continue;
+    }
+
+    const value = parseModelInteger(prompt.slice(index + keyword.length, index + keyword.length + 24));
+
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function addWritebackCandidate(
+  candidates: BpAskControlledWritebackCandidate[],
+  workOrderNo: string,
+  operation: BpAskControlledWritebackOperation,
+  proposedValue: string | number | null | undefined,
+) {
+  const value = typeof proposedValue === "number" ? String(proposedValue) : proposedValue?.trim();
+
+  if (!value) {
+    return;
+  }
+
+  candidates.push({
+    objectType: "work_order",
+    objectRef: workOrderNo,
+    operation,
+    proposedValue: value,
+    requiresConfirmation: true,
+    status: "not_applied",
+  });
+}
+
 function buildControlledWorkOrderWritebackPlan(
   decision: DispatchDecision,
   prompt: string,
 ): BpAskControlledWritebackPlan | null {
   const workOrderNo = readTargetWorkOrderNo(decision);
 
-  if (decision.targetDomain !== "work_order" || !workOrderNo) {
+  if (
+    decision.targetDomain !== "work_order" &&
+    !readTargetWorkOrderNo(decision) &&
+    !/WO-\d{4,}/i.test(prompt)
+  ) {
     return null;
   }
 
@@ -615,36 +895,65 @@ function buildControlledWorkOrderWritebackPlan(
     prompt,
     WORK_ORDER_RISK_FOLLOWUP_FIELD_KEYWORDS,
   );
-  const priority =
-    normalizeMappedWritebackValue(
-      extractWritebackValueAfterField(prompt, WORK_ORDER_PRIORITY_FIELD_KEYWORDS),
-      WORK_ORDER_PRIORITY_VALUE_MAP,
-    ) ||
-    extractMappedValueNearField(
+  const priority = extractMappedWritebackValue(
+    prompt,
+    WORK_ORDER_PRIORITY_FIELD_KEYWORDS,
+    WORK_ORDER_PRIORITY_VALUE_MAP,
+  );
+  const stage = extractMappedWritebackValue(
+    prompt,
+    WORK_ORDER_STAGE_FIELD_KEYWORDS,
+    WORK_ORDER_STAGE_VALUE_MAP,
+  );
+  const status = extractMappedWritebackValue(
+    prompt,
+    WORK_ORDER_STATUS_FIELD_KEYWORDS,
+    WORK_ORDER_STATUS_VALUE_MAP,
+  );
+  const title = extractWritebackValueAfterField(prompt, WORK_ORDER_TITLE_FIELD_KEYWORDS);
+  const sourceSummary = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_SOURCE_SUMMARY_FIELD_KEYWORDS,
+  );
+  const projectName = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_PROJECT_NAME_FIELD_KEYWORDS,
+  );
+  const siteName = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_SITE_NAME_FIELD_KEYWORDS,
+  );
+  const siteAddress = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_SITE_ADDRESS_FIELD_KEYWORDS,
+  );
+  const responsibleTeam = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_RESPONSIBLE_TEAM_FIELD_KEYWORDS,
+  );
+  const progressSummary = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_PROGRESS_SUMMARY_FIELD_KEYWORDS,
+  );
+  const warningStatus = extractMappedWritebackValue(
+    prompt,
+    WORK_ORDER_WARNING_STATUS_FIELD_KEYWORDS,
+    WORK_ORDER_WARNING_STATUS_VALUE_MAP,
+  );
+  const materialCompleteness = clampModelPercent(
+    extractWritebackValueAfterField(
       prompt,
-      WORK_ORDER_PRIORITY_FIELD_KEYWORDS,
-      WORK_ORDER_PRIORITY_VALUE_MAP,
-    );
-  const stage =
-    normalizeMappedWritebackValue(
-      extractWritebackValueAfterField(prompt, WORK_ORDER_STAGE_FIELD_KEYWORDS),
-      WORK_ORDER_STAGE_VALUE_MAP,
-    ) ||
-    extractMappedValueNearField(
-      prompt,
-      WORK_ORDER_STAGE_FIELD_KEYWORDS,
-      WORK_ORDER_STAGE_VALUE_MAP,
-    );
-  const status =
-    normalizeMappedWritebackValue(
-      extractWritebackValueAfterField(prompt, WORK_ORDER_STATUS_FIELD_KEYWORDS),
-      WORK_ORDER_STATUS_VALUE_MAP,
-    ) ||
-    extractMappedValueNearField(
-      prompt,
-      WORK_ORDER_STATUS_FIELD_KEYWORDS,
-      WORK_ORDER_STATUS_VALUE_MAP,
-    );
+      WORK_ORDER_MATERIAL_COMPLETENESS_FIELD_KEYWORDS,
+    ),
+  );
+  const missingItemCount = extractWritebackIntegerAfterField(
+    prompt.replace(/阻塞缺项(?:数)?(?:改成|改为|设为|设置为|更新为|调整为|写成|写为|变成|为)?\s*\d+/g, ""),
+    WORK_ORDER_MISSING_ITEM_COUNT_FIELD_KEYWORDS,
+  );
+  const blockingItemCount = extractWritebackIntegerAfterField(
+    prompt,
+    WORK_ORDER_BLOCKING_ITEM_COUNT_FIELD_KEYWORDS,
+  );
   const hasWriteCommandCue =
     decision.requiresWrite || includesAny(prompt, WORK_ORDER_WRITE_COMMAND_KEYWORDS);
   const shouldArchive =
@@ -705,6 +1014,39 @@ function buildControlledWorkOrderWritebackPlan(
     });
   }
 
+  addWritebackCandidate(candidates, workOrderNo, "draft_title", title);
+  addWritebackCandidate(candidates, workOrderNo, "draft_source_summary", sourceSummary);
+  addWritebackCandidate(candidates, workOrderNo, "draft_project_name", projectName);
+  addWritebackCandidate(candidates, workOrderNo, "draft_site_name", siteName);
+  addWritebackCandidate(candidates, workOrderNo, "draft_site_address", siteAddress);
+  addWritebackCandidate(candidates, workOrderNo, "draft_responsible_team", responsibleTeam);
+  addWritebackCandidate(candidates, workOrderNo, "draft_progress_summary", progressSummary);
+  addWritebackCandidate(candidates, workOrderNo, "draft_warning_status", warningStatus);
+  if (materialCompleteness !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_material_completeness",
+      materialCompleteness,
+    );
+  }
+  if (missingItemCount !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_missing_item_count",
+      Math.max(0, missingItemCount),
+    );
+  }
+  if (blockingItemCount !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_blocking_item_count",
+      Math.max(0, blockingItemCount),
+    );
+  }
+
   if (shouldArchive) {
     candidates.push({
       objectType: "work_order",
@@ -725,9 +1067,364 @@ function buildControlledWorkOrderWritebackPlan(
     : null;
 }
 
+function normalizeModelMappedWritebackValue(
+  value: string | null | undefined,
+  map: Record<string, string>,
+) {
+  if (!value) {
+    return "";
+  }
+
+  return normalizeMappedWritebackValue(value, map);
+}
+
+function shouldTryModelWorkOrderToolPlanner(
+  decision: DispatchDecision,
+  prompt: string,
+) {
+  if (
+    decision.executionMode === "start_workflow" ||
+    decision.executionMode === "delegate_to_longxia" ||
+    decision.suggestedExecutor === "longxia"
+  ) {
+    return false;
+  }
+
+  if (
+    ["summarize", "compare", "analyze", "extract", "help_meta", "chat_general"].includes(
+      decision.primaryIntent,
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    decision.targetDomain === "work_order" ||
+    /WO-\d{4,}/i.test(prompt) ||
+    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS) ||
+    includesAny(prompt, ["工单", "巡检单", "报修单", "派工单"])
+  );
+}
+
+function buildWorkOrderCreatePlanFromModel(
+  modelToolPlan: ModelWorkOrderToolPlan,
+  prompt: string,
+): BpAskWorkOrderCreatePlan | null {
+  if (modelToolPlan.tool !== "work_order.create") {
+    return null;
+  }
+
+  const title = modelToolPlan.args.title?.trim();
+
+  if (!title) {
+    return null;
+  }
+
+  return {
+    title: title.includes("工单") ? title : `${title}工单`,
+    sourceSummary: modelToolPlan.args.sourceSummary?.trim() || prompt,
+    priority:
+      normalizeModelMappedWritebackValue(
+        modelToolPlan.args.priority,
+        WORK_ORDER_PRIORITY_VALUE_MAP,
+      ) || "normal",
+    stage:
+      normalizeModelMappedWritebackValue(
+        modelToolPlan.args.stage,
+        WORK_ORDER_STAGE_VALUE_MAP,
+      ) || "registration",
+    nextAction: modelToolPlan.args.nextAction?.trim() ?? "",
+  };
+}
+
+function buildControlledWorkOrderWritebackPlanFromModel(
+  decision: DispatchDecision,
+  prompt: string,
+  modelToolPlan: ModelWorkOrderToolPlan,
+): BpAskControlledWritebackPlan | null {
+  if (
+    modelToolPlan.tool !== "work_order.update" &&
+    modelToolPlan.tool !== "work_order.archive"
+  ) {
+    return null;
+  }
+
+  const workOrderNo = modelToolPlan.args.workOrderNo || readTargetWorkOrderNo(decision);
+
+  if (!workOrderNo) {
+    return null;
+  }
+
+  const candidates: BpAskControlledWritebackCandidate[] = [];
+  const nextAction = modelToolPlan.args.nextAction?.trim() ?? "";
+  const riskFollowup = modelToolPlan.args.riskFollowup?.trim() ?? "";
+  const priority = normalizeModelMappedWritebackValue(
+    modelToolPlan.args.priority,
+    WORK_ORDER_PRIORITY_VALUE_MAP,
+  );
+  const stage = normalizeModelMappedWritebackValue(
+    modelToolPlan.args.stage,
+    WORK_ORDER_STAGE_VALUE_MAP,
+  );
+  const status = normalizeModelMappedWritebackValue(
+    modelToolPlan.args.status,
+    WORK_ORDER_STATUS_VALUE_MAP,
+  );
+  const warningStatus = normalizeModelMappedWritebackValue(
+    modelToolPlan.args.warningStatus,
+    WORK_ORDER_WARNING_STATUS_VALUE_MAP,
+  );
+  const materialCompleteness = clampModelPercent(
+    modelToolPlan.args.materialCompleteness,
+  );
+  const missingItemCount = parseModelInteger(modelToolPlan.args.missingItemCount);
+  const blockingItemCount = parseModelInteger(modelToolPlan.args.blockingItemCount);
+
+  if (modelToolPlan.tool === "work_order.archive") {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "archive_work_order",
+      proposedValue: "archived",
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (nextAction) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_next_action",
+      proposedValue: nextAction,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (riskFollowup) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_risk_followup",
+      proposedValue: riskFollowup,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (priority) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_priority",
+      proposedValue: priority,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (stage) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_stage",
+      proposedValue: stage,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (status && modelToolPlan.tool !== "work_order.archive") {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_status",
+      proposedValue: status,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  addWritebackCandidate(candidates, workOrderNo, "draft_title", modelToolPlan.args.title);
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_source_summary",
+    modelToolPlan.args.sourceSummary,
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_project_name",
+    modelToolPlan.args.projectName,
+  );
+  addWritebackCandidate(candidates, workOrderNo, "draft_site_name", modelToolPlan.args.siteName);
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_site_address",
+    modelToolPlan.args.siteAddress,
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_responsible_team",
+    modelToolPlan.args.responsibleTeam,
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_progress_summary",
+    modelToolPlan.args.progressSummary,
+  );
+  if (materialCompleteness !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_material_completeness",
+      String(materialCompleteness),
+    );
+  }
+  if (missingItemCount !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_missing_item_count",
+      String(Math.max(0, missingItemCount)),
+    );
+  }
+  if (blockingItemCount !== null) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_blocking_item_count",
+      String(Math.max(0, blockingItemCount)),
+    );
+  }
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_warning_status",
+    warningStatus,
+  );
+
+  return candidates.length > 0
+    ? {
+        workOrderNo,
+        candidates,
+        directApply: shouldDirectApplyWorkOrderWriteback(prompt),
+      }
+    : null;
+}
+
+function writebackOperationLabel(operation: string) {
+  const labels: Record<string, string> = {
+    draft_progress_summary: "更新进展摘要",
+    draft_status: "推进工单状态",
+    draft_next_action: "更新下一步动作",
+    draft_risk_followup: "追加风险跟进",
+    draft_stage: "推进工单阶段",
+    draft_warning_status: "更新预警状态",
+    draft_title: "更新标题",
+    draft_project_name: "更新项目名",
+    draft_site_name: "更新站点名",
+    draft_responsible_team: "更新责任团队",
+  };
+
+  return labels[operation] ?? operation;
+}
+
+function resolveNaturalStage(prompt: string) {
+  if (prompt.includes("施工")) {
+    return "field_construction";
+  }
+
+  return "";
+}
+
+function resolveNaturalWarningStatus(prompt: string) {
+  if (prompt.includes("解除预警") || prompt.includes("预警解除")) {
+    return "resolved";
+  }
+
+  return "";
+}
+
+function shouldRunWorkOrderStepPlanner(decision: DispatchDecision, prompt: string) {
+  return Boolean(
+    (decision.targetDomain === "work_order" || prompt.includes("工单")) &&
+      !decision.suggestedExecutor.includes("longxia") &&
+      includesAny(prompt, WORK_ORDER_STEP_PLANNER_KEYWORDS),
+  );
+}
+
+function buildWorkOrderStepPlannerPlan(
+  decision: DispatchDecision,
+  prompt: string,
+  workOrderNo: string,
+): BpAskWorkOrderStepPlannerPlan | null {
+  if (!shouldRunWorkOrderStepPlanner(decision, prompt) || !workOrderNo) {
+    return null;
+  }
+
+  const candidates: BpAskControlledWritebackCandidate[] = [];
+
+  if (prompt.includes("推进到") || prompt.includes("推进至")) {
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_stage",
+      resolveNaturalStage(prompt),
+    );
+    addWritebackCandidate(
+      candidates,
+      workOrderNo,
+      "draft_warning_status",
+      resolveNaturalWarningStatus(prompt),
+    );
+  }
+
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_progress_summary",
+    prompt.includes("解除预警") || prompt.includes("推进到") || prompt.includes("推进至")
+      ? "BP问问已根据目标推进工单：进入施工处理并解除预警。"
+      : "BP问问已根据目标完成工单整理：补齐执行摘要并准备推进。",
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_status",
+    "in_progress",
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_next_action",
+    prompt.includes("解除预警") || prompt.includes("推进到") || prompt.includes("推进至")
+      ? "继续现场施工闭环，确认预警已解除并补齐施工资料。"
+      : "按 BP问问整理结果继续推进：补齐缺项、跟进风险，并同步下一阶段资料。",
+  );
+  addWritebackCandidate(
+    candidates,
+    workOrderNo,
+    "draft_risk_followup",
+    "BP问问多步骤整理：已标记需要继续关注缺项、材料完整度和现场推进风险。",
+  );
+
+  return {
+    workOrderNo,
+    summary: "已规划读取工单、整理进展、推进状态、补下一步和风险跟进。",
+    candidates,
+  };
+}
+
 function planBpAskExecution(
   decision: DispatchDecision,
   prompt: string,
+  modelToolPlan: ModelWorkOrderToolPlan | null = null,
 ): BpAskExecutionPlan {
   const createPlan = buildWorkOrderCreatePlan(decision, prompt);
 
@@ -764,11 +1461,52 @@ function planBpAskExecution(
     };
   }
 
-  if (shouldRunDirectWorkOrderRead(decision)) {
+  if (shouldRunDirectWorkOrderRead(decision, prompt)) {
     return {
       route: "direct_tool",
       toolName: "work_order.read",
+      directToolInput: {
+        workOrderNo: readTargetWorkOrderNo(decision),
+      },
     };
+  }
+
+  if (modelToolPlan && modelToolPlan.confidence >= 70) {
+    const modelCreatePlan = buildWorkOrderCreatePlanFromModel(modelToolPlan, prompt);
+
+    if (modelCreatePlan) {
+      return {
+        route: "work_order_create",
+        toolName: "work_order.create",
+        createPlan: modelCreatePlan,
+        modelToolPlan,
+      };
+    }
+
+    const modelWritebackPlan = buildControlledWorkOrderWritebackPlanFromModel(
+      decision,
+      prompt,
+      modelToolPlan,
+    );
+
+    if (modelWritebackPlan) {
+      return {
+        route: "writeback_draft",
+        writebackPlan: modelWritebackPlan,
+        modelToolPlan,
+      };
+    }
+
+    if (modelToolPlan.tool === "work_order.read" && modelToolPlan.args.workOrderNo) {
+      return {
+        route: "direct_tool",
+        toolName: "work_order.read",
+        directToolInput: {
+          workOrderNo: modelToolPlan.args.workOrderNo,
+        },
+        modelToolPlan,
+      };
+    }
   }
 
   return {
@@ -4049,25 +4787,68 @@ export async function appendMessageToThreadForUser(
   const recentMemoryRows = await getRecentMemoryFactsForUser(user.id, thread.id);
   const recentMessages = await getMessagesForThread(thread.id);
   const rollingSummary = await getLatestRollingSummary(thread.id);
+  const recentDispatchMessages = recentMessages.slice(-8).map((message) => ({
+    role: message.role,
+    text: message.text,
+  }));
+  const recentDispatchFacts = recentMemoryRows.map((fact) => ({
+    factType: fact.factType,
+    factKey: fact.factKey,
+    factValue: fact.factValue,
+  }));
   const dispatch = await dispatchBpAskPrompt({
     user,
     prompt: normalizedPrompt,
     rollingSummary,
-    recentMessages: recentMessages.slice(-8).map((message) => ({
-      role: message.role,
-      text: message.text,
-    })),
-    memoryFacts: recentMemoryRows.map((fact) => ({
-      factType: fact.factType,
-      factKey: fact.factKey,
-      factValue: fact.factValue,
-    })),
+    recentMessages: recentDispatchMessages,
+    memoryFacts: recentDispatchFacts,
   });
+
+  let modelToolPlan: ModelWorkOrderToolPlan | null = null;
+  let modelToolPlannerAttempted = false;
+  let modelToolPlannerError: string | null = null;
+
+  if (shouldTryModelWorkOrderToolPlanner(dispatch.decision, normalizedPrompt)) {
+    modelToolPlannerAttempted = true;
+
+    try {
+      modelToolPlan = await planWorkOrderToolWithModel({
+        prompt: normalizedPrompt,
+        rollingSummary,
+        recentMessages: recentDispatchMessages.map(
+          (message) => `${message.role}: ${message.text}`,
+        ),
+        memoryFacts: recentDispatchFacts.map(
+          (fact) => `${fact.factType}.${fact.factKey}: ${fact.factValue}`,
+        ),
+        dispatchDecision: dispatch.decision,
+      });
+    } catch (error) {
+      modelToolPlannerError =
+        error instanceof Error ? error.message : "MODEL_TOOL_PLANNER_FAILED";
+    }
+  }
 
   let assistantText = dispatch.assistantText;
   let insight = dispatch.insight;
   let executionPreview = dispatch.executionPreview;
-  const executionPlan = planBpAskExecution(dispatch.decision, normalizedPrompt);
+  const stepPlannerWorkOrderNo = await resolveWorkOrderNoForPrompt(
+    dispatch.decision,
+    normalizedPrompt,
+  );
+  const stepPlannerPlan = buildWorkOrderStepPlannerPlan(
+    dispatch.decision,
+    normalizedPrompt,
+    stepPlannerWorkOrderNo,
+  );
+  const executionPlan = stepPlannerPlan
+    ? ({ route: "writeback_draft", writebackPlan: { workOrderNo: stepPlannerPlan.workOrderNo, candidates: stepPlannerPlan.candidates, directApply: true } } satisfies BpAskExecutionPlan)
+    : planBpAskExecution(
+        dispatch.decision,
+        normalizedPrompt,
+        modelToolPlan,
+      );
+  const modelToolPlanUsed = executionPlan.modelToolPlan === modelToolPlan && Boolean(modelToolPlan);
   let directToolRun: AiToolRunRecord | null = null;
   let writebackDraftToolRun: AiToolRunRecord | null = null;
   let writebackApplyToolRun: AiToolRunRecord | null = null;
@@ -4161,20 +4942,26 @@ export async function appendMessageToThreadForUser(
     insight = buildSkillInsight(dispatch.insight, skillRun);
     assistantText = buildWorkOrderSummarySkillAssistantText(user.name, skillRun);
   } else if (executionPlan.route === "direct_tool" && executionPlan.toolName) {
-    directToolRun = await runAiTool(
-      { user },
-      {
-        toolName: executionPlan.toolName,
-        input: {
-          workOrderNo: readTargetWorkOrderNo(dispatch.decision),
+    const directToolWorkOrderNo =
+      executionPlan.directToolInput?.workOrderNo ||
+      readTargetWorkOrderNo(dispatch.decision);
+
+    if (directToolWorkOrderNo) {
+      directToolRun = await runAiTool(
+        { user },
+        {
+          toolName: executionPlan.toolName,
+          input: {
+            workOrderNo: directToolWorkOrderNo,
+          },
         },
-      },
-    );
-    taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
-    resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
-    executionPreview = buildDirectToolExecutionPreview(directToolRun);
-    insight = buildDirectToolInsight(dispatch.insight, directToolRun);
-    assistantText = buildWorkOrderReadAssistantText(user.name, directToolRun);
+      );
+      taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
+      resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
+      executionPreview = buildDirectToolExecutionPreview(directToolRun);
+      insight = buildDirectToolInsight(dispatch.insight, directToolRun);
+      assistantText = buildWorkOrderReadAssistantText(user.name, directToolRun);
+    }
   }
 
   const executionTaskId = buildId("exec-task");
@@ -4220,6 +5007,10 @@ export async function appendMessageToThreadForUser(
       skillStatus: skillRun?.status ?? null,
       workflowId: workflowRun?.workflowId ?? executionPlan.workflowId ?? null,
       workflowStatus: workflowRun?.status ?? null,
+      modelToolPlannerAttempted,
+      modelToolPlanUsed,
+      modelToolPlannerError,
+      modelToolPlan,
       createPlan: executionPlan.createPlan ?? null,
       writebackOperations:
         executionPlan.writebackPlan?.candidates.map(
@@ -4227,6 +5018,7 @@ export async function appendMessageToThreadForUser(
         ) ?? [],
       writebackCandidateCount:
         executionPlan.writebackPlan?.candidates.length ?? 0,
+      stepPlannerPlan: stepPlannerPlan ?? null,
     },
     createdAt: now,
     updatedAt: now,
@@ -4237,6 +5029,13 @@ export async function appendMessageToThreadForUser(
     insight,
     executionPreview,
     executionRoute,
+    modelToolPlanner: {
+      attempted: modelToolPlannerAttempted,
+      used: modelToolPlanUsed,
+      error: modelToolPlannerError,
+    },
+    modelToolPlan,
+    stepPlannerPlan,
     workflowRuns: workflowRun ? [workflowRun] : [],
     skillRuns: skillRun ? [skillRun] : (workflowRun?.skillRuns ?? []),
     agentRuns: workflowRun?.agentRuns ?? [],
@@ -4372,6 +5171,15 @@ export async function appendMessageToThreadForUser(
         plan: executionPlan.writebackPlan,
         toolRun: writebackApplyToolRun,
       });
+
+      if (stepPlannerPlan && writebackApplyToolRun.status === "completed") {
+        assistantText = [
+          `${user.name}，我已经按多步骤工单计划真实处理完 ${stepPlannerPlan.workOrderNo}。`,
+          stepPlannerPlan.summary,
+          `本次真实执行了 ${writebackDrafts.length} 个动作：${writebackDrafts.map((draft) => writebackOperationLabel(draft.operation)).join("、")}。`,
+          "前端重新读取工单后会看到这些字段变化。",
+        ].join("\n");
+      }
     }
 
     await db
@@ -4411,6 +5219,9 @@ export async function appendMessageToThreadForUser(
         executionTaskId,
         executionResultId,
         executionRoute,
+        modelToolPlanner: resultStructuredPayload.modelToolPlanner,
+        modelToolPlan: resultStructuredPayload.modelToolPlan,
+        stepPlannerPlan: resultStructuredPayload.stepPlannerPlan,
         workflowRuns: resultStructuredPayload.workflowRuns,
         skillRuns: resultStructuredPayload.skillRuns,
         agentRuns: resultStructuredPayload.agentRuns,
