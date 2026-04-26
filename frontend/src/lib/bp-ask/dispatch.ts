@@ -139,6 +139,16 @@ const EXPLICIT_WRITE_KEYWORDS = [
   "新建",
   "修改",
   "更新",
+  "调整",
+  "改成",
+  "改为",
+  "设为",
+  "设置为",
+  "写成",
+  "写为",
+  "追加",
+  "补充",
+  "记录为",
   "删除",
   "分配",
   "指派",
@@ -509,7 +519,25 @@ function scorePrimaryIntent(
     addScore(scores, "create_object", 84);
   }
 
-  if (includesAny(prompt, ["修改", "更新", "调整", "改一个", "回写", "编辑"])) {
+  if (
+    includesAny(prompt, [
+      "修改",
+      "更新",
+      "调整",
+      "改一个",
+      "改成",
+      "改为",
+      "设为",
+      "设置为",
+      "写成",
+      "写为",
+      "追加",
+      "补充",
+      "记录为",
+      "回写",
+      "编辑",
+    ])
+  ) {
     addScore(scores, "update_object", 78);
     addScore(scores, "edit_draft", 48);
   }

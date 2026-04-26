@@ -33,7 +33,7 @@ BP问问作为大总管
 
 | 编号 | 缺口 | 当前状态 | 为什么重要 | 建议落点 |
 | --- | --- | --- | --- | --- |
-| P0-01 | 执行方式评估器 | 已在 BP问问服务层最小落地 `executionRoute = direct_tool / skill / dispatch_plan`，但尚未沉淀为 dispatch 统一字段 | 决定 BP问问到底自己做、走工作流，还是外包龙虾 | `frontend/src/lib/bp-ask/dispatch.ts` + `server.ts` |
+| P0-01 | 执行方式评估器 | 已在 BP问问服务层最小落地 `executionRoute = direct_tool / skill / workflow / writeback_draft / dispatch_plan`，但尚未沉淀为 dispatch 统一字段 | 决定 BP问问到底自己做、走工作流，还是外包龙虾，或进入受控写回草案 | `frontend/src/lib/bp-ask/dispatch.ts` + `server.ts` |
 | P0-02 | 追问细节策略 | 已有 clarification，但还没有按对象、权限、输出格式、成功标准拆分追问类型 | 大总管不能在信息不足时假装执行 | `dispatch.ts` + `intents.ts` |
 | P0-03 | 简单 Tool 直执边界 | 最小 Tool Gateway 已落地，当前支持 `work_order.read` 只读直执 | BP问问需要能自己处理低风险短链路任务 | `frontend/src/lib/ai-tools/**` |
 | P0-04 | execution result 回收循环 | 当前会写 result，但 BP问问尚未把后场结果作为下一步上下文继续规划 | 理想架构是循环，不是一次性转述 | `bp-ask/server.ts` + `ai-dorm/server.ts` |
@@ -51,7 +51,7 @@ BP问问作为大总管
 | P1-05 | Workflow Runner 最小实现 | 已最小落地，当前支持 `input -> 工单摘要 Skill -> 工单龙虾 dry-run -> waiting_confirmation -> confirmation evaluation -> post-confirmation dry-run -> 写回草案落库 -> 草案审阅 -> 白名单正式写回 -> OpenClaw chat.send -> output`，确认项支持同意/拒绝/暂缓记录与结果评估；写回草案支持批准待写回 / 拒绝 / 取消；正式写回仅允许 ready 草案和白名单字段；OpenClaw 可通过开关在 probe-only 与真实下发之间切换 | 跑通 input -> skill -> agent dry-run -> human confirmation -> output 的第一条链，并具备进入 OpenClaw 的安全入口 | `frontend/src/lib/ai-dorm/workflow-runner.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
 | P1-06 | AI宿舍消费 task 的动作入口 | `/ai-dorm/tasks` 可看任务，但不能执行/试运行 | execution task 需要有后场承接动作 | 新增 `/api/ai-dorm/tasks/[taskId]/run` |
 | P1-07 | execution result 结构扩展约定 | 已在 payload 中写入 `executionRoute`、`toolRuns`、`skillRuns`、`changedObjects`、`artifacts`，并新增 `execution_writeback_drafts` 追踪候选写回草案与审阅状态；尚未建独立 agent/tool run 日志表 | BP问问需要稳定读取 toolRuns、artifacts、changedObjects 和可审计草案 | 先写约定，再决定是否建表 |
-| P1-08 | 最小端到端回归 | 已新增 `smoke:bp-ask:skill` 与 `smoke:bp-ask:workflow`，覆盖 BP问问 -> Skill / Workflow -> Tool -> Result | 防止工作流接入后破坏 BP问问主链 | `frontend/scripts/bp-ask-skill-runner-smoke.mjs`、`frontend/scripts/bp-ask-workflow-runner-smoke.mjs` |
+| P1-08 | 最小端到端回归 | 已新增 `smoke:bp-ask:skill`、`smoke:bp-ask:workflow` 与 `smoke:bp-ask:writeback`，覆盖 BP问问 -> Skill / Workflow / 受控写回 -> Tool -> Result | 防止工作流和写回接入后破坏 BP问问主链 | `frontend/scripts/bp-ask-skill-runner-smoke.mjs`、`frontend/scripts/bp-ask-workflow-runner-smoke.mjs`、`frontend/scripts/bp-ask-controlled-writeback-smoke.mjs` |
 
 ## 5. P2 缺口：Agent 平台化能力
 
@@ -165,7 +165,43 @@ BP问问作为大总管
 - AI员工页缺启停、授权、能力测试。
 - 最终报告缺“改变了哪些文件或对象”的固定展示区。
 
-## 8. 建议第一条最小闭环
+## 8. 当前工程里程碑：工单受控写回 M1
+
+M1 的目标不是开放 AI 任意改工单，而是跑通第一条可审计、可撤回风险较低的真实写回闭环：
+
+```text
+用户对 BP问问说：把 WO-xxx 的下一步改成 xxx
+-> BP问问识别工单受控写回
+-> 先调用 work_order.read 校验工单
+-> 调用 work_order.writeback_draft.create 创建写回草案
+-> 用户在 BP问问里批准草案为 ready
+-> 用户触发正式写回
+-> work_order.writeback.apply 只按白名单修改 work_orders
+-> 工单页面重新读取后展示真实变化
+-> BP问问记录 changedObjects 与草案 applied 状态
+```
+
+M1 当前白名单：
+
+| 用户意图 | 写回草案 operation | 正式写回字段 |
+| --- | --- | --- |
+| 修改工单下一步 | `draft_next_action` | `work_orders.next_action` |
+| 追加风险跟进 | `draft_risk_followup` | `work_orders.metadata.bpAskRiskFollowups` |
+
+M1 安全边界：
+
+- BP问问自然语言入口只创建写回草案，不直接改业务字段。
+- 草案必须从 `draft` 审阅到 `ready` 后才能正式写回。
+- 正式写回只允许 `ready` 草案和白名单 operation。
+- OpenClaw 不直接写 BPAI 业务表；如需变更，只能返回候选结果，再进入草案和白名单写回。
+- 非白名单字段，例如 `status`、`stage`、负责人、派单、附件、删除，仍不开放自然语言写回。
+
+M1 验收：
+
+- `npm run smoke:bp-ask:writeback`
+- 验证点包括：自然语言创建草案、草案阶段不改 `work_orders.next_action`、批准后进入 `ready`、正式写回后进入 `applied`、工单真源字段发生变化、`changedObjects` 记录 `work_orders.next_action`。
+
+## 9. 建议第一条最小闭环
 
 第一条闭环不要从 Longxia 或 MCP 开始，先从最小只读链路开始：
 
@@ -188,7 +224,7 @@ BP问问作为大总管
 - execution result 是否能回到 BP问问上下文
 - 最终报告是否能说明读取对象和后续建议
 
-## 9. 建议第二条闭环
+## 10. 建议第二条闭环
 
 第二条闭环再做工作流：
 
@@ -213,7 +249,7 @@ BP问问作为大总管
 - 候选写回是否能先变成草案，而不是直接改业务字段
 - BP问问是否能把执行结果继续纳入对话
 
-## 10. 暂时不要先做的事
+## 11. 暂时不要先做的事
 
 以下能力很重要，但不建议作为下一步第一优先级：
 
@@ -227,7 +263,7 @@ BP问问作为大总管
 
 原因是：这些能力都会放大系统复杂度。当前更关键的是先跑通“BP问问 -> 简单工具 / Skill -> execution result -> BP问问”的最小循环。
 
-## 11. 一句话总结
+## 12. 一句话总结
 
 当前 BPAI 离理想 Agent 状态最核心的缺口不是“缺更多模型”，而是：
 

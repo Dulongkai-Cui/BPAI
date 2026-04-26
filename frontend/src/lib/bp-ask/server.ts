@@ -47,7 +47,12 @@ type MemoryScopeKind =
   | "system_form"
   | "document"
   | "work_order";
-type BpAskExecutionRoute = "dispatch_plan" | "direct_tool" | "skill" | "workflow";
+type BpAskExecutionRoute =
+  | "dispatch_plan"
+  | "direct_tool"
+  | "skill"
+  | "workflow"
+  | "writeback_draft";
 type BpAskConfirmationAction = "approve" | "reject" | "defer";
 type BpAskConfirmationStatus = "approved" | "rejected" | "deferred";
 type BpAskWritebackDraftReviewAction = "approve" | "reject" | "cancel";
@@ -76,6 +81,25 @@ type BpAskExecutionPlan = {
   toolName?: "work_order.read";
   skillId?: "skill-work-order-summary";
   workflowId?: "workflow-work-order-intake";
+  writebackPlan?: BpAskControlledWritebackPlan;
+};
+
+type BpAskControlledWritebackOperation =
+  | "draft_next_action"
+  | "draft_risk_followup";
+
+type BpAskControlledWritebackCandidate = {
+  objectType: "work_order";
+  objectRef: string;
+  operation: BpAskControlledWritebackOperation;
+  proposedValue: string;
+  requiresConfirmation: true;
+  status: "not_applied";
+};
+
+type BpAskControlledWritebackPlan = {
+  workOrderNo: string;
+  candidates: BpAskControlledWritebackCandidate[];
 };
 
 const WORK_ORDER_SUMMARY_KEYWORDS = [
@@ -88,6 +112,40 @@ const WORK_ORDER_SUMMARY_KEYWORDS = [
   "建议",
   "风险",
   "缺项",
+] as const;
+const WORK_ORDER_NEXT_ACTION_FIELD_KEYWORDS = [
+  "下一步",
+  "下步",
+  "后续动作",
+  "后续处理",
+  "推进动作",
+  "待办",
+  "next_action",
+  "next action",
+] as const;
+const WORK_ORDER_RISK_FOLLOWUP_FIELD_KEYWORDS = [
+  "风险跟进",
+  "风险备注",
+  "风险说明",
+  "风险处置",
+  "风险点",
+] as const;
+const WORK_ORDER_WRITEBACK_VALUE_MARKERS = [
+  "改成",
+  "改为",
+  "设为",
+  "设置为",
+  "更新为",
+  "调整为",
+  "写成",
+  "写为",
+  "追加为",
+  "补充为",
+  "记录为",
+  "变成",
+  "为",
+  ":",
+  "：",
 ] as const;
 
 function nowDate() {
@@ -168,10 +226,156 @@ function shouldRunDirectWorkOrderRead(decision: DispatchDecision) {
   return Boolean(readTargetWorkOrderNo(decision));
 }
 
+function stripOuterQuotes(value: string) {
+  return value
+    .trim()
+    .replace(/^["'“”‘’「『【\[\(（]+/g, "")
+    .replace(/["'“”‘’」』】\]\)）]+$/g, "")
+    .trim();
+}
+
+function trimAtNextWritebackField(value: string) {
+  const separators = ["，", "；", "。", "\n"];
+  let bestIndex = -1;
+
+  for (const separator of separators) {
+    const index = value.indexOf(separator);
+
+    if (index === -1) {
+      continue;
+    }
+
+    const after = value.slice(index + separator.length).trim();
+    const startsNextField =
+      after.startsWith("并") ||
+      after.startsWith("同时") ||
+      after.startsWith("另外") ||
+      after.startsWith("然后") ||
+      WORK_ORDER_NEXT_ACTION_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      ) ||
+      WORK_ORDER_RISK_FOLLOWUP_FIELD_KEYWORDS.some((keyword) =>
+        after.startsWith(keyword),
+      );
+
+    if (startsNextField && (bestIndex === -1 || index < bestIndex)) {
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex === -1 ? value : value.slice(0, bestIndex);
+}
+
+function normalizeWritebackProposedValue(value: string) {
+  let nextValue = stripOuterQuotes(value)
+    .replace(/^(?:=|＝)+/g, "")
+    .trim();
+  let consumedMarker = true;
+
+  while (consumedMarker) {
+    consumedMarker = false;
+
+    for (const marker of WORK_ORDER_WRITEBACK_VALUE_MARKERS) {
+      if (nextValue.startsWith(marker)) {
+        nextValue = nextValue.slice(marker.length).trim();
+        consumedMarker = true;
+        break;
+      }
+    }
+  }
+
+  return stripOuterQuotes(trimAtNextWritebackField(nextValue));
+}
+
+function extractWritebackValueAfterField(
+  prompt: string,
+  fieldKeywords: readonly string[],
+) {
+  for (const keyword of fieldKeywords) {
+    const index = prompt.indexOf(keyword);
+
+    if (index === -1) {
+      continue;
+    }
+
+    const rawValue = prompt.slice(index + keyword.length);
+    const value = normalizeWritebackProposedValue(rawValue);
+
+    if (value.length >= 2) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function buildControlledWorkOrderWritebackPlan(
+  decision: DispatchDecision,
+  prompt: string,
+): BpAskControlledWritebackPlan | null {
+  const workOrderNo = readTargetWorkOrderNo(decision);
+
+  if (
+    decision.targetDomain !== "work_order" ||
+    !decision.requiresWrite ||
+    !workOrderNo
+  ) {
+    return null;
+  }
+
+  const candidates: BpAskControlledWritebackCandidate[] = [];
+  const nextAction = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_NEXT_ACTION_FIELD_KEYWORDS,
+  );
+  const riskFollowup = extractWritebackValueAfterField(
+    prompt,
+    WORK_ORDER_RISK_FOLLOWUP_FIELD_KEYWORDS,
+  );
+
+  if (nextAction) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_next_action",
+      proposedValue: nextAction,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  if (riskFollowup && riskFollowup !== nextAction) {
+    candidates.push({
+      objectType: "work_order",
+      objectRef: workOrderNo,
+      operation: "draft_risk_followup",
+      proposedValue: riskFollowup,
+      requiresConfirmation: true,
+      status: "not_applied",
+    });
+  }
+
+  return candidates.length > 0
+    ? {
+        workOrderNo,
+        candidates,
+      }
+    : null;
+}
+
 function planBpAskExecution(
   decision: DispatchDecision,
   prompt: string,
 ): BpAskExecutionPlan {
+  const writebackPlan = buildControlledWorkOrderWritebackPlan(decision, prompt);
+
+  if (writebackPlan) {
+    return {
+      route: "writeback_draft",
+      writebackPlan,
+    };
+  }
+
   const workflowMatch = matchAiWorkflow({ decision, prompt });
 
   if (workflowMatch) {
@@ -253,6 +457,123 @@ function buildDirectToolInsight(
     findings: [...insight.findings, toolFinding],
     summary: `${insight.summary} ${toolRun.summaryText}`,
   };
+}
+
+function buildControlledWritebackExecutionPreview(params: {
+  plan: BpAskControlledWritebackPlan;
+  readToolRun: AiToolRunRecord | null;
+  draftToolRun: AiToolRunRecord | null;
+  writebackDrafts: BpAskWritebackDraft[];
+}): DispatchExecutionPreview {
+  const { plan, readToolRun, draftToolRun, writebackDrafts } = params;
+  const readStatus = readToolRun?.status ?? "skipped";
+  const draftStatus = draftToolRun?.status ?? "not_created";
+  const candidateCount = plan.candidates.length;
+  const draftCount = writebackDrafts.length;
+  const readCompleted = readStatus === "completed";
+  const draftCreated = draftToolRun?.status === "completed" && draftCount > 0;
+  const toolRuns = [readToolRun, draftToolRun]
+    .filter((toolRun): toolRun is AiToolRunRecord => Boolean(toolRun))
+    .map((toolRun) => ({
+      toolName: toolRun.toolName,
+      status: toolRun.status,
+      summaryText: toolRun.summaryText,
+    }));
+
+  return {
+    mode: "writeback_result",
+    title: draftCreated
+      ? "真实执行：已创建受控写回草案"
+      : readCompleted
+        ? "真实执行：写回草案创建失败"
+        : "真实执行：工单校验失败",
+    summary: draftCreated
+      ? `已为 ${plan.workOrderNo} 创建/同步 ${draftCount} 个写回草案，当前未修改任何工单业务字段。`
+      : readCompleted
+        ? `已校验 ${plan.workOrderNo}，但写回草案未创建成功：${draftToolRun?.summaryText ?? "缺少草案工具结果"}`
+        : readToolRun?.summaryText ??
+          `未能校验 ${plan.workOrderNo}，因此没有创建写回草案。`,
+    nextStep: draftCreated
+      ? "请先审阅草案；只有批准待写回后，才允许进入正式业务写回。"
+      : "请检查工单编号、写回字段和值是否明确，再重新发起受控写回。",
+    safety:
+      "安全：本轮只允许把白名单字段变更落为写回草案；正式修改工单字段仍需单独批准并触发正式写回。",
+    simulatedActions: [
+      `工单校验：${readStatus}`,
+      `候选写回：${candidateCount}`,
+      `写回草案：${draftCreated ? "draft_created" : draftStatus}`,
+      "业务字段：not_modified",
+    ],
+    toolRuns,
+    writebackCandidates: plan.candidates,
+    writebackDrafts,
+    changedObjects: [],
+  };
+}
+
+function buildControlledWritebackInsight(params: {
+  insight: InsightBlock;
+  plan: BpAskControlledWritebackPlan;
+  readToolRun: AiToolRunRecord | null;
+  draftToolRun: AiToolRunRecord | null;
+  writebackDrafts: BpAskWritebackDraft[];
+}): InsightBlock {
+  const draftCreated =
+    params.draftToolRun?.status === "completed" &&
+    params.writebackDrafts.length > 0;
+  const findings = [
+    ...params.insight.findings,
+    `已识别为工单受控写回：${params.plan.workOrderNo}。`,
+    params.readToolRun
+      ? `已调用 ${params.readToolRun.toolName} 校验工单，结果为 ${params.readToolRun.status}。`
+      : "尚未调用工单读取工具。",
+    draftCreated
+      ? `已调用 work_order.writeback_draft.create 创建/同步 ${params.writebackDrafts.length} 个写回草案。`
+      : "尚未完成写回草案创建。",
+    "正式业务字段仍未修改，后续必须经过草案审阅和正式写回。",
+  ];
+
+  return {
+    ...params.insight,
+    metric: "WRITEBACK DRAFT",
+    status: draftCreated ? "待审阅" : "未完成",
+    findings,
+    summary: draftCreated
+      ? `已为 ${params.plan.workOrderNo} 创建 ${params.writebackDrafts.length} 个受控写回草案。`
+      : `未能为 ${params.plan.workOrderNo} 创建受控写回草案。`,
+  };
+}
+
+function buildControlledWritebackAssistantText(params: {
+  userName: string;
+  plan: BpAskControlledWritebackPlan;
+  readToolRun: AiToolRunRecord | null;
+  draftToolRun: AiToolRunRecord | null;
+  writebackDrafts: BpAskWritebackDraft[];
+}) {
+  const draftCreated =
+    params.draftToolRun?.status === "completed" &&
+    params.writebackDrafts.length > 0;
+
+  if (draftCreated) {
+    const draftSummary = params.writebackDrafts
+      .map((draft) => `${draft.operation} -> ${draft.proposedValue}`)
+      .join("；");
+
+    return [
+      `${params.userName}，我已把 ${params.plan.workOrderNo} 的修改请求落成受控写回草案。`,
+      `草案内容：${draftSummary}。`,
+      `现在还没有改动工单业务字段；你需要先点“批准待写回”，再点“正式写回”，工单页面才会看到真实变化。`,
+    ].join(" ");
+  }
+
+  return [
+    `${params.userName}，这次工单写回没有完成。`,
+    params.draftToolRun?.summaryText ??
+      params.readToolRun?.summaryText ??
+      "我没有拿到可创建草案的工具结果。",
+    `当前没有修改任何工单业务字段。`,
+  ].join(" ");
 }
 
 function buildSkillExecutionPreview(skillRun: AiSkillRunRecord): DispatchExecutionPreview {
@@ -3287,6 +3608,8 @@ export async function appendMessageToThreadForUser(
   let executionPreview = dispatch.executionPreview;
   const executionPlan = planBpAskExecution(dispatch.decision, normalizedPrompt);
   let directToolRun: AiToolRunRecord | null = null;
+  let writebackDraftToolRun: AiToolRunRecord | null = null;
+  let writebackDrafts: BpAskWritebackDraft[] = [];
   let skillRun: AiSkillRunRecord | null = null;
   let workflowRun: AiWorkflowRunRecord | null = null;
   const executionRoute: BpAskExecutionRoute = executionPlan.route;
@@ -3294,7 +3617,39 @@ export async function appendMessageToThreadForUser(
     dispatch.decision.suggestedExecutor === "longxia" ? "delegated" : "planned";
   let resultStatus: "ready" | "failed" = "ready";
 
-  if (executionPlan.route === "workflow" && executionPlan.workflowId) {
+  if (executionPlan.route === "writeback_draft" && executionPlan.writebackPlan) {
+    directToolRun = await runAiTool(
+      { user },
+      {
+        toolName: "work_order.read",
+        input: {
+          workOrderNo: executionPlan.writebackPlan.workOrderNo,
+        },
+      },
+    );
+    taskStatus = directToolRun.status === "completed" ? "planned" : "failed";
+    resultStatus = directToolRun.status === "completed" ? "ready" : "failed";
+    executionPreview = buildControlledWritebackExecutionPreview({
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    });
+    insight = buildControlledWritebackInsight({
+      insight: dispatch.insight,
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    });
+    assistantText = buildControlledWritebackAssistantText({
+      userName: user.name,
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    });
+  } else if (executionPlan.route === "workflow" && executionPlan.workflowId) {
     workflowRun = await runAiWorkflow(
       { user },
       {
@@ -3354,7 +3709,7 @@ export async function appendMessageToThreadForUser(
     executorKind:
       executionRoute === "direct_tool" || executionRoute === "skill"
         ? "bp_ask"
-        : executionRoute === "workflow"
+        : executionRoute === "workflow" || executionRoute === "writeback_draft"
           ? "system"
         : dispatch.decision.suggestedExecutor,
     primaryIntent: dispatch.decision.primaryIntent,
@@ -3382,10 +3737,31 @@ export async function appendMessageToThreadForUser(
       skillStatus: skillRun?.status ?? null,
       workflowId: workflowRun?.workflowId ?? executionPlan.workflowId ?? null,
       workflowStatus: workflowRun?.status ?? null,
+      writebackOperations:
+        executionPlan.writebackPlan?.candidates.map(
+          (candidate) => candidate.operation,
+        ) ?? [],
+      writebackCandidateCount:
+        executionPlan.writebackPlan?.candidates.length ?? 0,
     },
     createdAt: now,
     updatedAt: now,
   });
+
+  let resultStructuredPayload: Record<string, unknown> = {
+    decision: dispatch.decision,
+    insight,
+    executionPreview,
+    executionRoute,
+    workflowRuns: workflowRun ? [workflowRun] : [],
+    skillRuns: skillRun ? [skillRun] : (workflowRun?.skillRuns ?? []),
+    agentRuns: workflowRun?.agentRuns ?? [],
+    toolRuns: directToolRun
+      ? [directToolRun]
+      : (skillRun?.toolRuns ?? workflowRun?.toolRuns ?? []),
+    changedObjects: workflowRun?.changedObjects ?? skillRun?.changedObjects ?? [],
+    artifacts: workflowRun?.artifacts ?? skillRun?.artifacts ?? [],
+  };
 
   await db.insert(executionResults).values({
     id: executionResultId,
@@ -3397,23 +3773,86 @@ export async function appendMessageToThreadForUser(
       directToolRun?.summaryText ??
       insight.summary,
     responseText: assistantText,
-    structuredPayload: {
-      decision: dispatch.decision,
-      insight,
-      executionPreview,
-      executionRoute,
-      workflowRuns: workflowRun ? [workflowRun] : [],
-      skillRuns: skillRun ? [skillRun] : (workflowRun?.skillRuns ?? []),
-      agentRuns: workflowRun?.agentRuns ?? [],
-      toolRuns: directToolRun
-        ? [directToolRun]
-        : (skillRun?.toolRuns ?? workflowRun?.toolRuns ?? []),
-      changedObjects: workflowRun?.changedObjects ?? skillRun?.changedObjects ?? [],
-      artifacts: workflowRun?.artifacts ?? skillRun?.artifacts ?? [],
-    },
+    structuredPayload: resultStructuredPayload,
     createdAt: now,
     updatedAt: now,
   });
+
+  if (
+    executionPlan.route === "writeback_draft" &&
+    executionPlan.writebackPlan &&
+    directToolRun?.status === "completed"
+  ) {
+    writebackDraftToolRun = await runAiTool(
+      { user },
+      {
+        toolName: "work_order.writeback_draft.create",
+        input: {
+          taskId: executionTaskId,
+          resultId: executionResultId,
+          source: "bp_ask_direct_writeback",
+          sourceRequestId: userMessageId,
+          candidates: executionPlan.writebackPlan.candidates,
+        },
+      },
+    );
+    writebackDrafts = readWritebackDraftsFromToolRun(writebackDraftToolRun);
+    taskStatus =
+      writebackDraftToolRun.status === "completed" && writebackDrafts.length > 0
+        ? "completed"
+        : "failed";
+    resultStatus = taskStatus === "completed" ? "ready" : "failed";
+    executionPreview = buildControlledWritebackExecutionPreview({
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: writebackDraftToolRun,
+      writebackDrafts,
+    });
+    insight = buildControlledWritebackInsight({
+      insight: dispatch.insight,
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: writebackDraftToolRun,
+      writebackDrafts,
+    });
+    assistantText = buildControlledWritebackAssistantText({
+      userName: user.name,
+      plan: executionPlan.writebackPlan,
+      readToolRun: directToolRun,
+      draftToolRun: writebackDraftToolRun,
+      writebackDrafts,
+    });
+    resultStructuredPayload = {
+      ...resultStructuredPayload,
+      insight,
+      executionPreview,
+      writebackDrafts,
+      toolRuns: appendToolRun(
+        resultStructuredPayload.toolRuns,
+        writebackDraftToolRun,
+      ),
+      changedObjects: [],
+    };
+
+    await db
+      .update(executionTasks)
+      .set({
+        status: taskStatus,
+        updatedAt: now,
+      })
+      .where(eq(executionTasks.id, executionTaskId));
+
+    await db
+      .update(executionResults)
+      .set({
+        status: resultStatus,
+        summaryText: writebackDraftToolRun.summaryText,
+        responseText: assistantText,
+        structuredPayload: resultStructuredPayload,
+        updatedAt: now,
+      })
+      .where(eq(executionResults.id, executionResultId));
+  }
 
   const assistantMessageId = buildId("message-assistant");
   const [assistantMessageRow] = await db
@@ -3432,12 +3871,12 @@ export async function appendMessageToThreadForUser(
         executionTaskId,
         executionResultId,
         executionRoute,
-        workflowRuns: workflowRun ? [workflowRun] : [],
-        skillRuns: skillRun ? [skillRun] : (workflowRun?.skillRuns ?? []),
-        agentRuns: workflowRun?.agentRuns ?? [],
-        toolRuns: directToolRun
-          ? [directToolRun]
-          : (skillRun?.toolRuns ?? workflowRun?.toolRuns ?? []),
+        workflowRuns: resultStructuredPayload.workflowRuns,
+        skillRuns: resultStructuredPayload.skillRuns,
+        agentRuns: resultStructuredPayload.agentRuns,
+        toolRuns: resultStructuredPayload.toolRuns,
+        writebackDrafts: resultStructuredPayload.writebackDrafts,
+        changedObjects: resultStructuredPayload.changedObjects,
       },
       createdAt: now,
       updatedAt: now,

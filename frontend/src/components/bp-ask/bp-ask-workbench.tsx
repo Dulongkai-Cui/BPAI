@@ -27,7 +27,12 @@ function shouldShowTaskPreview(message: BpAskMessage) {
 }
 
 function previewToneClasses(mode?: DispatchExecutionPreview["mode"]) {
-  if (mode === "tool_result" || mode === "skill_result" || mode === "workflow_result") {
+  if (
+    mode === "tool_result" ||
+    mode === "skill_result" ||
+    mode === "workflow_result" ||
+    mode === "writeback_result"
+  ) {
     return "border-emerald-200 bg-emerald-50 text-emerald-800";
   }
 
@@ -35,7 +40,12 @@ function previewToneClasses(mode?: DispatchExecutionPreview["mode"]) {
 }
 
 function previewAccentClasses(mode?: DispatchExecutionPreview["mode"]) {
-  if (mode === "tool_result" || mode === "skill_result" || mode === "workflow_result") {
+  if (
+    mode === "tool_result" ||
+    mode === "skill_result" ||
+    mode === "workflow_result" ||
+    mode === "writeback_result"
+  ) {
     return {
       kicker: "text-emerald-600",
       title: "text-emerald-900",
@@ -63,6 +73,10 @@ function previewKicker(mode?: DispatchExecutionPreview["mode"]) {
 
   if (mode === "skill_result") {
     return "真实 Skill 执行";
+  }
+
+  if (mode === "writeback_result") {
+    return "真实受控写回";
   }
 
   return mode === "tool_result" ? "真实只读执行" : "模拟执行";

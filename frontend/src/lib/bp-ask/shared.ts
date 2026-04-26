@@ -21,7 +21,12 @@ export type InsightBlock = {
 };
 
 export type DispatchExecutionPreview = {
-  mode: "simulation" | "tool_result" | "skill_result" | "workflow_result";
+  mode:
+    | "simulation"
+    | "tool_result"
+    | "skill_result"
+    | "workflow_result"
+    | "writeback_result";
   title: string;
   summary: string;
   nextStep: string;
