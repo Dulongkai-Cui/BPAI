@@ -83,7 +83,7 @@ async function main() {
       {
         method: "POST",
         body: JSON.stringify({
-          prompt: `把 WO-20260401-001 的下一步改成：${proposedNextAction}`,
+          prompt: `先生成写回草案，不要直接改：把 WO-20260401-001 的下一步改成：${proposedNextAction}`,
         }),
       },
       cookieHeader,

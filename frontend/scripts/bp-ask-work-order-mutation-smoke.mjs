@@ -77,49 +77,6 @@ async function appendPrompt(
   return latestMessage;
 }
 
-async function approveDraft(cookieHeader, threadId, executionResultId, draftId) {
-  const reviewed = await requestJson(
-    `/api/bp-ask/threads/${threadId}/writeback-drafts`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        executionResultId,
-        draftId,
-        action: "approve",
-      }),
-    },
-    cookieHeader,
-  );
-  const draft =
-    reviewed.json?.thread?.messages
-      ?.at(-1)
-      ?.executionPreview?.writebackDrafts?.find(
-        (item) => item.draftId === draftId,
-      );
-
-  assert(draft?.status === "ready", `草案 ${draftId} 批准后未进入 ready`);
-}
-
-async function applyDraft(cookieHeader, threadId, executionResultId, draftId) {
-  const applied = await requestJson(
-    `/api/bp-ask/threads/${threadId}/writeback-drafts`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        executionResultId,
-        draftId,
-        action: "apply",
-      }),
-    },
-    cookieHeader,
-  );
-  const preview = applied.json?.thread?.messages?.at(-1)?.executionPreview;
-  const draft = preview?.writebackDrafts?.find((item) => item.draftId === draftId);
-
-  assert(draft?.status === "applied", `草案 ${draftId} 正式写回后未进入 applied`);
-  return preview;
-}
-
 function findDraftByOperation(preview, operation) {
   const draft = preview?.writebackDrafts?.find(
     (item) => item.operation === operation,
@@ -175,36 +132,14 @@ async function main() {
     assert(priorityDraft.proposedValue === "high", "优先级草案值不是 high");
     assert(stageDraft.proposedValue === "return_sheet", "阶段草案值不是 return_sheet");
     assert(statusDraft.proposedValue === "waiting", "状态草案值不是 waiting");
-
-    const beforeApply = await pool.query(
-      "select priority, stage, status from work_orders where id = $1",
-      [originalWorkOrder.id],
-    );
     assert(
-      beforeApply.rows[0]?.priority === originalWorkOrder.priority &&
-        beforeApply.rows[0]?.stage === originalWorkOrder.stage &&
-        beforeApply.rows[0]?.status === originalWorkOrder.status,
-      "草案阶段不应修改 work_orders 的优先级/阶段/状态",
+      [priorityDraft, stageDraft, statusDraft].every(
+        (draft) => draft.status === "applied",
+      ),
+      "直接执行后优先级/阶段/状态草案应自动进入 applied",
     );
 
-    for (const draft of [priorityDraft, stageDraft, statusDraft]) {
-      await approveDraft(
-        cookieHeader,
-        updateThreadId,
-        updateMessage.executionResultId,
-        draft.draftId,
-      );
-    }
-
-    let latestUpdatePreview = updatePreview;
-    for (const draft of [priorityDraft, stageDraft, statusDraft]) {
-      latestUpdatePreview = await applyDraft(
-        cookieHeader,
-        updateThreadId,
-        updateMessage.executionResultId,
-        draft.draftId,
-      );
-    }
+    const latestUpdatePreview = updatePreview;
 
     const afterUpdateApply = await pool.query(
       "select priority, stage, status from work_orders where id = $1",
@@ -250,18 +185,11 @@ async function main() {
       "archive_work_order",
     );
 
-    await approveDraft(
-      cookieHeader,
-      archiveThreadId,
-      archiveMessage.executionResultId,
-      archiveDraft.draftId,
+    assert(
+      archiveDraft.status === "applied",
+      "直接归档后草案应自动进入 applied",
     );
-    const archivePreview = await applyDraft(
-      cookieHeader,
-      archiveThreadId,
-      archiveMessage.executionResultId,
-      archiveDraft.draftId,
-    );
+    const archivePreview = archiveMessage.executionPreview;
     const afterArchiveApply = await pool.query(
       "select status, archived_at from work_orders where id = $1",
       [originalWorkOrder.id],

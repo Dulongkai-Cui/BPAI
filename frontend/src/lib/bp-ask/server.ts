@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { runAiSkill, type AiSkillRunRecord } from "@/lib/ai-dorm/skill-runner";
@@ -114,6 +114,7 @@ type BpAskControlledWritebackCandidate = {
 type BpAskControlledWritebackPlan = {
   workOrderNo: string;
   candidates: BpAskControlledWritebackCandidate[];
+  directApply: boolean;
 };
 
 const WORK_ORDER_SUMMARY_KEYWORDS = [
@@ -195,6 +196,20 @@ const WORK_ORDER_CREATE_KEYWORDS = [
   "开一个",
   "增加一个",
   "新增",
+] as const;
+const WRITEBACK_DRAFT_ONLY_KEYWORDS = [
+  "草案",
+  "写回草案",
+  "先生成",
+  "先创建",
+  "先让我确认",
+  "让我确认",
+  "需要确认",
+  "不要直接",
+  "别直接",
+  "先别改",
+  "先不要改",
+  "只生成",
 ] as const;
 const WORK_ORDER_WRITEBACK_VALUE_MARKERS = [
   "改成",
@@ -555,6 +570,10 @@ function buildWorkOrderCreatePlan(
   };
 }
 
+function shouldDirectApplyWorkOrderWriteback(prompt: string) {
+  return !includesAny(prompt, WRITEBACK_DRAFT_ONLY_KEYWORDS);
+}
+
 function extractWritebackValueAfterField(
   prompt: string,
   fieldKeywords: readonly string[],
@@ -701,6 +720,7 @@ function buildControlledWorkOrderWritebackPlan(
     ? {
         workOrderNo,
         candidates,
+        directApply: shouldDirectApplyWorkOrderWriteback(prompt),
       }
     : null;
 }
@@ -991,6 +1011,29 @@ function buildControlledWritebackAssistantText(params: {
       params.readToolRun?.summaryText ??
       "我没有拿到可创建草案的工具结果。",
     `当前没有修改任何工单业务字段。`,
+  ].join(" ");
+}
+
+function buildDirectWritebackAssistantText(params: {
+  userName: string;
+  plan: BpAskControlledWritebackPlan;
+  toolRun: AiToolRunRecord;
+}) {
+  const changedObjects = readChangedObjectsFromToolRun(params.toolRun);
+
+  if (params.toolRun.status === "completed") {
+    return [
+      `${params.userName}，我已经直接执行了 ${params.plan.workOrderNo} 的工单修改。`,
+      params.toolRun.summaryText,
+      changedObjects.length
+        ? `真实改变：${changedObjects.join("；")}。`
+        : "这次执行完成，但字段值和原值一致，所以没有产生新的业务字段变化。",
+    ].join(" ");
+  }
+
+  return [
+    `${params.userName}，这次工单修改没有完成。`,
+    params.toolRun.summaryText,
   ].join(" ");
 }
 
@@ -4027,6 +4070,7 @@ export async function appendMessageToThreadForUser(
   const executionPlan = planBpAskExecution(dispatch.decision, normalizedPrompt);
   let directToolRun: AiToolRunRecord | null = null;
   let writebackDraftToolRun: AiToolRunRecord | null = null;
+  let writebackApplyToolRun: AiToolRunRecord | null = null;
   let writebackDrafts: BpAskWritebackDraft[] = [];
   let skillRun: AiSkillRunRecord | null = null;
   let workflowRun: AiWorkflowRunRecord | null = null;
@@ -4277,6 +4321,59 @@ export async function appendMessageToThreadForUser(
       changedObjects: [],
     };
 
+    if (
+      executionPlan.writebackPlan.directApply &&
+      writebackDraftToolRun.status === "completed" &&
+      writebackDrafts.length > 0
+    ) {
+      const draftIds = writebackDrafts.map((draft) => draft.draftId);
+
+      await db
+        .update(executionWritebackDrafts)
+        .set({
+          status: "ready",
+          metadata: {
+            autoApproved: true,
+            reviewedAt: now.toISOString(),
+            reviewedByUserId: user.id,
+            reviewedByUserName: user.name,
+            reviewAction: "approve",
+            reviewReason: "bp_ask_direct_apply",
+          },
+          updatedAt: now,
+        })
+        .where(inArray(executionWritebackDrafts.id, draftIds));
+
+      writebackApplyToolRun = await runAiTool(
+        { user },
+        {
+          toolName: "work_order.writeback.apply",
+          input: {
+            taskId: executionTaskId,
+            resultId: executionResultId,
+            draftIds,
+          },
+        },
+      );
+      writebackDrafts = readWritebackDraftsFromApplyToolRun(writebackApplyToolRun);
+      taskStatus = writebackApplyToolRun.status === "completed" ? "completed" : "failed";
+      resultStatus = writebackApplyToolRun.status === "completed" ? "ready" : "failed";
+      resultStructuredPayload = updateWritebackApplyPayload({
+        payload: resultStructuredPayload,
+        toolRun: writebackApplyToolRun,
+        writebackDrafts,
+      });
+      executionPreview =
+        (asRecord(resultStructuredPayload.executionPreview) as DispatchExecutionPreview) ??
+        executionPreview;
+      insight = (asRecord(resultStructuredPayload.insight) as InsightBlock) ?? insight;
+      assistantText = buildDirectWritebackAssistantText({
+        userName: user.name,
+        plan: executionPlan.writebackPlan,
+        toolRun: writebackApplyToolRun,
+      });
+    }
+
     await db
       .update(executionTasks)
       .set({
@@ -4289,7 +4386,7 @@ export async function appendMessageToThreadForUser(
       .update(executionResults)
       .set({
         status: resultStatus,
-        summaryText: writebackDraftToolRun.summaryText,
+        summaryText: (writebackApplyToolRun ?? writebackDraftToolRun).summaryText,
         responseText: assistantText,
         structuredPayload: resultStructuredPayload,
         updatedAt: now,
