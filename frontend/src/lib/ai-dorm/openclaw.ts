@@ -3,8 +3,10 @@ type OpenClawSidecarConfig = {
   agentName: string;
   launchHref: string;
   baseUrlEnvNames: readonly string[];
+  gatewayUrlEnvNames: readonly string[];
   tokenEnvNames: readonly string[];
   defaultBaseUrl: string;
+  defaultGatewayUrl: string;
   defaultToken: string;
 };
 
@@ -18,11 +20,16 @@ const OPENCLAW_SIDECARS: Record<string, OpenClawSidecarConfig> = {
       "OPENCLAW_CONSOLE_URL",
       "NEXT_PUBLIC_OPENCLAW_CONSOLE_URL",
     ],
+    gatewayUrlEnvNames: [
+      "OPENCLAW_WORK_ORDER_GATEWAY_URL",
+      "OPENCLAW_GATEWAY_URL",
+    ],
     tokenEnvNames: [
       "OPENCLAW_WORK_ORDER_GATEWAY_TOKEN",
       "OPENCLAW_GATEWAY_TOKEN",
     ],
     defaultBaseUrl: "http://127.0.0.1:18889/",
+    defaultGatewayUrl: "ws://127.0.0.1:18889/",
     defaultToken: "bpai-sidecar-openclaw-token",
   },
   "document-longxia": {
@@ -30,8 +37,10 @@ const OPENCLAW_SIDECARS: Record<string, OpenClawSidecarConfig> = {
     agentName: "文档龙虾",
     launchHref: "/api/ai-dorm/openclaw/document-longxia/launch",
     baseUrlEnvNames: ["OPENCLAW_DOCUMENT_CONSOLE_URL"],
+    gatewayUrlEnvNames: ["OPENCLAW_DOCUMENT_GATEWAY_URL"],
     tokenEnvNames: ["OPENCLAW_DOCUMENT_GATEWAY_TOKEN"],
     defaultBaseUrl: "http://127.0.0.1:18989/",
+    defaultGatewayUrl: "ws://127.0.0.1:18989/",
     defaultToken: "bpai-document-openclaw-token",
   },
   "drawing-longxia": {
@@ -39,8 +48,10 @@ const OPENCLAW_SIDECARS: Record<string, OpenClawSidecarConfig> = {
     agentName: "图纸龙虾",
     launchHref: "/api/ai-dorm/openclaw/drawing-longxia/launch",
     baseUrlEnvNames: ["OPENCLAW_DRAWING_CONSOLE_URL"],
+    gatewayUrlEnvNames: ["OPENCLAW_DRAWING_GATEWAY_URL"],
     tokenEnvNames: ["OPENCLAW_DRAWING_GATEWAY_TOKEN"],
     defaultBaseUrl: "http://127.0.0.1:19089/",
+    defaultGatewayUrl: "ws://127.0.0.1:19089/",
     defaultToken: "bpai-drawing-openclaw-token",
   },
   "alert-longxia": {
@@ -48,8 +59,10 @@ const OPENCLAW_SIDECARS: Record<string, OpenClawSidecarConfig> = {
     agentName: "预警龙虾",
     launchHref: "/api/ai-dorm/openclaw/alert-longxia/launch",
     baseUrlEnvNames: ["OPENCLAW_ALERT_CONSOLE_URL"],
+    gatewayUrlEnvNames: ["OPENCLAW_ALERT_GATEWAY_URL"],
     tokenEnvNames: ["OPENCLAW_ALERT_GATEWAY_TOKEN"],
     defaultBaseUrl: "http://127.0.0.1:19189/",
+    defaultGatewayUrl: "ws://127.0.0.1:19189/",
     defaultToken: "bpai-alert-openclaw-token",
   },
   "report-longxia": {
@@ -57,8 +70,10 @@ const OPENCLAW_SIDECARS: Record<string, OpenClawSidecarConfig> = {
     agentName: "报表龙虾",
     launchHref: "/api/ai-dorm/openclaw/report-longxia/launch",
     baseUrlEnvNames: ["OPENCLAW_REPORT_CONSOLE_URL"],
+    gatewayUrlEnvNames: ["OPENCLAW_REPORT_GATEWAY_URL"],
     tokenEnvNames: ["OPENCLAW_REPORT_GATEWAY_TOKEN"],
     defaultBaseUrl: "http://127.0.0.1:19289/",
+    defaultGatewayUrl: "ws://127.0.0.1:19289/",
     defaultToken: "bpai-report-openclaw-token",
   },
 };
@@ -107,4 +122,19 @@ export function buildOpenClawLaunchUrl(agentId: string) {
   }).toString();
 
   return target;
+}
+
+export function getOpenClawGatewayConnection(agentId: string) {
+  const config = getOpenClawSidecarConfig(agentId);
+
+  if (!config) {
+    return null;
+  }
+
+  return {
+    agentId: config.agentId,
+    agentName: config.agentName,
+    gatewayUrl: readEnvValue(config.gatewayUrlEnvNames, config.defaultGatewayUrl),
+    token: readEnvValue(config.tokenEnvNames, config.defaultToken),
+  };
 }

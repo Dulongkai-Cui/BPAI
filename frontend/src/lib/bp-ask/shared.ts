@@ -101,6 +101,15 @@ export type DispatchExecutionPreview = {
     appliedAt?: string | null;
     appliedByUserName?: string | null;
   }>;
+  openClawRuns?: Array<{
+    agentId: string;
+    status: string;
+    summaryText: string;
+    submitEnabled?: boolean;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    errorCode?: string | null;
+  }>;
   changedObjects?: string[];
 };
 

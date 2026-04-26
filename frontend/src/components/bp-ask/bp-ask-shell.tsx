@@ -43,6 +43,10 @@ type WritebackDraftApplyInput = {
   draftId: string;
 };
 
+type OpenClawRunInput = {
+  executionResultId: string;
+};
+
 type PendingUserMessage = {
   id: string;
   text: string;
@@ -83,6 +87,7 @@ export function BpAskShell() {
   const [continuingKey, setContinuingKey] = useState<string | null>(null);
   const [reviewingDraftKey, setReviewingDraftKey] = useState<string | null>(null);
   const [applyingDraftKey, setApplyingDraftKey] = useState<string | null>(null);
+  const [runningOpenClawKey, setRunningOpenClawKey] = useState<string | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<PendingUserMessage | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -398,6 +403,37 @@ export function BpAskShell() {
     [activeThreadId, syncThreadSummary],
   );
 
+  const handleRunOpenClaw = useCallback(
+    async (input: OpenClawRunInput) => {
+      if (!activeThreadId) {
+        return;
+      }
+
+      setRunningOpenClawKey(input.executionResultId);
+      setErrorMessage(null);
+
+      try {
+        const result = await requestJson<ThreadMutationResponse>(
+          `/api/bp-ask/threads/${activeThreadId}/openclaw`,
+          {
+            method: "POST",
+            body: JSON.stringify(input),
+          },
+        );
+
+        syncThreadSummary(result.summary);
+        setActiveThread(result.thread);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "OpenClaw sidecar 执行失败。",
+        );
+      } finally {
+        setRunningOpenClawKey(null);
+      }
+    },
+    [activeThreadId, syncThreadSummary],
+  );
+
   return (
     <div className="flex h-full min-h-0 bg-slate-100">
       <BpAskSidebar
@@ -432,12 +468,14 @@ export function BpAskShell() {
           continuingKey={continuingKey}
           reviewingDraftKey={reviewingDraftKey}
           applyingDraftKey={applyingDraftKey}
+          runningOpenClawKey={runningOpenClawKey}
           errorMessage={errorMessage}
           onSubmit={handleSubmit}
           onConfirmRequest={handleConfirmRequest}
           onContinueWorkflow={handleContinueWorkflow}
           onReviewWritebackDraft={handleReviewWritebackDraft}
           onApplyWritebackDraft={handleApplyWritebackDraft}
+          onRunOpenClaw={handleRunOpenClaw}
         />
       </div>
     </div>

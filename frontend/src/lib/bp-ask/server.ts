@@ -66,6 +66,9 @@ type BpAskPostConfirmationRun = NonNullable<
 type BpAskWritebackDraft = NonNullable<
   DispatchExecutionPreview["writebackDrafts"]
 >[number];
+type BpAskOpenClawRun = NonNullable<
+  DispatchExecutionPreview["openClawRuns"]
+>[number];
 type WritebackDraftRow = typeof executionWritebackDrafts.$inferSelect;
 
 type BpAskExecutionPlan = {
@@ -1453,6 +1456,7 @@ function updateAssistantMessageMetadata(params: {
     writebackDrafts: params.updatedPayload.writebackDrafts,
     writebackDraftReview: params.updatedPayload.writebackDraftReview,
     writebackApply: params.updatedPayload.writebackApply,
+    openClawRuns: params.updatedPayload.openClawRuns,
     changedObjects: params.updatedPayload.changedObjects,
     toolRuns: params.updatedPayload.toolRuns,
   };
@@ -1976,6 +1980,94 @@ function updateWritebackApplyPayload(params: {
       changedObjects,
       toolRun: params.toolRun,
     },
+    toolRuns: appendToolRun(params.payload.toolRuns, params.toolRun),
+  };
+}
+
+function findFirstWorkflowInput(payload: Record<string, unknown>) {
+  const workflowRuns = readArray(payload.workflowRuns);
+  const firstWorkflow = asRecord(workflowRuns[0]);
+
+  return asRecord(firstWorkflow?.input);
+}
+
+function readWorkflowWorkOrderNo(payload: Record<string, unknown>) {
+  return readString(findFirstWorkflowInput(payload), "workOrderNo");
+}
+
+function isOpenClawExecutionApproved(payload: Record<string, unknown>) {
+  const confirmationRequests = findFirstWorkflowConfirmationRequests(
+    payload.workflowRuns,
+  );
+
+  return confirmationRequests.some((request) => {
+    const record = asRecord(request);
+
+    return (
+      readString(record, "requiredBefore") === "openclaw_execution" &&
+      readString(record, "status") === "approved"
+    );
+  });
+}
+
+function readOpenClawRunFromToolRun(toolRun: AiToolRunRecord): BpAskOpenClawRun {
+  const payload = asRecord(toolRun.structuredPayload);
+  const submitEnabled = payload?.submitEnabled;
+
+  return {
+    agentId: readString(payload, "agentId") || "work-order-longxia",
+    status: toolRun.status,
+    summaryText: toolRun.summaryText,
+    submitEnabled: typeof submitEnabled === "boolean" ? submitEnabled : false,
+    startedAt: toolRun.startedAt,
+    completedAt: toolRun.completedAt,
+    errorCode: toolRun.errorCode ?? null,
+  };
+}
+
+function updateOpenClawPayload(params: {
+  payload: Record<string, unknown>;
+  toolRun: AiToolRunRecord;
+}) {
+  const executionPreview = asRecord(params.payload.executionPreview);
+  const openClawRun = readOpenClawRunFromToolRun(params.toolRun);
+  const existingRuns = readArray(params.payload.openClawRuns).filter(
+    (run): run is BpAskOpenClawRun => Boolean(asRecord(run)),
+  );
+  const nextRuns = [...existingRuns, openClawRun];
+  const statusLabel =
+    params.toolRun.status === "completed"
+      ? openClawRun.submitEnabled
+        ? "completed"
+        : "probe_only"
+      : params.toolRun.status;
+  const nextExecutionPreview = {
+    ...(executionPreview ?? {}),
+    title:
+      params.toolRun.status === "completed"
+        ? "真实执行：OpenClaw sidecar 已连通"
+        : "真实执行：OpenClaw sidecar 未完成",
+    openClawRuns: nextRuns,
+    simulatedActions: upsertSimulatedActionStatus(
+      executionPreview?.simulatedActions,
+      "OpenClaw sidecar",
+      statusLabel,
+    ),
+    toolRuns: appendToolRun(executionPreview?.toolRuns, params.toolRun),
+    nextStep:
+      params.toolRun.status === "completed"
+        ? openClawRun.submitEnabled
+          ? "OpenClaw sidecar 已收到任务；下一步等待 sidecar 结果进入 artifacts 或候选写回。"
+          : "OpenClaw sidecar 已连通；当前是 probe_only，开启 OPENCLAW_WORK_ORDER_SUBMIT_ENABLED 后可正式下发。"
+        : "OpenClaw sidecar 未完成，请检查 gateway URL、token 权限或 openclaw profile。",
+    safety:
+      "安全：OpenClaw sidecar 不直接写 BPAI 业务数据；返回内容仍需进入 artifacts、候选写回或人工确认链路。",
+  };
+
+  return {
+    ...params.payload,
+    executionPreview: nextExecutionPreview,
+    openClawRuns: nextRuns,
     toolRuns: appendToolRun(params.payload.toolRuns, params.toolRun),
   };
 }
@@ -2656,6 +2748,148 @@ export async function applyWritebackDraftForUser(
   }
 
   const lastPreview = `正式写回：${changedObjects.join("；") || draftRow.operation}`;
+  const [updatedThread] = await db
+    .update(conversationThreads)
+    .set({
+      lastMessageAt: now,
+      metadata: {
+        ...(asRecord(thread.metadata) ?? {}),
+        lastMessagePreview: previewFromText(lastPreview),
+      },
+      updatedAt: now,
+    })
+    .where(eq(conversationThreads.id, thread.id))
+    .returning();
+
+  const detail = await getConversationThreadDetailForUser(user, thread.id);
+
+  return {
+    summary: mapThreadSummary(updatedThread ?? thread),
+    thread: detail,
+  };
+}
+
+export async function runOpenClawForUser(
+  user: AuthenticatedUser,
+  threadId: string,
+  payload: {
+    executionResultId?: string;
+  },
+) {
+  const executionResultId = payload.executionResultId?.trim();
+
+  if (!executionResultId) {
+    throw new Error("INVALID_OPENCLAW_PAYLOAD");
+  }
+
+  const thread = await getThreadRowForUser(user, threadId);
+  const db = getDb();
+  const now = nowDate();
+
+  const [resultRow] = await db
+    .select()
+    .from(executionResults)
+    .where(eq(executionResults.id, executionResultId))
+    .limit(1);
+
+  if (!resultRow) {
+    throw new Error("EXECUTION_RESULT_NOT_FOUND");
+  }
+
+  const [taskRow] = await db
+    .select()
+    .from(executionTasks)
+    .where(
+      and(
+        eq(executionTasks.id, resultRow.taskId),
+        eq(executionTasks.threadId, thread.id),
+        eq(executionTasks.userId, user.id),
+      ),
+    )
+    .limit(1);
+
+  if (!taskRow) {
+    throw new Error("EXECUTION_RESULT_NOT_FOUND");
+  }
+
+  const structuredPayload = asRecord(resultRow.structuredPayload);
+
+  if (!structuredPayload) {
+    throw new Error("OPENCLAW_PAYLOAD_NOT_FOUND");
+  }
+
+  if (!isOpenClawExecutionApproved(structuredPayload)) {
+    throw new Error("OPENCLAW_CONFIRMATION_REQUIRED");
+  }
+
+  const workOrderNo = readWorkflowWorkOrderNo(structuredPayload);
+
+  if (!workOrderNo) {
+    throw new Error("OPENCLAW_WORK_ORDER_NOT_FOUND");
+  }
+
+  const toolRun = await runAiTool(
+    { user },
+    {
+      toolName: "openclaw.work_order.execute",
+      input: {
+        taskId: taskRow.id,
+        resultId: resultRow.id,
+        workOrderNo,
+        workflowId: readString(asRecord(taskRow.metadata), "workflowId") ||
+          "workflow-work-order-intake",
+        payload: {
+          executionResultId: resultRow.id,
+          workOrderNo,
+          workflowRuns: structuredPayload.workflowRuns,
+          postConfirmationRun: structuredPayload.postConfirmationRun,
+          writebackDrafts: structuredPayload.writebackDrafts,
+          changedObjects: structuredPayload.changedObjects,
+        },
+      },
+    },
+  );
+
+  const updatedPayload = updateOpenClawPayload({
+    payload: structuredPayload,
+    toolRun,
+  });
+
+  await db
+    .update(executionResults)
+    .set({
+      structuredPayload: updatedPayload,
+      summaryText: `${resultRow.summaryText} ${toolRun.summaryText}`,
+      updatedAt: now,
+    })
+    .where(eq(executionResults.id, resultRow.id));
+
+  const messageRows = await db
+    .select()
+    .from(conversationMessages)
+    .where(eq(conversationMessages.threadId, thread.id))
+    .orderBy(asc(conversationMessages.sequence));
+
+  const assistantMessage = messageRows.find(
+    (message) =>
+      readString(asRecord(message.metadata), "executionResultId") ===
+      executionResultId,
+  );
+
+  if (assistantMessage) {
+    await db
+      .update(conversationMessages)
+      .set({
+        metadata: updateAssistantMessageMetadata({
+          metadata: asRecord(assistantMessage.metadata) ?? {},
+          updatedPayload,
+        }),
+        updatedAt: now,
+      })
+      .where(eq(conversationMessages.id, assistantMessage.id));
+  }
+
+  const lastPreview = `OpenClaw sidecar：${toolRun.status}`;
   const [updatedThread] = await db
     .update(conversationThreads)
     .set({

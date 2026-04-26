@@ -480,6 +480,30 @@ async function main() {
       "正式写回没有把风险跟进草案写入工单 metadata",
     );
 
+    const openClawRun = await requestJson(
+      `/api/bp-ask/threads/${threadId}/openclaw`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          executionResultId: latestMessage.executionResultId,
+        }),
+      },
+      cookieHeader,
+    );
+    const openClawLatestMessage = openClawRun.json?.thread?.messages?.at(-1);
+    const openClawRuns = openClawLatestMessage?.executionPreview?.openClawRuns ?? [];
+    assert(openClawRuns.length === 1, "OpenClaw 执行结果未写入 executionPreview");
+    assert(
+      openClawRuns[0]?.status === "completed",
+      `OpenClaw sidecar 未连通：${openClawRuns[0]?.errorCode ?? openClawRuns[0]?.summaryText ?? "unknown"}`,
+    );
+    assert(
+      openClawLatestMessage?.executionPreview?.simulatedActions?.some((action) =>
+        action.startsWith("OpenClaw sidecar："),
+      ),
+      "OpenClaw 执行后未展示 sidecar 状态",
+    );
+
     console.log(
       JSON.stringify(
         {
@@ -507,6 +531,11 @@ async function main() {
             (row) => row.status,
           ),
           changedObjects: appliedLatestMessage.executionPreview.changedObjects,
+          openClawRunStatuses: openClawRuns.map((run) => run.status),
+          openClawErrorCodes: openClawRuns.map((run) => run.errorCode ?? null),
+          openClawSubmitModes: openClawRuns.map((run) =>
+            run.submitEnabled ? "submitted" : "probe_only",
+          ),
           agentId: agentRun.agentId,
           agentMode: agentRun.mode,
           skillId: skillRun.skillId,

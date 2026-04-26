@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
+import { runOpenClawWorkOrderExecution } from "@/lib/ai-dorm/openclaw-gateway";
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { getDb } from "@/lib/db/client";
 import {
@@ -21,6 +22,7 @@ export const AI_TOOL_NAMES = [
   "work_order.read",
   "work_order.writeback_draft.create",
   "work_order.writeback.apply",
+  "openclaw.work_order.execute",
 ] as const;
 
 export type AiToolName = (typeof AI_TOOL_NAMES)[number];
@@ -57,6 +59,11 @@ type WorkOrderWritebackDraftCreateResult = Pick<
 >;
 
 type WorkOrderWritebackApplyResult = Pick<
+  AiToolRunRecord,
+  "status" | "summaryText" | "structuredPayload" | "errorCode"
+>;
+
+type OpenClawWorkOrderExecuteResult = Pick<
   AiToolRunRecord,
   "status" | "summaryText" | "structuredPayload" | "errorCode"
 >;
@@ -762,6 +769,110 @@ async function runWorkOrderWritebackApply(
   };
 }
 
+async function runOpenClawWorkOrderExecute(
+  context: AiToolExecutionContext,
+  input: Record<string, unknown>,
+): Promise<OpenClawWorkOrderExecuteResult> {
+  const taskId = readString(input, "taskId");
+  const resultId = readString(input, "resultId");
+  const workOrderNo = readString(input, "workOrderNo");
+  const workflowId = readString(input, "workflowId") || "workflow-work-order-intake";
+  const payload = isRecord(input.payload) ? input.payload : {};
+
+  if (!taskId || !resultId || !workOrderNo) {
+    return {
+      status: "failed",
+      summaryText:
+        "openclaw.work_order.execute 缺少 taskId、resultId 或 workOrderNo，无法执行 sidecar。",
+      structuredPayload: {
+        taskId: taskId || null,
+        resultId: resultId || null,
+        workOrderNo: workOrderNo || null,
+        changedObjects: [],
+      },
+      errorCode: "INVALID_OPENCLAW_WORK_ORDER_INPUT",
+    };
+  }
+
+  const db = getDb();
+  const [taskRow] = await db
+    .select()
+    .from(executionTasks)
+    .where(and(eq(executionTasks.id, taskId), eq(executionTasks.userId, context.user.id)))
+    .limit(1);
+
+  if (!taskRow) {
+    return {
+      status: "not_found",
+      summaryText: "没有找到当前用户可访问的 execution task，未执行 OpenClaw sidecar。",
+      structuredPayload: {
+        taskId,
+        resultId,
+        workOrderNo,
+        changedObjects: [],
+      },
+      errorCode: "EXECUTION_TASK_NOT_FOUND",
+    };
+  }
+
+  const [resultRow] = await db
+    .select()
+    .from(executionResults)
+    .where(
+      and(eq(executionResults.id, resultId), eq(executionResults.taskId, taskRow.id)),
+    )
+    .limit(1);
+
+  if (!resultRow) {
+    return {
+      status: "not_found",
+      summaryText: "没有找到匹配的 execution result，未执行 OpenClaw sidecar。",
+      structuredPayload: {
+        taskId,
+        resultId,
+        workOrderNo,
+        changedObjects: [],
+      },
+      errorCode: "EXECUTION_RESULT_NOT_FOUND",
+    };
+  }
+
+  const openClawRun = await runOpenClawWorkOrderExecution({
+    agentId: "work-order-longxia",
+    taskId: taskRow.id,
+    resultId: resultRow.id,
+    workOrderNo,
+    workflowId,
+    payload: {
+      ...payload,
+      actor: {
+        userId: context.user.id,
+        userName: context.user.name,
+      },
+      safety: {
+        businessWriteback: "forbidden_inside_openclaw",
+        writebackPolicy: "return_candidates_to_bpask",
+      },
+    },
+  });
+
+  return {
+    status: openClawRun.status,
+    summaryText: openClawRun.summaryText,
+    structuredPayload: {
+      ...openClawRun.structuredPayload,
+      taskId: taskRow.id,
+      resultId: resultRow.id,
+      workOrderNo,
+      workflowId,
+      agentId: openClawRun.agentId,
+      startedAt: openClawRun.startedAt,
+      completedAt: openClawRun.completedAt,
+    },
+    errorCode: openClawRun.errorCode,
+  };
+}
+
 export async function runAiTool(
   context: AiToolExecutionContext,
   request: AiToolRunRequest,
@@ -775,8 +886,10 @@ export async function runAiTool(
         ? await runWorkOrderRead(input)
         : request.toolName === "work_order.writeback_draft.create"
           ? await runWorkOrderWritebackDraftCreate(context, input)
-          : request.toolName === "work_order.writeback.apply"
-            ? await runWorkOrderWritebackApply(context, input)
+        : request.toolName === "work_order.writeback.apply"
+          ? await runWorkOrderWritebackApply(context, input)
+          : request.toolName === "openclaw.work_order.execute"
+            ? await runOpenClawWorkOrderExecute(context, input)
         : {
             status: "failed" as const,
             summaryText: `未知工具：${request.toolName}`,

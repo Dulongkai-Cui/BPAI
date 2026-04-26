@@ -37,8 +37,8 @@ BPAI 已经有 BP问问、execution task/result、AI宿舍、Skill 仓库页面�
 | AI宿舍 Skill 仓库 | 页面和 blueprint 已落地；`skill-work-order-summary` 最小 Runner 已落地，真实持久化未落地 | `/ai-dorm/skills`、`frontend/src/lib/ai-dorm/server.ts`、`frontend/src/lib/ai-dorm/skill-runner.ts` |
 | AI宿舍工作流 | 页面和 blueprint 已落地；`workflow-work-order-intake` 最小 Runner 已落地，当前可跑 `input -> 工单摘要 Skill -> 工单龙虾 dry-run -> waiting_confirmation -> confirmation evaluation -> post-confirmation dry-run -> 写回草案落库 -> 草案审阅 -> 白名单正式写回 -> output`，并记录确认项同意/拒绝/暂缓、草案批准/拒绝/取消和 applied 写回结果 | `/ai-dorm/workflows`、`frontend/src/lib/ai-dorm/workflow-runner.ts` |
 | AI员工/龙虾目录 | 页面和 blueprint 已落地 | `/ai-dorm/agents` |
-| OpenClaw sidecar 发射入口 | 已落地 | `frontend/src/lib/ai-dorm/openclaw.ts`、`/api/ai-dorm/openclaw/**` |
-| LongxiaAdapter | 已最小落地 dry-run，当前仅支持 `work-order-longxia` 生成承接预案与待确认项；未调用 OpenClaw sidecar | `frontend/src/lib/ai-dorm/longxia-adapter.ts` |
+| OpenClaw sidecar 发射入口 | 已落地；新增 Gateway 连接配置，Docker dev 下 work-order sidecar 走 `ws://openclaw-gateway:18789/` | `frontend/src/lib/ai-dorm/openclaw.ts`、`/api/ai-dorm/openclaw/**` |
+| LongxiaAdapter | 已最小落地 dry-run，当前支持 `work-order-longxia` 生成承接预案与待确认项；已新增 OpenClaw Gateway Adapter 的 probe-only 连通链路，真实下发仍由开关控制 | `frontend/src/lib/ai-dorm/longxia-adapter.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
 | MCP Registry / Tool Gateway | Tool Gateway 最小链路已落地 `work_order.read`、`work_order.writeback_draft.create` 和 `work_order.writeback.apply`；正式写回只处理 ready 草案和白名单字段；草案审阅 API 已支持 `ready / rejected / cancelled / applied`；MCP Registry 未落地 | `frontend/src/lib/ai-tools/gateway.ts`、`/api/bp-ask/threads/[threadId]/writeback-drafts` |
 | BPAI CLI | 未落地 | 当前仅有设计需求 |
 
@@ -485,6 +485,30 @@ LongxiaAdapter 是 AI宿舍到 OpenClaw / 浏览器执行器之间的桥。
   }
 }
 ```
+
+### 5.8.1 BP问问与 OpenClaw 的通信方式
+
+当前最小通信链路采用“BP问问后端 -> Tool Gateway -> OpenClaw Gateway Adapter -> OpenClaw sidecar”的方式，不让前端浏览器直接把业务 payload 发给 sidecar。
+
+```text
+BP问问
+-> /api/bp-ask/threads/[threadId]/openclaw
+-> runOpenClawForUser
+-> Tool Gateway: openclaw.work_order.execute
+-> OpenClaw Gateway Adapter
+-> WebSocket: connect / health / 可选 chat.send
+-> OpenClaw work-order sidecar
+-> openClawRuns 写回 execution_results.structuredPayload
+-> BP问问更新 executionPreview
+```
+
+当前安全边界：
+
+- 默认只做 `probe_only`：连接 sidecar 并执行 `health` 探测，不下发 `chat.send`。
+- 只有设置 `OPENCLAW_WORK_ORDER_SUBMIT_ENABLED=true` 或 `OPENCLAW_SUBMIT_ENABLED=true` 后，才会尝试把结构化任务 payload 发送给 OpenClaw。
+- OpenClaw 不直接写 BPAI 业务表；需要业务变更时，只能返回候选结果，再由 BP问问进入草案审阅、白名单写回。
+- 只有确认项全部同意、写回草案已审阅并完成正式写回后，UI 才提供“继续 OpenClaw”的下一步入口。
+- Docker dev 环境下，前端容器使用 `OPENCLAW_WORK_ORDER_GATEWAY_URL=ws://openclaw-gateway:18789/`；宿主机调试入口仍是 `http://127.0.0.1:18889/`。
 
 ### 5.9 BPAI CLI
 

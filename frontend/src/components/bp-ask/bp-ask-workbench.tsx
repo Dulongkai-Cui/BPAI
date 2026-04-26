@@ -205,6 +205,10 @@ function postConfirmationRunSafeguards(preview?: DispatchExecutionPreview) {
   ];
 }
 
+function shouldOfferOpenClawRun(preview?: DispatchExecutionPreview) {
+  return hasAppliedWriteback(preview) && !(preview?.openClawRuns?.length);
+}
+
 function toneClasses(tone: ActionCard["tone"]) {
   if (tone === "purple") {
     return "border-violet-200 bg-violet-50 text-violet-700";
@@ -225,6 +229,7 @@ type BpAskWorkbenchProps = {
   continuingKey?: string | null;
   reviewingDraftKey?: string | null;
   applyingDraftKey?: string | null;
+  runningOpenClawKey?: string | null;
   errorMessage?: string | null;
   onSubmit: (prompt: string) => void;
   onConfirmRequest?: (input: {
@@ -241,6 +246,9 @@ type BpAskWorkbenchProps = {
   onApplyWritebackDraft?: (input: {
     executionResultId: string;
     draftId: string;
+  }) => void;
+  onRunOpenClaw?: (input: {
+    executionResultId: string;
   }) => void;
 };
 
@@ -310,12 +318,14 @@ export function BpAskWorkbench({
   continuingKey,
   reviewingDraftKey,
   applyingDraftKey,
+  runningOpenClawKey,
   errorMessage,
   onSubmit,
   onConfirmRequest,
   onContinueWorkflow,
   onReviewWritebackDraft,
   onApplyWritebackDraft,
+  onRunOpenClaw,
 }: BpAskWorkbenchProps) {
   const [inputValue, setInputValue] = useState("");
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -521,6 +531,57 @@ export function BpAskWorkbench({
                                   </span>
                                 ))}
                               </div>
+                              {message.executionPreview?.openClawRuns?.length ? (
+                                <div className="mt-3 rounded-2xl border border-teal-200 bg-teal-50/80 p-3 text-xs leading-5 text-teal-900">
+                                  <div className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">
+                                    OpenClaw sidecar
+                                  </div>
+                                  <div className="mt-2 space-y-2">
+                                    {message.executionPreview.openClawRuns.map((run, index) => (
+                                      <div
+                                        key={`${message.id}-${run.agentId}-${run.startedAt ?? index}`}
+                                        className="rounded-xl bg-white/80 px-3 py-2"
+                                      >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-semibold">{run.agentId}</span>
+                                          <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                                            {run.status}
+                                          </span>
+                                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                                            {run.submitEnabled ? "submitted" : "probe_only"}
+                                          </span>
+                                        </div>
+                                        <div className="mt-1">{run.summaryText}</div>
+                                        {run.errorCode ? (
+                                          <div className="mt-1 text-teal-900/70">
+                                            {run.errorCode}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {shouldOfferOpenClawRun(message.executionPreview) &&
+                              message.executionResultId &&
+                              onRunOpenClaw ? (
+                                <div className="mt-3">
+                                  <button
+                                    type="button"
+                                    disabled={Boolean(runningOpenClawKey)}
+                                    onClick={() =>
+                                      onRunOpenClaw({
+                                        executionResultId: message.executionResultId!,
+                                      })
+                                    }
+                                    className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {runningOpenClawKey === message.executionResultId
+                                      ? "连接中..."
+                                      : "继续 OpenClaw"}
+                                  </button>
+                                </div>
+                              ) : null}
                               {message.executionPreview?.agentRuns?.length ? (
                                 <div className="mt-3 space-y-2">
                                   {message.executionPreview.agentRuns.map((agentRun) => (
