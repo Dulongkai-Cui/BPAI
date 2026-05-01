@@ -303,7 +303,7 @@ function crewSummary(item: WorkOrderItem) {
 }
 
 function isWarningAlert(item: WorkOrderItem) {
-  return item.stage === "warning";
+  return item.warningStatus === "warning" || item.warningStatus === "critical";
 }
 
 function PersonIcon() {

@@ -419,6 +419,39 @@ export async function copyAssetToWorkspace(params: {
   });
 }
 
+export async function overwriteAssetTextContent(params: {
+  kind: ContentKind;
+  assetId: string;
+  text: string;
+}) {
+  const { kind, assetId, text } = params;
+  const asset = await getAssetById(kind, assetId);
+
+  if (!asset) {
+    return null;
+  }
+
+  const absolutePath = toStoredPath(asset.storedRelativePath);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  const buffer = Buffer.from(text, "utf8");
+  await writeFile(absolutePath, buffer);
+
+  const nextAsset: StoredContentAsset = {
+    ...asset,
+    sizeBytes: buffer.byteLength,
+    updatedAt: nowIso(),
+  };
+  await mirrorAssetToPostgres(nextAsset);
+  void runShadowWrite("asset-overwrite-text-shadow", async () => {
+    await mutateAppStore((store) => ({
+      store: upsertAssetInRawStore(store, nextAsset),
+      result: undefined,
+    }));
+  });
+
+  return nextAsset;
+}
+
 export async function overwriteAssetBinary(
   kind: ContentKind,
   assetId: string,

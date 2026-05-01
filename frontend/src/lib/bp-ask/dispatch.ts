@@ -575,11 +575,11 @@ function scorePrimaryIntent(
   }
 
   if (includesAny(prompt, ["拆成", "处理一遍", "跑一遍", "联动", "自动处理", "逐步"])) {
-    addScore(scores, "workflow_execute", 86);
+    addScore(scores, "workflow_execute", 78);
   }
 
   if (includesAny(prompt, ["让龙虾", "调用龙虾", "交给龙虾", "让AI去做", "委托执行"])) {
-    addScore(scores, "agent_delegate", 96);
+    addScore(scores, "agent_delegate", 84);
   }
 
   if (refs?.fileName) {
@@ -842,7 +842,7 @@ function buildFollowupQuestion(
 function deriveExecutionMode(
   intent: PrimaryIntent,
   targetDomain: TargetDomain,
-  prompt: string,
+  _prompt: string,
 ): ExecutionMode {
   if (intent === "clarification") {
     return "ask_followup";
@@ -865,9 +865,7 @@ function deriveExecutionMode(
   }
 
   if (intent === "workflow_execute") {
-    return includesAny(prompt, ["多步骤", "逐步", "自动处理", "跑一遍"])
-      ? "delegate_to_longxia"
-      : "start_workflow";
+    return "start_workflow";
   }
 
   if (intent === "delete_object" || intent === "assign" || intent === "permission_change") {
@@ -1175,9 +1173,6 @@ function buildDispatchDecisionFromClassification(params: {
     ? "ask_followup"
     : params.classification.executionMode ??
       deriveExecutionMode(primaryIntent, targetDomain, params.prompt);
-  const suggestedExecutor = clarified
-    ? "bp_ask"
-    : deriveSuggestedExecutor(primaryIntent, executionMode, requiresWrite);
   const followupQuestion = clarified
     ? buildFollowupQuestion(
         params.classification.primaryIntent,
@@ -1199,7 +1194,7 @@ function buildDispatchDecisionFromClassification(params: {
     targetRefs: params.targetRefs,
     constraints: params.constraints,
     expectedOutput: deriveExpectedOutput(primaryIntent, executionMode, targetDomain),
-    suggestedExecutor,
+    suggestedExecutor: requiresWrite ? "system" : "bp_ask",
     toolHints: buildToolHints(targetDomain, executionMode, requiresWrite, params.targetRefs),
     memoryScopes: buildMemoryScopes(targetDomain, needsMemory, params.targetRefs),
     followupQuestion,
@@ -1301,9 +1296,6 @@ function buildRuleDecision(prompt: string): DispatchDecision {
   const executionMode = clarified
     ? "ask_followup"
     : deriveExecutionMode(primaryIntent, targetDomain, normalizedPrompt);
-  const suggestedExecutor = clarified
-    ? "bp_ask"
-    : deriveSuggestedExecutor(primaryIntent, executionMode, requiresWrite);
   const priority = classifyPriority(normalizedPrompt);
 
   const confidenceBase =
@@ -1338,7 +1330,7 @@ function buildRuleDecision(prompt: string): DispatchDecision {
     targetRefs,
     constraints,
     expectedOutput: deriveExpectedOutput(primaryIntent, executionMode, targetDomain),
-    suggestedExecutor,
+    suggestedExecutor: requiresWrite ? "system" : "bp_ask",
     toolHints: buildToolHints(targetDomain, executionMode, requiresWrite, targetRefs),
     memoryScopes: buildMemoryScopes(targetDomain, needsMemory, targetRefs),
     followupQuestion,
@@ -1389,13 +1381,11 @@ function combineDecision(
   const memoryScopes = uniqueStrings([...primary.memoryScopes, ...secondary.memoryScopes]);
 
   const suggestedExecutor: SuggestedExecutor =
-    primary.suggestedExecutor === "longxia" || secondary.suggestedExecutor === "longxia"
-      ? "longxia"
-      : combinedRequiresWrite ||
-          primary.suggestedExecutor === "system" ||
-          secondary.suggestedExecutor === "system"
-        ? "system"
-        : primary.suggestedExecutor;
+    combinedRequiresWrite ||
+    primary.suggestedExecutor === "system" ||
+    secondary.suggestedExecutor === "system"
+      ? "system"
+      : "bp_ask";
 
   const priority =
     priorityWeight(primary.priority) >= priorityWeight(secondary.priority)
@@ -1445,17 +1435,17 @@ function buildActions(decision: DispatchDecision): ActionCard[] {
     },
   ];
 
-  if (decision.suggestedExecutor === "longxia") {
-    actions.push({
-      title: "委托龙虾执行",
-      subtitle: "这条请求更适合拆成多步骤任务，进入执行器链路。",
-      tone: "purple",
-    });
-  } else if (decision.requiresWrite) {
+  if (decision.requiresWrite) {
     actions.push({
       title: "等待人工确认",
       subtitle: "当前动作涉及正式写入、分配、删除或权限变更，执行前需要确认。",
       tone: "emerald",
+    });
+  } else if (decision.executionMode === "delegate_to_longxia" || decision.executionMode === "start_workflow") {
+    actions.push({
+      title: "进入后场执行",
+      subtitle: "BP问问会先整理目标与约束，再把任务送入受控执行链。",
+      tone: "purple",
     });
   } else {
     actions.push({
@@ -1489,7 +1479,6 @@ function buildInsight(decision: DispatchDecision): InsightBlock {
   const findings = [
     `识别为“${PRIMARY_INTENT_LABELS[decision.primaryIntent]}”，目标域为“${TARGET_DOMAIN_LABELS[decision.targetDomain]}”。`,
     `执行模式是“${EXECUTION_MODE_LABELS[decision.executionMode]}”，优先级为“${DISPATCH_PRIORITY_LABELS[decision.priority]}”。`,
-    `建议执行器：${executorLabel}。`,
     decision.toolHints.length > 0
       ? `建议工具：${decision.toolHints.join(" / ")}。`
       : "当前不需要额外工具即可先处理。",
@@ -1552,14 +1541,14 @@ function buildExecutionPreview(decision: DispatchDecision): DispatchExecutionPre
   if (decision.executionMode === "delegate_to_longxia") {
     return {
       mode: "simulation",
-      title: "模拟执行：龙虾委托任务草案",
-      summary: `这次请求适合委托执行器处理，建议执行器是“${decision.suggestedExecutor}”。`,
-      nextStep: `真实 LongxiaAdapter 尚未接入；当前只生成执行任务草案，目标：${targetText}。`,
-      safety: "安全：未调用龙虾/浏览器执行器，未触发外部自动化动作。",
+      title: "模拟执行：后场执行预案",
+      summary: `这次请求更适合进入后场执行链，由 BP问问继续跟进结果和后续动作。`,
+      nextStep: `当前先生成标准 handoff 预案，目标：${targetText}。`,
+      safety: "安全：当前只生成受控执行预案，不直接触发外部自动化动作。",
       simulatedActions: [
-        "创建执行任务草案",
-        "准备目标对象和约束参数",
-        "等待 LongxiaAdapter 接入后再触发真实执行",
+        "整理目标对象与约束",
+        "生成标准 handoff payload",
+        "等待后场执行器接入或继续确认",
       ],
     };
   }

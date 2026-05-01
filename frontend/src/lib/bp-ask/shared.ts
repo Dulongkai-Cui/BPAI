@@ -26,16 +26,33 @@ export type DispatchExecutionPreview = {
     | "tool_result"
     | "skill_result"
     | "workflow_result"
-    | "writeback_result";
+    | "writeback_result"
+    | "capability_steps_result";
   title: string;
   summary: string;
   nextStep: string;
   safety: string;
   simulatedActions: string[];
   toolRuns?: Array<{
+    callId?: string;
     toolName: string;
+    sourceKind?: string;
+    riskLevel?: string;
     status: string;
     summaryText: string;
+    startedAt?: string;
+    completedAt?: string;
+    input?: Record<string, unknown>;
+    trace?: {
+      callId?: string;
+      sourceKind?: string;
+      riskLevel?: string;
+      changedObjects?: string[];
+      artifacts?: Array<Record<string, unknown>>;
+      startedAt?: string;
+      completedAt?: string;
+    };
+    structuredPayload?: Record<string, unknown> | null;
   }>;
   agentRuns?: Array<{
     agentId: string;

@@ -6,16 +6,30 @@ import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 
 import type { AuthenticatedUser } from "@/lib/auth/types";
 import { runAiSkill, type AiSkillRunRecord } from "@/lib/ai-dorm/skill-runner";
+import {
+  runLongxiaAgent,
+  type AiLongxiaRunRecord,
+} from "@/lib/ai-dorm/longxia-adapter";
 import { matchAiWorkflow } from "@/lib/ai-dorm/workflow-matcher";
 import {
   runAiWorkflow,
   type AiWorkflowRunRecord,
 } from "@/lib/ai-dorm/workflow-runner";
-import { runAiTool, type AiToolRunRecord } from "@/lib/ai-tools/gateway";
+import {
+  listAiCapabilityDescriptors,
+  runAiTool,
+  type AiCapabilityDescriptor,
+  type AiToolRunRecord,
+} from "@/lib/ai-tools/gateway";
 import { dispatchBpAskPrompt } from "@/lib/bp-ask/dispatch";
 import type { DispatchDecision } from "@/lib/bp-ask/intents";
 import {
+  planAiCapabilityStepsWithModel,
+  planAiCapabilityWithModel,
   planWorkOrderToolWithModel,
+  refineWorkOrderPatchWithModel,
+  type ModelAiCapabilityPlan,
+  type ModelAiCapabilityStepPlan,
   type ModelWorkOrderToolPlan,
 } from "@/lib/bp-ask/model-provider";
 import {
@@ -53,6 +67,9 @@ type MemoryScopeKind =
   | "document"
   | "work_order";
 type BpAskExecutionRoute =
+  | "capability_followup"
+  | "capability_steps"
+  | "capability_tool"
   | "dispatch_plan"
   | "direct_tool"
   | "skill"
@@ -82,9 +99,61 @@ type BpAskOpenClawRun = NonNullable<
 >[number];
 type WritebackDraftRow = typeof executionWritebackDrafts.$inferSelect;
 
+type BpAskMissingInformationFollowupCandidate = {
+  key: string;
+  value: string;
+  title: string;
+  subtitle?: string;
+};
+
+type BpAskMissingInformationFollowup = {
+  capability: AiCapabilityDescriptor;
+  missingInformation: string[];
+  prompt: string;
+  candidates?: BpAskMissingInformationFollowupCandidate[];
+};
+
+type BpAskContinuationValue = {
+  key: string;
+  value: string;
+};
+
+type BpAskSlotFillContinuation = {
+  sourceAssistantMessageId: string;
+  sourceAssistantSequence: number;
+  filledKey: string;
+  filledValue: string;
+  capabilityName: string;
+  originalModelCapabilityPlan: ModelAiCapabilityPlan;
+  mergedModelCapabilityPlan: ModelAiCapabilityPlan;
+};
+
+type BpAskSlotFillSource = {
+  messageId: string;
+  sequence: number;
+  modelCapabilityPlan: ModelAiCapabilityPlan;
+  missingInformationFollowup: BpAskMissingInformationFollowup;
+};
+
+type BpAskStepSlotFillContinuation = {
+  sourceAssistantMessageId: string;
+  sourceAssistantSequence: number;
+  filledKey: string;
+  filledValue: string;
+  originalModelCapabilityStepPlan: ModelAiCapabilityStepPlan;
+  mergedModelCapabilityStepPlan: ModelAiCapabilityStepPlan;
+};
+
+type BpAskStepSlotFillSource = {
+  messageId: string;
+  sequence: number;
+  modelCapabilityStepPlan: ModelAiCapabilityStepPlan;
+  missingInformationFollowup: BpAskMissingInformationFollowup;
+};
+
 type BpAskExecutionPlan = {
   route: BpAskExecutionRoute;
-  toolName?: "work_order.read" | "work_order.create";
+  toolName?: string;
   skillId?: "skill-work-order-summary";
   workflowId?: "workflow-work-order-intake";
   createPlan?: BpAskWorkOrderCreatePlan;
@@ -93,12 +162,87 @@ type BpAskExecutionPlan = {
     workOrderNo?: string;
   };
   modelToolPlan?: ModelWorkOrderToolPlan;
+  modelCapabilityPlan?: ModelAiCapabilityPlan;
+  modelCapabilityStepPlan?: ModelAiCapabilityStepPlan;
+  missingInformationFollowup?: BpAskMissingInformationFollowup;
+};
+
+type BpAskRouteSelection = {
+  executionPlan: BpAskExecutionPlan;
+  modelCapabilityMissingInformationFollowup: BpAskMissingInformationFollowup | null;
+  stepPlannerPlan: BpAskWorkOrderStepPlannerPlan | null;
+};
+
+type BpAskOrchestrationTerminalState =
+  | "needs_followup"
+  | "waiting_confirmation"
+  | "ready_to_delegate"
+  | "completed"
+  | "failed";
+
+type BpAskLongxiaHandoffPayload = {
+  agentId: "work-order-longxia";
+  mode: "dry_run";
+  input: {
+    workOrderNo: string;
+    workOrder?: Record<string, unknown>;
+    nextStep: string;
+    risks: string[];
+    sourceThreadId: string;
+    sourceMessageId: string;
+    taskTitle: string;
+  };
+};
+
+type BpAskExecutionState = {
+  assistantText: string;
+  insight: InsightBlock;
+  executionPreview: DispatchExecutionPreview;
+  modelCapabilityStepPlan: ModelAiCapabilityStepPlan | null;
+  directToolRun: AiToolRunRecord | null;
+  writebackDraftToolRun: AiToolRunRecord | null;
+  writebackApplyToolRun: AiToolRunRecord | null;
+  writebackDrafts: BpAskWritebackDraft[];
+  missingInformationFollowup: BpAskMissingInformationFollowup | null;
+  capabilityStepRuns: BpAskCapabilityStepRun[];
+  capabilityStepToolRuns: AiToolRunRecord[];
+  longxiaRun: AiLongxiaRunRecord | null;
+  longxiaHandoffPayload: BpAskLongxiaHandoffPayload | null;
+  skillRun: AiSkillRunRecord | null;
+  workflowRun: AiWorkflowRunRecord | null;
+  terminalState: BpAskOrchestrationTerminalState;
+  taskStatus: "planned" | "delegated" | "completed" | "failed";
+  resultStatus: "ready" | "failed";
+};
+
+type BpAskStepExecutionState = {
+  stepPlan: ModelAiCapabilityStepPlan;
+  stepRuns: BpAskCapabilityStepRun[];
+  toolRuns: AiToolRunRecord[];
+  writebackDrafts: BpAskWritebackDraft[];
+  missingInformationFollowup: BpAskMissingInformationFollowup | null;
+  terminalState: BpAskOrchestrationTerminalState;
+  taskStatus: "planned" | "completed" | "failed";
+  resultStatus: "ready" | "failed";
+  executionPreview: DispatchExecutionPreview;
+  insight: InsightBlock;
+  assistantText: string;
 };
 
 type BpAskWorkOrderStepPlannerPlan = {
   workOrderNo: string;
   summary: string;
   candidates: BpAskControlledWritebackCandidate[];
+};
+
+type BpAskCapabilityStepRun = {
+  stepId: string;
+  toolName: string;
+  purpose: string;
+  status: string;
+  summaryText: string;
+  toolRunCallIds: string[];
+  changedObjects: string[];
 };
 
 type BpAskWorkOrderCreatePlan = {
@@ -143,17 +287,6 @@ type BpAskControlledWritebackPlan = {
   directApply: boolean;
 };
 
-const WORK_ORDER_SUMMARY_KEYWORDS = [
-  "总结",
-  "摘要",
-  "梳理",
-  "整理",
-  "归纳",
-  "下一步",
-  "建议",
-  "风险",
-  "缺项",
-] as const;
 const WORK_ORDER_NEXT_ACTION_FIELD_KEYWORDS = [
   "下一步",
   "下步",
@@ -286,20 +419,6 @@ const WORK_ORDER_CREATE_KEYWORDS = [
   "开一个",
   "增加一个",
   "新增",
-] as const;
-const WRITEBACK_DRAFT_ONLY_KEYWORDS = [
-  "草案",
-  "写回草案",
-  "先生成",
-  "先创建",
-  "先让我确认",
-  "让我确认",
-  "需要确认",
-  "不要直接",
-  "别直接",
-  "先别改",
-  "先不要改",
-  "只生成",
 ] as const;
 const WORK_ORDER_WRITEBACK_VALUE_MARKERS = [
   "改成",
@@ -438,6 +557,199 @@ function readNumber(record: JsonRecord, key: string) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readModelCapabilityPlan(value: unknown): ModelAiCapabilityPlan | null {
+  const record = asRecord(value);
+  const toolName = readString(record, "toolName");
+  const args = asRecord(record?.args);
+  const confidence = readNumber(record, "confidence");
+
+  if (!toolName || !args || confidence === null) {
+    return null;
+  }
+
+  return {
+    toolName,
+    args,
+    confidence,
+    reason: readString(record, "reason"),
+  };
+}
+
+function readModelCapabilityStepPlan(value: unknown): ModelAiCapabilityStepPlan | null {
+  const record = asRecord(value);
+  const mode = readString(record, "mode") as ModelAiCapabilityStepPlan["mode"];
+  const confidence = readNumber(record, "confidence");
+  const steps = readArray(record?.steps)
+    .map((step): ModelAiCapabilityStepPlan["steps"][number] | null => {
+      const stepRecord = asRecord(step);
+      const toolName = readString(stepRecord, "toolName");
+
+      if (!toolName) {
+        return null;
+      }
+
+      return {
+        stepId: readString(stepRecord, "stepId"),
+        toolName,
+        args: asRecord(stepRecord?.args) ?? {},
+        purpose: readString(stepRecord, "purpose"),
+        requiresPreviousResult: Boolean(stepRecord?.requiresPreviousResult),
+      };
+    })
+    .filter((step): step is ModelAiCapabilityStepPlan["steps"][number] => Boolean(step));
+
+  if (!mode || !["chat", "task", "delegate"].includes(mode) || confidence === null) {
+    return null;
+  }
+
+  return {
+    mode,
+    taskTitle: readString(record, "taskTitle"),
+    steps,
+    missingInformation: readArray(record?.missingInformation).filter(
+      (item): item is string => typeof item === "string" && item.length > 0,
+    ),
+    followupQuestion: readString(record, "followupQuestion"),
+    delegateTarget: readString(record, "delegateTarget"),
+    delegateReason: readString(record, "delegateReason"),
+    confidence,
+    reason: readString(record, "reason"),
+  };
+}
+
+function readMissingInformationFollowup(value: unknown): BpAskMissingInformationFollowup | null {
+  const record = asRecord(value);
+  const capability = asRecord(record?.capability) as AiCapabilityDescriptor | null;
+  const missingInformation = readArray(record?.missingInformation).filter(
+    (item): item is string => typeof item === "string",
+  );
+  const prompt = readString(record, "prompt");
+  const candidates = readArray(record?.candidates)
+    .map((candidate) => asRecord(candidate))
+    .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate))
+    .map((candidate) => {
+      const workOrderNo = readString(candidate, "workOrderNo");
+      const documentId =
+        readString(candidate, "documentId") || readString(candidate, "assetId");
+      const key =
+        readString(candidate, "key") ||
+        (workOrderNo ? "workOrderNo" : documentId ? "documentId" : "");
+      const value = readString(candidate, "value") || workOrderNo || documentId;
+      const title = readString(candidate, "title") || value;
+      const subtitle =
+        readString(candidate, "subtitle") ||
+        [
+          readString(candidate, "projectName"),
+          readString(candidate, "siteName"),
+          readString(candidate, "originalFileName"),
+          readString(candidate, "kind"),
+        ]
+          .filter(Boolean)
+          .join(" / ");
+
+      return {
+        key,
+        value,
+        title,
+        subtitle: subtitle || undefined,
+      };
+    })
+    .filter((candidate) => candidate.key && candidate.value && candidate.title);
+
+  if (!capability?.name || missingInformation.length === 0 || !prompt) {
+    return null;
+  }
+
+  return {
+    capability,
+    missingInformation,
+    prompt,
+    candidates,
+  };
+}
+
+function hasWorkOrderNoCue(prompt: string) {
+  return /#?WO-\d{4,}-[A-Z0-9]{3,12}/i.test(prompt);
+}
+
+function extractWorkOrderNoCue(prompt: string) {
+  const match = prompt.match(/#?(WO-\d{4,}-[A-Z0-9]{3,12})/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
+async function resolveWorkOrderNoFromNaturalText(prompt: string) {
+  const direct = extractWorkOrderNoCue(prompt);
+
+  if (direct) {
+    return direct;
+  }
+
+  const db = getDb();
+  const rows = await db
+    .select({
+      workOrderNo: workOrders.workOrderNo,
+      title: workOrders.title,
+      projectName: workOrders.projectName,
+      siteName: workOrders.siteName,
+      siteAddress: workOrders.siteAddress,
+    })
+    .from(workOrders);
+  const promptToken = normalizeWorkOrderLookupToken(prompt);
+  const scored = rows
+    .map((row) => {
+      const fields = [row.workOrderNo, row.title, row.projectName, row.siteName, row.siteAddress]
+        .filter(Boolean)
+        .map(normalizeWorkOrderLookupToken);
+      const score = fields.reduce((total, field) => {
+        if (!field) {
+          return total;
+        }
+
+        if (promptToken.includes(field) || field.includes(promptToken)) {
+          return total + field.length + 20;
+        }
+
+        const chars = Array.from(new Set(field.split("")));
+        return total + chars.filter((char) => promptToken.includes(char)).length;
+      }, 0);
+
+      return { row, score };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0] && scored[0].score >= 4 ? scored[0].row.workOrderNo : "";
+}
+
+function shouldTreatWorkOrderNoAsMissing(prompt: string) {
+  return (
+    !hasWorkOrderNoCue(prompt) &&
+    (prompt.includes("工单") ||
+      includesAny(prompt, ["这个工单", "该工单", "这张工单", "这条工单"]))
+  );
+}
+
+function clearImplicitWorkOrderNo(plan: ModelAiCapabilityPlan | null, prompt: string) {
+  if (
+    !plan ||
+    !plan.toolName.startsWith("work_order.") ||
+    !shouldTreatWorkOrderNoAsMissing(prompt) ||
+    !isCapabilityArgumentPresent(plan.args, "workOrderNo")
+  ) {
+    return plan;
+  }
+
+  const args = { ...plan.args };
+  delete args.workOrderNo;
+
+  return {
+    ...plan,
+    args,
+    reason: plan.reason
+      ? `${plan.reason}；当前请求使用了隐式工单指代，需要用户补充工单号。`
+      : "当前请求使用了隐式工单指代，需要用户补充工单号。",
+  };
+}
+
 function parseModelInteger(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -481,7 +793,7 @@ async function resolveWorkOrderNoForPrompt(
 ) {
   const directWorkOrderNo = readTargetWorkOrderNo(decision);
 
-  if (directWorkOrderNo) {
+  if (directWorkOrderNo && extractWorkOrderNoCue(prompt)) {
     return directWorkOrderNo;
   }
 
@@ -489,78 +801,11 @@ async function resolveWorkOrderNoForPrompt(
     return "";
   }
 
-  const db = getDb();
-  const rows = await db
-    .select({
-      workOrderNo: workOrders.workOrderNo,
-      title: workOrders.title,
-      projectName: workOrders.projectName,
-      siteName: workOrders.siteName,
-      siteAddress: workOrders.siteAddress,
-    })
-    .from(workOrders);
-  const promptToken = normalizeWorkOrderLookupToken(prompt);
-  const scored = rows
-    .map((row) => {
-      const fields = [row.title, row.projectName, row.siteName, row.siteAddress]
-        .filter(Boolean)
-        .map(normalizeWorkOrderLookupToken);
-      const score = fields.reduce((total, field) => {
-        if (!field) {
-          return total;
-        }
-
-        if (promptToken.includes(field) || field.includes(promptToken)) {
-          return total + field.length + 20;
-        }
-
-        const chars = Array.from(new Set(field.split("")));
-        return total + chars.filter((char) => promptToken.includes(char)).length;
-      }, 0);
-
-      return { row, score };
-    })
-    .sort((left, right) => right.score - left.score);
-
-  return scored[0] && scored[0].score >= 4 ? scored[0].row.workOrderNo : "";
+  return resolveWorkOrderNoFromNaturalText(prompt);
 }
 
 function includesAny(source: string, keywords: readonly string[]) {
   return keywords.some((keyword) => source.includes(keyword));
-}
-
-function shouldRunWorkOrderSummarySkill(decision: DispatchDecision, prompt: string) {
-  if (
-    decision.targetDomain !== "work_order" ||
-    decision.requiresWrite ||
-    decision.requiresConfirmation ||
-    decision.suggestedExecutor === "longxia" ||
-    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS) ||
-    !readTargetWorkOrderNo(decision)
-  ) {
-    return false;
-  }
-
-  return (
-    decision.executionMode === "retrieve_and_summarize" ||
-    decision.primaryIntent === "summarize" ||
-    includesAny(prompt, WORK_ORDER_SUMMARY_KEYWORDS)
-  );
-}
-
-function shouldRunDirectWorkOrderRead(decision: DispatchDecision, prompt = "") {
-  if (
-    decision.targetDomain !== "work_order" ||
-    decision.executionMode !== "retrieve_then_answer" ||
-    decision.requiresWrite ||
-    decision.requiresConfirmation ||
-    decision.suggestedExecutor === "longxia" ||
-    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS)
-  ) {
-    return false;
-  }
-
-  return Boolean(readTargetWorkOrderNo(decision));
 }
 
 function stripOuterQuotes(value: string) {
@@ -790,8 +1035,8 @@ function buildWorkOrderCreatePlan(
   };
 }
 
-function shouldDirectApplyWorkOrderWriteback(prompt: string) {
-  return !includesAny(prompt, WRITEBACK_DRAFT_ONLY_KEYWORDS);
+function shouldDirectApplyWorkOrderWriteback() {
+  return true;
 }
 
 function extractWritebackValueAfterField(
@@ -1062,7 +1307,7 @@ function buildControlledWorkOrderWritebackPlan(
     ? {
         workOrderNo,
         candidates,
-        directApply: shouldDirectApplyWorkOrderWriteback(prompt),
+        directApply: shouldDirectApplyWorkOrderWriteback(),
       }
     : null;
 }
@@ -1098,11 +1343,14 @@ function shouldTryModelWorkOrderToolPlanner(
     return false;
   }
 
+  if (hasWorkOrderNoCue(prompt)) {
+    return false;
+  }
+
   return (
-    decision.targetDomain === "work_order" ||
-    /WO-\d{4,}/i.test(prompt) ||
-    includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS) ||
-    includesAny(prompt, ["工单", "巡检单", "报修单", "派工单"])
+    decision.targetDomain === "work_order" &&
+    (includesAny(prompt, WORK_ORDER_BROAD_UPDATE_FIELD_KEYWORDS) ||
+      includesAny(prompt, ["工单", "巡检单", "报修单", "派工单"]))
   );
 }
 
@@ -1313,7 +1561,7 @@ function buildControlledWorkOrderWritebackPlanFromModel(
     ? {
         workOrderNo,
         candidates,
-        directApply: shouldDirectApplyWorkOrderWriteback(prompt),
+        directApply: shouldDirectApplyWorkOrderWriteback(),
       }
     : null;
 }
@@ -1353,7 +1601,8 @@ function resolveNaturalWarningStatus(prompt: string) {
 
 function shouldRunWorkOrderStepPlanner(decision: DispatchDecision, prompt: string) {
   return Boolean(
-    (decision.targetDomain === "work_order" || prompt.includes("工单")) &&
+    decision.targetDomain === "work_order" &&
+      decision.executionMode === "write_restricted" &&
       !decision.suggestedExecutor.includes("longxia") &&
       includesAny(prompt, WORK_ORDER_STEP_PLANNER_KEYWORDS),
   );
@@ -1421,11 +1670,2421 @@ function buildWorkOrderStepPlannerPlan(
   };
 }
 
+function isCapabilityArgumentPresent(args: Record<string, unknown>, key: string) {
+  const value = args[key];
+
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  return value !== null && value !== undefined;
+}
+
+function isAnyOfRequirementSatisfied(
+  args: Record<string, unknown>,
+  inputSchema: Record<string, unknown>,
+) {
+  const anyOf = inputSchema.anyOf;
+
+  if (!Array.isArray(anyOf)) {
+    return true;
+  }
+
+  return anyOf.some((option) => {
+    const optionRecord = asRecord(option);
+    const required = readArray(optionRecord?.required).filter(
+      (key): key is string => typeof key === "string",
+    );
+
+    return required.length > 0 && required.every((key) => isCapabilityArgumentPresent(args, key));
+  });
+}
+
+function readCapabilityRequiredKeys(capability: AiCapabilityDescriptor) {
+  return readArray(capability.inputSchema.required).filter(
+    (key): key is string => typeof key === "string",
+  );
+}
+
+function buildCapabilityMissingInformationFollowup(
+  plan: ModelAiCapabilityPlan | null,
+  capabilities: AiCapabilityDescriptor[],
+): BpAskMissingInformationFollowup | null {
+  if (!plan || plan.confidence < 70) {
+    return null;
+  }
+
+  const capability = capabilities.find((item) => item.name === plan.toolName);
+
+  if (!capability) {
+    return null;
+  }
+
+  const missingKeys = readCapabilityRequiredKeys(capability).filter(
+    (key) => !isCapabilityArgumentPresent(plan.args, key),
+  );
+  const missingInformation = !isAnyOfRequirementSatisfied(plan.args, capability.inputSchema)
+    ? capability.plannerHints.requiredInformation
+    : missingKeys;
+
+  if (missingInformation.length === 0) {
+    return null;
+  }
+
+  return {
+    capability,
+    missingInformation,
+    prompt:
+      capability.plannerHints.missingInformationPrompt ||
+      `我可以处理「${capability.displayName}」，但还缺少：${missingInformation.join("、")}。`,
+  };
+}
+
+function buildCapabilityStepMissingInformationFollowup(
+  plan: ModelAiCapabilityStepPlan | null,
+  capabilities: AiCapabilityDescriptor[],
+): BpAskMissingInformationFollowup | null {
+  if (!plan || plan.mode !== "task" || plan.confidence < 70 || plan.missingInformation.length === 0) {
+    return null;
+  }
+
+  const plannedCapabilities = plan.steps
+    .map((step) => capabilities.find((capability) => capability.name === step.toolName))
+    .filter((capability): capability is AiCapabilityDescriptor => Boolean(capability));
+  const missingText = plan.missingInformation.join(" ").toLowerCase();
+  const matchedMissingCapability = plannedCapabilities.find((capability) => {
+    const requiredKeys = readCapabilityRequiredKeys(capability).map((key) =>
+      key.toLowerCase(),
+    );
+    const requiredInfo = capability.plannerHints.requiredInformation.map((item) =>
+      item.toLowerCase(),
+    );
+
+    return [...requiredKeys, ...requiredInfo].some((item) => {
+      if (!item) {
+        return false;
+      }
+
+      return (
+        missingText.includes(item) ||
+        item.includes(missingText) ||
+        (item.includes("content") && /content|正文|内容/.test(missingText)) ||
+        (item.includes("document") && /document|文档|文件/.test(missingText)) ||
+        (item.includes("workorder") && /workorder|工单/.test(missingText))
+      );
+    });
+  });
+  const firstPlannedCapability = matchedMissingCapability ?? plannedCapabilities[0];
+
+  if (!firstPlannedCapability) {
+    return null;
+  }
+
+  return {
+    capability: firstPlannedCapability,
+    missingInformation: plan.missingInformation,
+    prompt:
+      plan.followupQuestion ||
+      firstPlannedCapability.plannerHints.missingInformationPrompt ||
+      `我可以处理「${firstPlannedCapability.displayName}」，但还缺少：${plan.missingInformation.join("、")}。`,
+  };
+}
+
+function buildAmbiguousSearchFollowup(params: {
+  plan: ModelAiCapabilityStepPlan;
+  searchToolRun: AiToolRunRecord;
+  capabilities: AiCapabilityDescriptor[];
+}): BpAskMissingInformationFollowup | null {
+  const searchCapability = params.capabilities.find(
+    (capability) => capability.name === params.searchToolRun.toolName,
+  );
+  const payload = asRecord(params.searchToolRun.structuredPayload);
+
+  if (params.searchToolRun.toolName === "work_order.search") {
+    const candidates = readArray(payload?.candidates)
+      .map((candidate) => asRecord(candidate))
+      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate))
+      .map((candidate) => ({
+        key: "workOrderNo",
+        value: readString(candidate, "workOrderNo"),
+        title: readString(candidate, "title"),
+        subtitle: [readString(candidate, "projectName"), readString(candidate, "siteName")]
+          .filter(Boolean)
+          .join(" / ") || undefined,
+      }))
+      .filter((candidate) => candidate.value && candidate.title)
+      .slice(0, 5);
+
+    if (!searchCapability || candidates.length < 2) {
+      return null;
+    }
+
+    return {
+      capability: searchCapability,
+      missingInformation: ["选择候选工单"],
+      prompt: "我找到了多张相似工单，请回复序号、工单号，或再补一句更具体的标题/项目/站点。",
+      candidates,
+    };
+  }
+
+  if (params.searchToolRun.toolName === "document.search") {
+    const candidates = readArray(payload?.candidates)
+      .map((candidate) => asRecord(candidate))
+      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate))
+      .map((candidate) => ({
+        key: "documentId",
+        value: readString(candidate, "documentId") || readString(candidate, "assetId"),
+        title: readString(candidate, "title"),
+        subtitle: [readString(candidate, "originalFileName"), readString(candidate, "kind")]
+          .filter(Boolean)
+          .join(" / ") || undefined,
+      }))
+      .filter((candidate) => candidate.value && candidate.title)
+      .slice(0, 5);
+
+    if (!searchCapability || candidates.length < 2) {
+      return null;
+    }
+
+    return {
+      capability: searchCapability,
+      missingInformation: ["选择候选文档"],
+      prompt: "我找到了多份相似文档，请回复序号、文档 ID，或再补一句更具体的标题/文件名。",
+      candidates,
+    };
+  }
+
+  return null;
+}
+
+function resolveDocumentSearchQuery(prompt: string) {
+  return prompt
+    .replace(/^(?:请|帮我|麻烦|给我|帮忙)?/g, "")
+    .replace(/^(?:找一下|找找|搜索|搜一下|搜|打开|看一下|看看|读取|读一下)/g, "")
+    .replace(/(?:这份|这个|那份|那个)/g, "")
+    .replace(/(?:文档|文件|表格|表|周报|资料)$/g, "")
+    .trim();
+}
+
+function resolveDocumentContentValue(prompt: string) {
+  return (
+    prompt
+      .replace(/^(?:内容是|正文是|写入内容是|具体内容是|写入|就写|写|写成|改成|更新为|替换为)\s*[:：]?\s*/g, "")
+      .trim() || prompt.trim()
+  );
+}
+
+async function resolveCapabilityContinuationValue(params: {
+  capability: AiCapabilityDescriptor;
+  missingInformation: string[];
+  prompt: string;
+  candidates?: BpAskMissingInformationFollowup["candidates"];
+}): Promise<BpAskContinuationValue | null> {
+  const missingInfoText = params.missingInformation.join(" ").toLowerCase();
+
+  if (params.candidates?.length) {
+    const selectedCandidate = resolveCandidateSelection(params.prompt, params.candidates);
+
+    if (selectedCandidate) {
+      return {
+        key: selectedCandidate.key,
+        value: selectedCandidate.value,
+      };
+    }
+  }
+
+  const identifierKeys = params.capability.target.identifierKeys;
+  const requiredKeys = readCapabilityRequiredKeys(params.capability);
+
+  if (
+    identifierKeys.includes("workOrderNo") ||
+    requiredKeys.includes("workOrderNo") ||
+    /workorderno|工单号|工单编号|候选工单|工单/.test(missingInfoText)
+  ) {
+    const workOrderNo = await resolveWorkOrderNoFromNaturalText(params.prompt);
+
+    if (workOrderNo) {
+      return {
+        key: "workOrderNo",
+        value: workOrderNo,
+      };
+    }
+  }
+
+  if (
+    identifierKeys.includes("documentId") ||
+    requiredKeys.includes("documentId") ||
+    /documentid|文档id|文档 id/.test(missingInfoText)
+  ) {
+    const documentId = readLooseIdentifier(params.prompt, [
+      /\b(doc(?:ument)?-[\w-]+)\b/i,
+      /\b(documentId|docId)\s*[:：]?\s*([\w-]+)\b/i,
+    ]);
+
+    if (documentId) {
+      return {
+        key: "documentId",
+        value: documentId,
+      };
+    }
+  }
+
+  if (
+    identifierKeys.includes("assetId") ||
+    requiredKeys.includes("assetId") ||
+    /assetid|资产id|资源id|文件id/.test(missingInfoText)
+  ) {
+    const assetId = readLooseIdentifier(params.prompt, [
+      /\b(asset-[\w-]+)\b/i,
+      /\bassetId\s*[:：]?\s*([\w-]+)\b/i,
+    ]);
+
+    if (assetId) {
+      return {
+        key: "assetId",
+        value: assetId,
+      };
+    }
+  }
+
+  if (requiredKeys.includes("query") || /query|关键词|搜索词|检索条件/.test(missingInfoText)) {
+    const query =
+      params.capability.name === "document.search"
+        ? resolveDocumentSearchQuery(params.prompt) || params.prompt.trim()
+        : params.prompt.trim();
+
+    if (query) {
+      return {
+        key: "query",
+        value: query,
+      };
+    }
+  }
+
+  if (requiredKeys.includes("title") || /title|标题|名称/.test(missingInfoText)) {
+    const title = params.prompt.trim();
+
+    if (title) {
+      return {
+        key: "title",
+        value: title,
+      };
+    }
+  }
+
+  if (requiredKeys.includes("content") || /content|正文|内容|写入内容|具体内容/.test(missingInfoText)) {
+    const content =
+      params.capability.name === "document.write_content"
+        ? resolveDocumentContentValue(params.prompt)
+        : params.prompt.trim();
+
+    if (content) {
+      return {
+        key: "content",
+        value: content,
+      };
+    }
+  }
+
+  return null;
+}
+
+function readLooseIdentifier(prompt: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    const value = (match?.[2] ?? match?.[1] ?? "").trim();
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+async function resolveSlotFillContinuation(params: {
+  threadId: string;
+  prompt: string;
+  capabilities: AiCapabilityDescriptor[];
+}): Promise<BpAskSlotFillContinuation | null> {
+  const source = await getLatestAssistantSlotFillSource(params.threadId);
+
+  if (!source) {
+    return null;
+  }
+
+  const followup = buildCapabilityMissingInformationFollowup(
+    source.modelCapabilityPlan,
+    params.capabilities,
+  );
+
+  if (!followup || followup.capability.name !== source.missingInformationFollowup.capability.name) {
+    return null;
+  }
+
+  const missingKeys = readCapabilityRequiredKeys(followup.capability).filter(
+    (key) => !isCapabilityArgumentPresent(source.modelCapabilityPlan.args, key),
+  );
+  const continuationValue = await resolveCapabilityContinuationValue({
+    capability: followup.capability,
+    missingInformation: missingKeys.length > 0 ? missingKeys : followup.missingInformation,
+    prompt: params.prompt,
+    candidates: source.missingInformationFollowup.candidates,
+  });
+
+  if (!continuationValue) {
+    return null;
+  }
+
+  const mergedModelCapabilityPlan: ModelAiCapabilityPlan = {
+    ...source.modelCapabilityPlan,
+    args: {
+      ...source.modelCapabilityPlan.args,
+      [continuationValue.key]: continuationValue.value,
+    },
+    reason: source.modelCapabilityPlan.reason
+      ? `${source.modelCapabilityPlan.reason}；用户补充了缺失的 ${continuationValue.key}。`
+      : `用户补充了缺失的 ${continuationValue.key}。`,
+  };
+
+  if (buildCapabilityMissingInformationFollowup(mergedModelCapabilityPlan, params.capabilities)) {
+    return null;
+  }
+
+  return {
+    sourceAssistantMessageId: source.messageId,
+    sourceAssistantSequence: source.sequence,
+    filledKey: continuationValue.key,
+    filledValue: continuationValue.value,
+    capabilityName: followup.capability.name,
+    originalModelCapabilityPlan: source.modelCapabilityPlan,
+    mergedModelCapabilityPlan,
+  };
+}
+
+function buildCapabilityFollowupInsight(
+  insight: InsightBlock,
+  followup: BpAskMissingInformationFollowup,
+): InsightBlock {
+  return {
+    ...insight,
+    metric: "NEED MORE INFO",
+    status: "等待补充信息",
+    findings: [
+      ...insight.findings,
+      `已匹配能力 ${followup.capability.name}，但缺少 ${followup.missingInformation.join("、")}。`,
+    ],
+    actions: [
+      {
+        title: followup.capability.displayName,
+        subtitle: followup.prompt,
+        tone: "blue",
+      },
+      ...insight.actions,
+    ],
+    summary: followup.prompt,
+  };
+}
+
+function buildCapabilityFollowupExecutionPreview(
+  followup: BpAskMissingInformationFollowup,
+): DispatchExecutionPreview {
+  return {
+    mode: "simulation",
+    title: "需要补充信息",
+    summary: `BP问问已匹配 ${followup.capability.displayName}，但还缺少必要信息。`,
+    nextStep: followup.prompt,
+    safety: "不会编造对象或参数；补齐信息前不会调用工具。",
+    simulatedActions: [
+      "读取 capability descriptor",
+      `匹配能力 ${followup.capability.name}`,
+      `发现缺少 ${followup.missingInformation.join("、")}`,
+      "等待用户补充信息",
+    ],
+    changedObjects: [],
+    writebackCandidates: followup.candidates?.map((candidate, index) => ({
+      objectType: followup.capability.domain === "document" ? "document" : "work_order",
+      objectRef: candidate.value,
+      operation: `candidate_${index + 1}`,
+      proposedValue: `${candidate.title}${candidate.subtitle ? ` / ${candidate.subtitle}` : ""}`,
+      requiresConfirmation: false,
+      status: "candidate",
+    })),
+  };
+}
+
+function buildCapabilityFollowupAssistantText(
+  userName: string,
+  followup: BpAskMissingInformationFollowup,
+) {
+  if (followup.candidates && followup.candidates.length > 0) {
+    const candidateText = followup.candidates
+      .map(
+        (candidate, index) =>
+          `${index + 1}. ${candidate.value}「${candidate.title}」${candidate.subtitle ? ` / ${candidate.subtitle}` : ""}`,
+      )
+      .join("\n");
+
+    return `${userName}，${followup.prompt}\n${candidateText}`;
+  }
+
+  return `${userName}，${followup.prompt}`;
+}
+
+function readCapabilityStringArg(
+  plan: ModelAiCapabilityPlan,
+  key: string,
+) {
+  const value = plan.args[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readSearchBestWorkOrderNo(toolRun: AiToolRunRecord) {
+  const payload = asRecord(toolRun.structuredPayload);
+  const bestCandidate = asRecord(payload?.bestCandidate);
+  const candidates = readArray(payload?.candidates)
+    .map((candidate) => asRecord(candidate))
+    .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate));
+
+  return readString(bestCandidate, "workOrderNo") || readString(candidates[0], "workOrderNo");
+}
+
+function readSearchBestDocumentId(toolRun: AiToolRunRecord) {
+  const payload = asRecord(toolRun.structuredPayload);
+  const bestCandidate = asRecord(payload?.bestCandidate);
+  const candidates = readArray(payload?.candidates)
+    .map((candidate) => asRecord(candidate))
+    .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate));
+
+  return (
+    readString(bestCandidate, "documentId") ||
+    readString(bestCandidate, "assetId") ||
+    readString(candidates[0], "documentId") ||
+    readString(candidates[0], "assetId")
+  );
+}
+
+function fillCapabilityStepIdentifiers(
+  step: ModelAiCapabilityStepPlan["steps"][number],
+  resolvedIdentifiers: {
+    workOrderNo?: string;
+    documentId?: string;
+  },
+): ModelAiCapabilityStepPlan["steps"][number] {
+  let nextStep = step;
+
+  if (resolvedIdentifiers.workOrderNo && !isCapabilityArgumentPresent(nextStep.args, "workOrderNo")) {
+    nextStep = {
+      ...nextStep,
+      args: {
+        ...nextStep.args,
+        workOrderNo: resolvedIdentifiers.workOrderNo,
+      },
+    };
+  }
+
+  if (resolvedIdentifiers.documentId) {
+    const hasDocumentId = isCapabilityArgumentPresent(nextStep.args, "documentId");
+    const hasAssetId = isCapabilityArgumentPresent(nextStep.args, "assetId");
+
+    if (
+      !hasDocumentId &&
+      !hasAssetId &&
+      (nextStep.toolName === "document.read" ||
+        nextStep.toolName === "document.search" ||
+        nextStep.toolName === "document.write_content")
+    ) {
+      nextStep = {
+        ...nextStep,
+        args: {
+          ...nextStep.args,
+          documentId: resolvedIdentifiers.documentId,
+        },
+      };
+    }
+  }
+
+  return nextStep;
+}
+
+function fillCapabilityStepPlanIdentifiers(
+  plan: ModelAiCapabilityStepPlan,
+  resolvedIdentifiers: {
+    workOrderNo?: string;
+    documentId?: string;
+  },
+): ModelAiCapabilityStepPlan {
+  return {
+    ...plan,
+    steps: plan.steps.map((step) => fillCapabilityStepIdentifiers(step, resolvedIdentifiers)),
+  };
+}
+
+function shouldApplyContinuationValueToStep(
+  step: ModelAiCapabilityStepPlan["steps"][number],
+  key: string,
+) {
+  if (key === "workOrderNo") {
+    return step.toolName.startsWith("work_order.");
+  }
+
+  if (key === "documentId" || key === "assetId") {
+    return step.toolName.startsWith("document.");
+  }
+
+  if (key === "query") {
+    return step.toolName.endsWith(".search");
+  }
+
+  if (key === "content") {
+    return step.toolName === "document.write_content";
+  }
+
+  return true;
+}
+
+function shouldRunCapabilityStepPlan(
+  plan: ModelAiCapabilityStepPlan | null,
+  _prompt: string,
+  options: { force?: boolean } = {},
+) {
+  void options;
+
+  if (
+    !plan ||
+    plan.mode !== "task" ||
+    plan.confidence < 70 ||
+    plan.missingInformation.length > 0 ||
+    plan.steps.length === 0
+  ) {
+    return false;
+  }
+
+  const toolNames = plan.steps.map((step) => step.toolName);
+  const supportedToolNames = toolNames.every((toolName) =>
+    [
+      "work_order.search",
+      "work_order.read",
+      "work_order.update",
+      "work_order.archive",
+      "document.search",
+      "document.read",
+      "document.write_content",
+    ].includes(toolName),
+  );
+
+  if (!supportedToolNames) {
+    return false;
+  }
+
+  const hasLocator =
+    toolNames.includes("work_order.read") ||
+    toolNames.includes("work_order.search") ||
+    toolNames.includes("document.read") ||
+    toolNames.includes("document.search");
+
+  return (
+    hasLocator ||
+    toolNames.includes("work_order.update") ||
+    toolNames.includes("work_order.archive") ||
+    toolNames.includes("document.write_content")
+  );
+}
+
+function canProbeCapabilityStepSearch(plan: ModelAiCapabilityStepPlan | null) {
+  if (!plan || plan.mode !== "task" || plan.confidence < 70 || plan.steps.length === 0) {
+    return false;
+  }
+
+  const firstStep = plan.steps[0];
+  const query = readString(asRecord(firstStep.args), "query");
+
+  return (
+    (firstStep.toolName === "work_order.search" ||
+      firstStep.toolName === "document.search") &&
+    query.length > 0
+  );
+}
+
+function resolveCandidateSelection(
+  prompt: string,
+  candidates: NonNullable<BpAskMissingInformationFollowup["candidates"]>,
+) {
+  const indexMatch = prompt.match(/(?:第\s*)(\d+)(?:\s*[个张条项份]?)/);
+
+  if (indexMatch) {
+    const index = Number.parseInt(indexMatch[1] ?? "", 10);
+
+    if (Number.isFinite(index) && index >= 1 && index <= candidates.length) {
+      return candidates[index - 1] ?? null;
+    }
+  }
+
+  const explicitWorkOrderNo = extractWorkOrderNoCue(prompt);
+
+  if (explicitWorkOrderNo) {
+    return (
+      candidates.find((candidate) => candidate.key === "workOrderNo" && candidate.value.toUpperCase() === explicitWorkOrderNo) ??
+      null
+    );
+  }
+
+  const explicitDocumentId = readLooseIdentifier(prompt, [
+    /\b(doc(?:ument)?-[\w-]+)\b/i,
+    /\b(documentId|docId)\s*[:：]?\s*([\w-]+)\b/i,
+    /\b(asset-[\w-]+)\b/i,
+    /\bassetId\s*[:：]?\s*([\w-]+)\b/i,
+  ]);
+
+  if (explicitDocumentId) {
+    return (
+      candidates.find(
+        (candidate) =>
+          (candidate.key === "documentId" || candidate.key === "assetId") &&
+          candidate.value.toLowerCase() === explicitDocumentId.toLowerCase(),
+      ) ?? null
+    );
+  }
+
+  const normalizedPrompt = normalizeWorkOrderLookupToken(prompt);
+
+  return (
+    candidates.find((candidate) => {
+      const fields = [candidate.value, candidate.title, candidate.subtitle]
+        .filter(Boolean)
+        .map((value) => normalizeWorkOrderLookupToken(String(value)));
+
+      return fields.some(
+        (field) => field && (normalizedPrompt.includes(field) || field.includes(normalizedPrompt)),
+      );
+    }) ?? null
+  );
+}
+
+function mergeStepArgs(
+  step: ModelAiCapabilityStepPlan["steps"][number],
+  args: Record<string, unknown> | null,
+) {
+  if (!args) {
+    return step;
+  }
+
+  return {
+    ...step,
+    args: {
+      ...args,
+      ...step.args,
+      workOrderNo:
+        readString(step.args as Record<string, unknown>, "workOrderNo") ||
+        readString(args, "workOrderNo"),
+      documentId:
+        readString(step.args as Record<string, unknown>, "documentId") ||
+        readString(step.args as Record<string, unknown>, "assetId") ||
+        readString(args, "documentId") ||
+        readString(args, "assetId"),
+      assetId:
+        readString(step.args as Record<string, unknown>, "assetId") ||
+        readString(step.args as Record<string, unknown>, "documentId") ||
+        readString(args, "assetId") ||
+        readString(args, "documentId"),
+    },
+  };
+}
+
+function fillCapabilityStepPlanContinuationValue(
+  plan: ModelAiCapabilityStepPlan,
+  continuationValue: BpAskContinuationValue,
+): ModelAiCapabilityStepPlan {
+  return {
+    ...plan,
+    steps: plan.steps.map((step) => {
+      if (!shouldApplyContinuationValueToStep(step, continuationValue.key)) {
+        return step;
+      }
+
+      if (isCapabilityArgumentPresent(step.args, continuationValue.key)) {
+        return step;
+      }
+
+      return {
+        ...step,
+        args: {
+          ...step.args,
+          [continuationValue.key]: continuationValue.value,
+        },
+      };
+    }),
+    missingInformation: plan.missingInformation.filter((item) => {
+      const normalized = item.toLowerCase();
+
+      if (continuationValue.key === "workOrderNo") {
+        return !/workorderno|工单号|工单编号|工单|选择候选/i.test(normalized);
+      }
+
+      if (continuationValue.key === "documentId" || continuationValue.key === "assetId") {
+        return !/documentid|文档id|文档 id|assetid|资产id|资源id|文件id|选择候选文档/i.test(normalized);
+      }
+
+      if (continuationValue.key === "query") {
+        return !/query|关键词|搜索词|检索条件/i.test(normalized);
+      }
+
+      if (continuationValue.key === "title") {
+        return !/title|标题|名称/i.test(normalized);
+      }
+
+      if (continuationValue.key === "content") {
+        return !/content|正文|内容|写入内容|具体内容/i.test(normalized);
+      }
+
+      return item !== continuationValue.key;
+    }),
+    followupQuestion: "",
+    reason: plan.reason
+      ? `${plan.reason}；用户补充了缺失的 ${continuationValue.key}。`
+      : `用户补充了缺失的 ${continuationValue.key}。`,
+  };
+}
+
+function planMentionsDocumentWriteIntent(plan: ModelAiCapabilityStepPlan) {
+  const text = [
+    plan.taskTitle,
+    plan.reason,
+    plan.followupQuestion,
+    ...plan.missingInformation,
+    ...plan.steps.flatMap((step) => [step.purpose, step.toolName]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return /document\.write_content|写入|写一下|写到|写进|改写|更新.*文档|文档.*内容|内容.*文档/i.test(text);
+}
+
+function appendDocumentWriteContentStepAfterSelection(
+  plan: ModelAiCapabilityStepPlan,
+  continuationValue: BpAskContinuationValue,
+): ModelAiCapabilityStepPlan {
+  if (
+    continuationValue.key !== "documentId" &&
+    continuationValue.key !== "assetId"
+  ) {
+    return plan;
+  }
+
+  if (
+    plan.steps.some((step) => step.toolName === "document.write_content") ||
+    !plan.steps.some((step) => step.toolName === "document.search") ||
+    !planMentionsDocumentWriteIntent(plan)
+  ) {
+    return plan;
+  }
+
+  return {
+    ...plan,
+    steps: [
+      ...plan.steps,
+      {
+        stepId: `step-${plan.steps.length + 1}`,
+        toolName: "document.write_content",
+        args: {
+          documentId: continuationValue.value,
+        },
+        purpose: "用户已经选择目标文档，等待具体内容后写入该文档。",
+        requiresPreviousResult: true,
+      },
+    ],
+    missingInformation: plan.missingInformation.includes("content")
+      ? plan.missingInformation
+      : [...plan.missingInformation, "content"],
+    followupQuestion: "我已经定位到目标文档了，请直接告诉我要写入的具体内容。",
+    reason: plan.reason
+      ? `${plan.reason}；用户已选择目标文档，补入 document.write_content 等待内容。`
+      : "用户已选择目标文档，补入 document.write_content 等待内容。",
+  };
+}
+
+async function resolveStepSlotFillContinuation(params: {
+  threadId: string;
+  prompt: string;
+  capabilities: AiCapabilityDescriptor[];
+}): Promise<BpAskStepSlotFillContinuation | null> {
+  const source = await getLatestAssistantStepSlotFillSource(params.threadId);
+
+  if (!source) {
+    return null;
+  }
+
+  const followup = buildCapabilityStepMissingInformationFollowup(
+    source.modelCapabilityStepPlan,
+    params.capabilities,
+  );
+
+  if (!followup || followup.capability.name !== source.missingInformationFollowup.capability.name) {
+    return null;
+  }
+
+  const continuationValue = await resolveCapabilityContinuationValue({
+    capability: followup.capability,
+    missingInformation: [
+      ...source.modelCapabilityStepPlan.missingInformation,
+      ...source.missingInformationFollowup.missingInformation,
+    ],
+    prompt: params.prompt,
+    candidates: source.missingInformationFollowup.candidates,
+  });
+
+  if (!continuationValue) {
+    return null;
+  }
+
+  const mergedModelCapabilityStepPlan = appendDocumentWriteContentStepAfterSelection(
+    fillCapabilityStepPlanContinuationValue(
+      source.modelCapabilityStepPlan,
+      continuationValue,
+    ),
+    continuationValue,
+  );
+
+  return {
+    sourceAssistantMessageId: source.messageId,
+    sourceAssistantSequence: source.sequence,
+    filledKey: continuationValue.key,
+    filledValue: continuationValue.value,
+    originalModelCapabilityStepPlan: source.modelCapabilityStepPlan,
+    mergedModelCapabilityStepPlan,
+  };
+}
+
+function buildContentMissingInformationFollowup(params: {
+  capabilityDescriptors: AiCapabilityDescriptor[];
+  prompt: string;
+}): BpAskMissingInformationFollowup {
+  return {
+    capability:
+      params.capabilityDescriptors.find(
+        (capability) => capability.name === "document.write_content",
+      ) ?? params.capabilityDescriptors.find((capability) => capability.name === "document.read")!,
+    missingInformation: ["content"],
+    prompt: params.prompt,
+  };
+}
+
+function buildCapabilityStepWritebackPlan(
+  stepPlan: ModelAiCapabilityStepPlan,
+  step: ModelAiCapabilityStepPlan["steps"][number],
+): BpAskControlledWritebackPlan | null {
+  const plan: ModelAiCapabilityPlan = {
+    toolName: step.toolName,
+    args: step.args,
+    confidence: stepPlan.confidence,
+    reason: stepPlan.reason,
+  };
+  const writebackPlan = buildControlledWorkOrderWritebackPlanFromCapabilityPlan(plan);
+
+  return writebackPlan ? { ...writebackPlan, directApply: true } : null;
+}
+
+function buildCapabilityStepExecutionPreview(params: {
+  stepPlan: ModelAiCapabilityStepPlan;
+  stepRuns: BpAskCapabilityStepRun[];
+  toolRuns: AiToolRunRecord[];
+  changedObjects: string[];
+}): DispatchExecutionPreview {
+  const failedStep = params.stepRuns.find((stepRun) => stepRun.status !== "completed");
+
+  return {
+    mode: "capability_steps_result",
+    title: failedStep ? "多步能力执行：部分失败" : "多步能力执行：已完成",
+    summary: failedStep
+      ? `已执行 ${params.stepRuns.length} 个 capability step，其中 ${failedStep.toolName} 未完成。`
+      : `已按模型计划执行 ${params.stepRuns.length} 个 capability step。`,
+    nextStep: failedStep
+      ? "请检查失败步骤结果，或补充更明确的信息后重试。"
+      : params.changedObjects.length > 0
+        ? "已完成真实写回；刷新相关页面即可看到变化。"
+        : "已完成工具调用；本轮没有产生新的业务字段变化。",
+    safety: "本轮由模型根据 Tool Registry 生成多步计划；每一步仍通过 AI tools gateway 的 schema、白名单和写回草案执行。",
+    simulatedActions: params.stepRuns.map(
+      (stepRun) => `${stepRun.stepId} ${stepRun.toolName}：${stepRun.status}`,
+    ),
+    toolRuns: params.toolRuns.map(compactToolRun),
+    changedObjects: params.changedObjects,
+  };
+}
+
+function buildCapabilityStepInsight(params: {
+  insight: InsightBlock;
+  stepPlan: ModelAiCapabilityStepPlan;
+  stepRuns: BpAskCapabilityStepRun[];
+  changedObjects: string[];
+}): InsightBlock {
+  return {
+    ...params.insight,
+    metric: "MULTI-STEP TOOL PLAN",
+    status: params.stepRuns.every((stepRun) => stepRun.status === "completed")
+      ? "已完成"
+      : "部分失败",
+    findings: [
+      ...params.insight.findings,
+      `模型生成多步 capability plan：${params.stepPlan.taskTitle || params.stepPlan.reason}。`,
+      ...params.stepRuns.map(
+        (stepRun) => `${stepRun.stepId} 调用 ${stepRun.toolName}：${stepRun.status}`,
+      ),
+      `真实变化对象：${params.changedObjects.length} 个。`,
+    ],
+    summary: `多步 capability plan 已执行 ${params.stepRuns.length} 个步骤，产生 ${params.changedObjects.length} 个 changedObjects。`,
+  };
+}
+
+function buildCapabilityStepAssistantText(params: {
+  userName: string;
+  stepPlan: ModelAiCapabilityStepPlan;
+  stepRuns: BpAskCapabilityStepRun[];
+  changedObjects: string[];
+}) {
+  const failedStep = params.stepRuns.find((stepRun) => stepRun.status !== "completed");
+
+  if (failedStep) {
+    return [
+      `${params.userName}，我按多步工具计划执行时，${failedStep.toolName} 这一步没有完成。`,
+      failedStep.summaryText,
+    ].join("\n");
+  }
+
+  return [
+    `${params.userName}，我已经按多步工具计划处理完：${params.stepPlan.taskTitle || "这项任务"}。`,
+    `执行步骤：${params.stepRuns.map((stepRun) => stepRun.toolName).join(" -> ")}。`,
+    params.changedObjects.length
+      ? `真实改变：${params.changedObjects.join("；")}。`
+      : "本轮工具调用完成，但没有产生新的业务字段变化。",
+  ].join("\n");
+}
+
+function buildControlledWorkOrderWritebackPlanFromCapabilityPlan(
+  plan: ModelAiCapabilityPlan,
+): BpAskControlledWritebackPlan | null {
+  if (plan.toolName !== "work_order.update" && plan.toolName !== "work_order.archive") {
+    return null;
+  }
+
+  const workOrderNo = readCapabilityStringArg(plan, "workOrderNo");
+
+  if (!workOrderNo) {
+    return null;
+  }
+
+  const candidates: BpAskControlledWritebackCandidate[] = [];
+
+  if (plan.toolName === "work_order.archive") {
+    addWritebackCandidate(candidates, workOrderNo, "archive_work_order", "archived");
+  }
+
+  addWritebackCandidate(candidates, workOrderNo, "draft_next_action", readCapabilityStringArg(plan, "nextAction"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_risk_followup", readCapabilityStringArg(plan, "riskFollowup"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_title", readCapabilityStringArg(plan, "title"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_source_summary", readCapabilityStringArg(plan, "sourceSummary"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_project_name", readCapabilityStringArg(plan, "projectName"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_site_name", readCapabilityStringArg(plan, "siteName"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_site_address", readCapabilityStringArg(plan, "siteAddress"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_responsible_team", readCapabilityStringArg(plan, "responsibleTeam"));
+  addWritebackCandidate(candidates, workOrderNo, "draft_progress_summary", readCapabilityStringArg(plan, "progressSummary"));
+
+  const priority = normalizeModelMappedWritebackValue(
+    readCapabilityStringArg(plan, "priority"),
+    WORK_ORDER_PRIORITY_VALUE_MAP,
+  );
+  const stage = normalizeModelMappedWritebackValue(
+    readCapabilityStringArg(plan, "stage"),
+    WORK_ORDER_STAGE_VALUE_MAP,
+  );
+  const status = normalizeModelMappedWritebackValue(
+    readCapabilityStringArg(plan, "status"),
+    WORK_ORDER_STATUS_VALUE_MAP,
+  );
+  const warningStatus = normalizeModelMappedWritebackValue(
+    readCapabilityStringArg(plan, "warningStatus"),
+    WORK_ORDER_WARNING_STATUS_VALUE_MAP,
+  );
+  const materialCompleteness = clampModelPercent(readCapabilityStringArg(plan, "materialCompleteness"));
+  const missingItemCount = parseModelInteger(readCapabilityStringArg(plan, "missingItemCount"));
+  const blockingItemCount = parseModelInteger(readCapabilityStringArg(plan, "blockingItemCount"));
+
+  addWritebackCandidate(candidates, workOrderNo, "draft_priority", priority);
+  addWritebackCandidate(candidates, workOrderNo, "draft_stage", stage);
+  if (plan.toolName !== "work_order.archive") {
+    addWritebackCandidate(candidates, workOrderNo, "draft_status", status);
+  }
+  addWritebackCandidate(candidates, workOrderNo, "draft_warning_status", warningStatus);
+  if (materialCompleteness !== null) {
+    addWritebackCandidate(candidates, workOrderNo, "draft_material_completeness", materialCompleteness);
+  }
+  if (missingItemCount !== null) {
+    addWritebackCandidate(candidates, workOrderNo, "draft_missing_item_count", Math.max(0, missingItemCount));
+  }
+  if (blockingItemCount !== null) {
+    addWritebackCandidate(candidates, workOrderNo, "draft_blocking_item_count", Math.max(0, blockingItemCount));
+  }
+
+  return candidates.length > 0
+    ? {
+        workOrderNo,
+        candidates,
+        directApply: shouldDirectApplyWorkOrderWriteback(),
+      }
+    : null;
+}
+
+function buildLongxiaHandoffPayload(params: {
+  threadId: string;
+  userMessageId: string;
+  stepPlan: ModelAiCapabilityStepPlan;
+  stepRuns: BpAskCapabilityStepRun[];
+  toolRuns: AiToolRunRecord[];
+}): BpAskLongxiaHandoffPayload | null {
+  const latestReadToolRun =
+    [...params.toolRuns].reverse().find((toolRun) => toolRun.toolName === "work_order.read") ?? null;
+  const workOrder = latestReadToolRun ? readWorkOrderFromToolRun(latestReadToolRun) : null;
+  const workOrderNo =
+    readString(asRecord(workOrder), "workOrderNo") ||
+    params.stepPlan.steps
+      .map((step) => readString(asRecord(step.args), "workOrderNo"))
+      .find(Boolean) ||
+    "";
+
+  if (!workOrderNo) {
+    return null;
+  }
+
+  const failedStep = params.stepRuns.find((stepRun) => stepRun.status !== "completed");
+  const risks = params.stepRuns
+    .filter((stepRun) => stepRun.status !== "completed")
+    .map((stepRun) => `${stepRun.toolName}：${stepRun.summaryText}`);
+
+  return {
+    agentId: "work-order-longxia",
+    mode: "dry_run",
+    input: {
+      workOrderNo,
+      workOrder: workOrder ?? undefined,
+      nextStep:
+        failedStep?.summaryText ||
+        params.stepPlan.reason ||
+        params.stepPlan.taskTitle ||
+        "请继续承接当前未完成的工单任务。",
+      risks,
+      sourceThreadId: params.threadId,
+      sourceMessageId: params.userMessageId,
+      taskTitle: params.stepPlan.taskTitle || "BP问问委派工单任务",
+    },
+  };
+}
+
+function buildLongxiaExecutionPreview(run: AiLongxiaRunRecord): DispatchExecutionPreview {
+  const confirmationRequests = buildLongxiaConfirmationRequests(run);
+  const confirmationEvaluation = evaluateConfirmationRequests(confirmationRequests);
+  const writebackDrafts = buildLongxiaWritebackDrafts(run);
+
+  return {
+    mode: "workflow_result",
+    title: run.status === "completed" ? "龙虾承接预案已生成" : "龙虾承接失败",
+    summary: run.summaryText,
+    nextStep:
+      run.status === "completed"
+        ? confirmationRequests.length > 0
+          ? "Longxia 已给出待确认项；下一步请先确认，再决定是否继续执行或正式写回。"
+          : writebackDrafts.length > 0
+            ? "Longxia 已给出候选写回；下一步可以审阅草案并决定是否进入正式写回。"
+            : "BP问问已生成 Longxia handoff，并拿到结构化承接预案。"
+        : "Longxia 暂未能承接，请补充信息或调整任务。",
+    safety: "当前仍为 dry-run 承接，不会直接修改业务数据。",
+    simulatedActions: run.output?.planSteps ?? [run.summaryText],
+    agentRuns: [
+      {
+        agentId: run.agentId,
+        mode: run.mode,
+        status: run.status,
+        summaryText: run.summaryText,
+      },
+    ],
+    confirmationRequests,
+    confirmationEvaluation,
+    changedObjects: run.changedObjects,
+    writebackCandidates: run.output?.writebackCandidates.map((candidate) => ({
+      objectType: candidate.objectType,
+      objectRef: candidate.objectRef,
+      operation: candidate.operation,
+      proposedValue: candidate.proposedValue,
+      requiresConfirmation: candidate.requiresConfirmation,
+      status: candidate.status,
+    })),
+    writebackDrafts,
+  };
+}
+
+function buildLongxiaInsight(insight: InsightBlock, run: AiLongxiaRunRecord): InsightBlock {
+  return {
+    ...insight,
+    metric: "LONGXIA HANDOFF",
+    status: run.status === "completed" ? "已委派预案" : "委派失败",
+    findings: [
+      ...insight.findings,
+      `已生成 Longxia handoff：${run.agentId} / ${run.mode} / ${run.status}`,
+    ],
+    summary: `${insight.summary} ${run.summaryText}`,
+  };
+}
+
+function buildLongxiaAssistantText(userName: string, run: AiLongxiaRunRecord) {
+  return `${userName}，${run.summaryText}`;
+}
+
+function buildLongxiaConfirmationRequests(run: AiLongxiaRunRecord) {
+  if (run.status !== "completed" || !run.output) {
+    return [];
+  }
+
+  return run.output.requiredConfirmations.map((title, index) => ({
+    requestId: `longxia-confirm-${index + 1}`,
+    title,
+    description: "Longxia dry-run 认为该项需要确认后再继续后续执行或写回。",
+    riskLevel: "draft_write",
+    status: "waiting" as const,
+  }));
+}
+
+function buildLongxiaWritebackDrafts(run: AiLongxiaRunRecord): BpAskWritebackDraft[] {
+  if (run.status !== "completed" || !run.output) {
+    return [];
+  }
+
+  const timestamp = new Date().toISOString();
+
+  return run.output.writebackCandidates.map((candidate, index) => ({
+    draftId: `longxia-draft-${index + 1}`,
+    objectType: candidate.objectType,
+    objectRef: candidate.objectRef,
+    operation: candidate.operation,
+    proposedValue: candidate.proposedValue,
+    requiresConfirmation: candidate.requiresConfirmation,
+    status: "draft",
+    source: "longxia_dry_run",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    reviewedAt: null,
+    reviewedByUserName: null,
+    reviewAction: null,
+    appliedAt: null,
+    appliedByUserName: null,
+  }));
+}
+
+function buildLongxiaContinuation(params: {
+  run: AiLongxiaRunRecord;
+}): {
+  terminalState: BpAskOrchestrationTerminalState;
+  missingInformationFollowup: BpAskMissingInformationFollowup | null;
+  confirmationRequests: ReturnType<typeof buildLongxiaConfirmationRequests>;
+  writebackDrafts: BpAskWritebackDraft[];
+} {
+  if (params.run.status !== "completed" || !params.run.output) {
+    return {
+      terminalState: "failed",
+      missingInformationFollowup: null,
+      confirmationRequests: [],
+      writebackDrafts: [],
+    };
+  }
+
+  const confirmationRequests = buildLongxiaConfirmationRequests(params.run);
+  const writebackDrafts = buildLongxiaWritebackDrafts(params.run);
+
+  if (confirmationRequests.length > 0) {
+    return {
+      terminalState: "waiting_confirmation",
+      missingInformationFollowup: null,
+      confirmationRequests,
+      writebackDrafts,
+    };
+  }
+
+  return {
+    terminalState: writebackDrafts.length > 0 ? "waiting_confirmation" : "completed",
+    missingInformationFollowup: null,
+    confirmationRequests,
+    writebackDrafts,
+  };
+}
+
+async function createCapabilityStepWritebackExecutionRecord(params: {
+  user: AuthenticatedUser;
+  threadId: string;
+  db: ReturnType<typeof getDb>;
+  now: Date;
+  userMessageId: string;
+  normalizedPrompt: string;
+  dispatch: Awaited<ReturnType<typeof dispatchBpAskPrompt>>;
+  step: ModelAiCapabilityStepPlan["steps"][number];
+}) {
+  const taskId = buildId("capability-step-task");
+  const resultId = buildId("capability-step-result");
+
+  await params.db.insert(executionTasks).values({
+    id: taskId,
+    userId: params.user.id,
+    threadId: params.threadId,
+    workspaceId: null,
+    sourceMessageId: params.userMessageId,
+    status: "planned",
+    executorKind: "system",
+    primaryIntent: params.dispatch.decision.primaryIntent,
+    targetDomain: params.dispatch.decision.targetDomain,
+    executionMode: params.dispatch.decision.executionMode,
+    goal: params.normalizedPrompt,
+    confidence: params.dispatch.decision.confidence,
+    needsMemory: params.dispatch.decision.needsMemory,
+    needsTools: true,
+    requiresWrite: true,
+    requiresConfirmation: false,
+    targetRefs: params.dispatch.decision.targetRefs,
+    constraints: params.dispatch.decision.constraints,
+    metadata: {
+      executionRoute: "capability_steps",
+      source: "bp_ask_capability_steps",
+      stepId: params.step.stepId,
+      toolName: params.step.toolName,
+      purpose: params.step.purpose,
+    },
+    createdAt: params.now,
+    updatedAt: params.now,
+  });
+
+  await params.db.insert(executionResults).values({
+    id: resultId,
+    taskId,
+    status: "ready",
+    summaryText: "Capability step writeback staging record.",
+    responseText: "",
+    structuredPayload: {
+      executionRoute: "capability_steps",
+      source: "bp_ask_capability_steps",
+      stepId: params.step.stepId,
+      toolName: params.step.toolName,
+    },
+    createdAt: params.now,
+    updatedAt: params.now,
+  });
+
+  return { taskId, resultId };
+}
+
+async function runCapabilityStepMachine(params: {
+  user: AuthenticatedUser;
+  threadId: string;
+  db: ReturnType<typeof getDb>;
+  now: Date;
+  userMessageId: string;
+  normalizedPrompt: string;
+  dispatch: Awaited<ReturnType<typeof dispatchBpAskPrompt>>;
+  stepPlan: ModelAiCapabilityStepPlan;
+  capabilityDescriptors: AiCapabilityDescriptor[];
+}): Promise<BpAskStepExecutionState> {
+  const stepRuns: BpAskCapabilityStepRun[] = [];
+  const toolRuns: AiToolRunRecord[] = [];
+  let writebackDrafts: BpAskWritebackDraft[] = [];
+  const resolvedIdentifiers: {
+    workOrderNo?: string;
+    documentId?: string;
+  } = {};
+  let activeStepPlan = params.stepPlan;
+  const initialWorkOrderNo = params.stepPlan.steps
+    .map((step) => readString(asRecord(step.args), "workOrderNo"))
+    .find(Boolean);
+  const initialDocumentId = params.stepPlan.steps
+    .map(
+      (step) =>
+        readString(asRecord(step.args), "documentId") ||
+        readString(asRecord(step.args), "assetId"),
+    )
+    .find(Boolean);
+
+  if (initialWorkOrderNo) {
+    resolvedIdentifiers.workOrderNo = initialWorkOrderNo;
+  }
+
+  if (initialDocumentId) {
+    resolvedIdentifiers.documentId = initialDocumentId;
+  }
+
+  for (const originalStep of params.stepPlan.steps) {
+    const step = fillCapabilityStepIdentifiers(originalStep, resolvedIdentifiers);
+
+    if (step.toolName === "work_order.search") {
+      if (resolvedIdentifiers.workOrderNo) {
+        stepRuns.push({
+          stepId: step.stepId,
+          toolName: step.toolName,
+          purpose: step.purpose,
+          status: "completed",
+          summaryText: `已根据上一轮候选选择使用工单 ${resolvedIdentifiers.workOrderNo}，跳过重复搜索。`,
+          toolRunCallIds: [],
+          changedObjects: [],
+        });
+        activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+        continue;
+      }
+
+      const toolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "work_order.search",
+          input: step.args,
+        },
+      );
+      toolRuns.push(toolRun);
+      resolvedIdentifiers.workOrderNo =
+        readSearchBestWorkOrderNo(toolRun) || resolvedIdentifiers.workOrderNo;
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: toolRun.status,
+        summaryText: toolRun.summaryText,
+        toolRunCallIds: [toolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(toolRun),
+      });
+
+      const ambiguousSearchFollowup = buildAmbiguousSearchFollowup({
+        plan: params.stepPlan,
+        searchToolRun: toolRun,
+        capabilities: params.capabilityDescriptors,
+      });
+
+      if (ambiguousSearchFollowup) {
+        activeStepPlan = {
+          ...params.stepPlan,
+          missingInformation: ["选择候选工单"],
+          followupQuestion: ambiguousSearchFollowup.prompt,
+        };
+
+        return {
+          stepPlan: activeStepPlan,
+          stepRuns,
+          toolRuns,
+          writebackDrafts,
+          missingInformationFollowup: ambiguousSearchFollowup,
+          terminalState: "needs_followup",
+          taskStatus: "planned",
+          resultStatus: "ready",
+          executionPreview: buildCapabilityFollowupExecutionPreview(ambiguousSearchFollowup),
+          insight: buildCapabilityFollowupInsight(params.dispatch.insight, ambiguousSearchFollowup),
+          assistantText: buildCapabilityFollowupAssistantText(
+            params.user.name,
+            ambiguousSearchFollowup,
+          ),
+        };
+      }
+
+      if (toolRun.status !== "completed" || !resolvedIdentifiers.workOrderNo) {
+        break;
+      }
+
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+      continue;
+    }
+
+    if (step.toolName === "work_order.read") {
+      const toolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "work_order.read",
+          input: step.args,
+        },
+      );
+      toolRuns.push(toolRun);
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: toolRun.status,
+        summaryText: toolRun.summaryText,
+        toolRunCallIds: [toolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(toolRun),
+      });
+
+      if (toolRun.status === "completed") {
+        resolvedIdentifiers.workOrderNo =
+          readString(asRecord(readWorkOrderFromToolRun(toolRun)), "workOrderNo") ||
+          readString(asRecord(step.args), "workOrderNo") ||
+          resolvedIdentifiers.workOrderNo;
+      }
+
+      if (toolRun.status !== "completed") {
+        break;
+      }
+
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+      continue;
+    }
+
+    if (step.toolName === "document.search") {
+      if (resolvedIdentifiers.documentId) {
+        stepRuns.push({
+          stepId: step.stepId,
+          toolName: step.toolName,
+          purpose: step.purpose,
+          status: "completed",
+          summaryText: `已根据上一轮候选选择使用文档 ${resolvedIdentifiers.documentId}，跳过重复搜索。`,
+          toolRunCallIds: [],
+          changedObjects: [],
+        });
+        activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+        continue;
+      }
+
+      const toolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "document.search",
+          input: step.args,
+        },
+      );
+      toolRuns.push(toolRun);
+      resolvedIdentifiers.documentId =
+        readSearchBestDocumentId(toolRun) || resolvedIdentifiers.documentId;
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: toolRun.status,
+        summaryText: toolRun.summaryText,
+        toolRunCallIds: [toolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(toolRun),
+      });
+
+      const ambiguousSearchFollowup = buildAmbiguousSearchFollowup({
+        plan: params.stepPlan,
+        searchToolRun: toolRun,
+        capabilities: params.capabilityDescriptors,
+      });
+
+      if (ambiguousSearchFollowup) {
+        activeStepPlan = {
+          ...params.stepPlan,
+          missingInformation: ["选择候选文档"],
+          followupQuestion: ambiguousSearchFollowup.prompt,
+        };
+
+        return {
+          stepPlan: activeStepPlan,
+          stepRuns,
+          toolRuns,
+          writebackDrafts,
+          missingInformationFollowup: ambiguousSearchFollowup,
+          terminalState: "needs_followup",
+          taskStatus: "planned",
+          resultStatus: "ready",
+          executionPreview: buildCapabilityFollowupExecutionPreview(ambiguousSearchFollowup),
+          insight: buildCapabilityFollowupInsight(params.dispatch.insight, ambiguousSearchFollowup),
+          assistantText: buildCapabilityFollowupAssistantText(
+            params.user.name,
+            ambiguousSearchFollowup,
+          ),
+        };
+      }
+
+      if (toolRun.status !== "completed" || !resolvedIdentifiers.documentId) {
+        break;
+      }
+
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+      continue;
+    }
+
+    if (step.toolName === "document.read") {
+      const toolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "document.read",
+          input: step.args,
+        },
+      );
+      toolRuns.push(toolRun);
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: toolRun.status,
+        summaryText: toolRun.summaryText,
+        toolRunCallIds: [toolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(toolRun),
+      });
+
+      if (toolRun.status === "completed") {
+        const document = asRecord(asRecord(toolRun.structuredPayload)?.document);
+        resolvedIdentifiers.documentId =
+          readString(document, "id") ||
+          readString(asRecord(step.args), "documentId") ||
+          readString(asRecord(step.args), "assetId") ||
+          resolvedIdentifiers.documentId;
+      }
+
+      if (toolRun.status !== "completed") {
+        break;
+      }
+
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+      continue;
+    }
+
+    if (step.toolName === "document.write_content") {
+      const hasContent = isCapabilityArgumentPresent(step.args, "content");
+
+      if (!hasContent) {
+        const followupPrompt = "我已经定位到目标文档了，请直接告诉我要写入的具体内容。";
+        const contentFollowup = buildContentMissingInformationFollowup({
+          capabilityDescriptors: params.capabilityDescriptors,
+          prompt: followupPrompt,
+        });
+        const resolvedStepPlan = fillCapabilityStepPlanIdentifiers(
+          activeStepPlan,
+          resolvedIdentifiers,
+        );
+
+        activeStepPlan = {
+          ...resolvedStepPlan,
+          missingInformation: ["content"],
+          followupQuestion: followupPrompt,
+        };
+
+        return {
+          stepPlan: activeStepPlan,
+          stepRuns,
+          toolRuns,
+          writebackDrafts,
+          missingInformationFollowup: contentFollowup,
+          terminalState: "needs_followup",
+          taskStatus: "planned",
+          resultStatus: "ready",
+          executionPreview: buildCapabilityFollowupExecutionPreview(contentFollowup),
+          insight: buildCapabilityFollowupInsight(params.dispatch.insight, contentFollowup),
+          assistantText: `${params.user.name}，${followupPrompt}`,
+        };
+      }
+
+      const toolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "document.write_content",
+          input: step.args,
+        },
+      );
+      toolRuns.push(toolRun);
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: toolRun.status,
+        summaryText: toolRun.summaryText,
+        toolRunCallIds: [toolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(toolRun),
+      });
+
+      if (toolRun.status === "completed") {
+        const document = asRecord(asRecord(toolRun.structuredPayload)?.document);
+        resolvedIdentifiers.documentId =
+          readString(document, "id") ||
+          readString(asRecord(step.args), "documentId") ||
+          readString(asRecord(step.args), "assetId") ||
+          resolvedIdentifiers.documentId;
+      }
+
+      if (toolRun.status === "failed" && toolRun.errorCode === "INVALID_DOCUMENT_WRITE_CONTENT_INPUT") {
+        const contentFollowup = buildContentMissingInformationFollowup({
+          capabilityDescriptors: params.capabilityDescriptors,
+          prompt: "我已经定位到目标文档了，请直接告诉我要写入的具体内容。",
+        });
+        const resolvedStepPlan = fillCapabilityStepPlanIdentifiers(
+          activeStepPlan,
+          resolvedIdentifiers,
+        );
+
+        activeStepPlan = {
+          ...resolvedStepPlan,
+          missingInformation: ["content"],
+          followupQuestion: contentFollowup.prompt,
+        };
+
+        return {
+          stepPlan: activeStepPlan,
+          stepRuns,
+          toolRuns,
+          writebackDrafts,
+          missingInformationFollowup: contentFollowup,
+          terminalState: "needs_followup",
+          taskStatus: "planned",
+          resultStatus: "ready",
+          executionPreview: buildCapabilityFollowupExecutionPreview(contentFollowup),
+          insight: buildCapabilityFollowupInsight(params.dispatch.insight, contentFollowup),
+          assistantText: `${params.user.name}，${contentFollowup.prompt}`,
+        };
+      }
+
+      if (toolRun.status !== "completed") {
+        break;
+      }
+
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+      continue;
+    }
+
+    if (step.toolName === "work_order.update" || step.toolName === "work_order.archive") {
+      const latestResolvedReadToolRun =
+        [...toolRuns].reverse().find((toolRun) => toolRun.toolName === "work_order.read") ?? null;
+      const refinedArgs = await refineWorkOrderPatchWithModel({
+        prompt: params.normalizedPrompt,
+        workOrder: latestResolvedReadToolRun
+          ? readWorkOrderFromToolRun(latestResolvedReadToolRun) ?? {}
+          : {},
+        existingArgs: step.args,
+      });
+      const executableStep = mergeStepArgs(step, refinedArgs);
+      const writebackPlan = buildCapabilityStepWritebackPlan(
+        params.stepPlan,
+        executableStep,
+      );
+
+      if (!writebackPlan) {
+        stepRuns.push({
+          stepId: step.stepId,
+          toolName: step.toolName,
+          purpose: step.purpose,
+          status: "failed",
+          summaryText: "模型计划缺少可执行的写回字段。",
+          toolRunCallIds: [],
+          changedObjects: [],
+        });
+        break;
+      }
+
+      const readToolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "work_order.read",
+          input: {
+            workOrderNo: writebackPlan.workOrderNo,
+          },
+        },
+      );
+      toolRuns.push(readToolRun);
+
+      if (readToolRun.status !== "completed") {
+        stepRuns.push({
+          stepId: step.stepId,
+          toolName: step.toolName,
+          purpose: step.purpose,
+          status: readToolRun.status,
+          summaryText: readToolRun.summaryText,
+          toolRunCallIds: [readToolRun.callId],
+          changedObjects: readChangedObjectsFromToolRun(readToolRun),
+        });
+        break;
+      }
+
+      resolvedIdentifiers.workOrderNo =
+        writebackPlan.workOrderNo || resolvedIdentifiers.workOrderNo;
+      activeStepPlan = fillCapabilityStepPlanIdentifiers(activeStepPlan, resolvedIdentifiers);
+
+      const writebackExecution =
+        await createCapabilityStepWritebackExecutionRecord({
+          user: params.user,
+          threadId: params.threadId,
+          db: params.db,
+          now: params.now,
+          userMessageId: params.userMessageId,
+          normalizedPrompt: params.normalizedPrompt,
+          dispatch: params.dispatch,
+          step: executableStep,
+        });
+      const draftToolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "work_order.writeback_draft.create",
+          input: {
+            taskId: writebackExecution.taskId,
+            resultId: writebackExecution.resultId,
+            source: "bp_ask_capability_steps",
+            sourceRequestId: params.userMessageId,
+            candidates: writebackPlan.candidates,
+          },
+        },
+      );
+      toolRuns.push(draftToolRun);
+      const stepDrafts = readWritebackDraftsFromToolRun(draftToolRun);
+
+      if (draftToolRun.status !== "completed" || stepDrafts.length === 0) {
+        stepRuns.push({
+          stepId: step.stepId,
+          toolName: step.toolName,
+          purpose: step.purpose,
+          status: draftToolRun.status,
+          summaryText: draftToolRun.summaryText,
+          toolRunCallIds: [readToolRun.callId, draftToolRun.callId],
+          changedObjects: readChangedObjectsFromToolRun(draftToolRun),
+        });
+        break;
+      }
+
+      await params.db
+        .update(executionWritebackDrafts)
+        .set({
+          status: "ready",
+          metadata: {
+            autoApproved: true,
+            reviewedAt: params.now.toISOString(),
+            reviewedByUserId: params.user.id,
+            reviewedByUserName: params.user.name,
+            reviewAction: "approve",
+            reviewReason: "bp_ask_capability_steps_direct_apply",
+          },
+          updatedAt: params.now,
+        })
+        .where(inArray(executionWritebackDrafts.id, stepDrafts.map((draft) => draft.draftId)));
+
+      const applyToolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: "work_order.writeback.apply",
+          input: {
+            taskId: writebackExecution.taskId,
+            resultId: writebackExecution.resultId,
+            draftIds: stepDrafts.map((draft) => draft.draftId),
+          },
+        },
+      );
+      toolRuns.push(applyToolRun);
+      writebackDrafts = [
+        ...writebackDrafts,
+        ...readWritebackDraftsFromApplyToolRun(applyToolRun),
+      ];
+      stepRuns.push({
+        stepId: step.stepId,
+        toolName: step.toolName,
+        purpose: step.purpose,
+        status: applyToolRun.status,
+        summaryText: applyToolRun.summaryText,
+        toolRunCallIds: [readToolRun.callId, draftToolRun.callId, applyToolRun.callId],
+        changedObjects: readChangedObjectsFromToolRun(applyToolRun),
+      });
+
+      if (applyToolRun.status !== "completed") {
+        break;
+      }
+
+      await params.db
+        .update(executionTasks)
+        .set({
+          status: "completed",
+          updatedAt: params.now,
+        })
+        .where(eq(executionTasks.id, writebackExecution.taskId));
+      await params.db
+        .update(executionResults)
+        .set({
+          status: "ready",
+          summaryText: applyToolRun.summaryText,
+          responseText: applyToolRun.summaryText,
+          structuredPayload: {
+            executionRoute: "capability_steps",
+            source: "bp_ask_capability_steps",
+            stepId: step.stepId,
+            toolName: step.toolName,
+            writebackDrafts,
+            toolRuns: [readToolRun, draftToolRun, applyToolRun],
+            changedObjects: readChangedObjectsFromToolRun(applyToolRun),
+          },
+          updatedAt: params.now,
+        })
+        .where(eq(executionResults.id, writebackExecution.resultId));
+
+      continue;
+    }
+
+    stepRuns.push({
+      stepId: step.stepId,
+      toolName: step.toolName,
+      purpose: step.purpose,
+      status: "failed",
+      summaryText: `第一版多步执行暂不支持 ${step.toolName}。`,
+      toolRunCallIds: [],
+      changedObjects: [],
+    });
+    break;
+  }
+
+  const changedObjects = mergeChangedObjects(
+    ...toolRuns.map((toolRun) => readChangedObjectsFromToolRun(toolRun)),
+  );
+  const capabilityStepCompleted = stepRuns.length > 0 &&
+    stepRuns.every((stepRun) => stepRun.status === "completed");
+  const terminalState = capabilityStepCompleted
+    ? "completed"
+    : stepRuns.some((stepRun) => stepRun.status === "failed") && toolRuns.length > 0
+      ? "ready_to_delegate"
+      : "failed";
+
+  return {
+    stepPlan: activeStepPlan,
+    stepRuns,
+    toolRuns,
+    writebackDrafts,
+    missingInformationFollowup: null,
+    terminalState,
+    taskStatus: capabilityStepCompleted ? "completed" : "failed",
+    resultStatus: capabilityStepCompleted ? "ready" : "failed",
+    executionPreview: buildCapabilityStepExecutionPreview({
+      stepPlan: activeStepPlan,
+      stepRuns,
+      toolRuns,
+      changedObjects,
+    }),
+    insight: buildCapabilityStepInsight({
+      insight: params.dispatch.insight,
+      stepPlan: activeStepPlan,
+      stepRuns,
+      changedObjects,
+    }),
+    assistantText: buildCapabilityStepAssistantText({
+      userName: params.user.name,
+      stepPlan: activeStepPlan,
+      stepRuns,
+      changedObjects,
+    }),
+  };
+}
+
+async function executeWritebackDraftPlan(params: {
+  user: AuthenticatedUser;
+  executionPlan: BpAskExecutionPlan;
+  dispatch: Awaited<ReturnType<typeof dispatchBpAskPrompt>>;
+}): Promise<Pick<BpAskExecutionState, "assistantText" | "insight" | "executionPreview" | "directToolRun" | "taskStatus" | "resultStatus">> {
+  const directToolRun = await runAiTool(
+    { user: params.user },
+    {
+      toolName: "work_order.read",
+      input: {
+        workOrderNo: params.executionPlan.writebackPlan?.workOrderNo,
+      },
+    },
+  );
+
+  return {
+    directToolRun,
+    taskStatus: directToolRun.status === "completed" ? "planned" : "failed",
+    resultStatus: directToolRun.status === "completed" ? "ready" : "failed",
+    executionPreview: buildControlledWritebackExecutionPreview({
+      plan: params.executionPlan.writebackPlan!,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    }),
+    insight: buildControlledWritebackInsight({
+      insight: params.dispatch.insight,
+      plan: params.executionPlan.writebackPlan!,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    }),
+    assistantText: buildControlledWritebackAssistantText({
+      userName: params.user.name,
+      plan: params.executionPlan.writebackPlan!,
+      readToolRun: directToolRun,
+      draftToolRun: null,
+      writebackDrafts: [],
+    }),
+  };
+}
+
+async function executeBpAskPlan(params: {
+  user: AuthenticatedUser;
+  threadId: string;
+  db: ReturnType<typeof getDb>;
+  now: Date;
+  userMessageId: string;
+  normalizedPrompt: string;
+  dispatch: Awaited<ReturnType<typeof dispatchBpAskPrompt>>;
+  executionPlan: BpAskExecutionPlan;
+  capabilityDescriptors: AiCapabilityDescriptor[];
+}): Promise<BpAskExecutionState> {
+  let assistantText = params.dispatch.assistantText;
+  let insight = params.dispatch.insight;
+  let executionPreview = params.dispatch.executionPreview;
+  let modelCapabilityStepPlan =
+    params.executionPlan.modelCapabilityStepPlan ?? null;
+  let directToolRun: AiToolRunRecord | null = null;
+  const writebackDraftToolRun: AiToolRunRecord | null = null;
+  const writebackApplyToolRun: AiToolRunRecord | null = null;
+  let writebackDrafts: BpAskWritebackDraft[] = [];
+  let missingInformationFollowup: BpAskMissingInformationFollowup | null =
+    params.executionPlan.missingInformationFollowup ?? null;
+  let capabilityStepRuns: BpAskCapabilityStepRun[] = [];
+  let capabilityStepToolRuns: AiToolRunRecord[] = [];
+  let longxiaRun: AiLongxiaRunRecord | null = null;
+  let longxiaHandoffPayload: BpAskLongxiaHandoffPayload | null = null;
+  let skillRun: AiSkillRunRecord | null = null;
+  let workflowRun: AiWorkflowRunRecord | null = null;
+  let taskStatus: "planned" | "delegated" | "completed" | "failed" =
+    params.dispatch.decision.suggestedExecutor === "longxia" ? "delegated" : "planned";
+  let resultStatus: "ready" | "failed" = "ready";
+  let terminalState: BpAskOrchestrationTerminalState =
+    params.dispatch.decision.suggestedExecutor === "longxia" ? "ready_to_delegate" : "completed";
+
+  if (
+    params.executionPlan.route === "capability_followup" &&
+    params.executionPlan.missingInformationFollowup
+  ) {
+    taskStatus = "planned";
+    resultStatus = "ready";
+    terminalState = "needs_followup";
+    executionPreview = buildCapabilityFollowupExecutionPreview(
+      params.executionPlan.missingInformationFollowup,
+    );
+    insight = buildCapabilityFollowupInsight(
+      params.dispatch.insight,
+      params.executionPlan.missingInformationFollowup,
+    );
+    assistantText = buildCapabilityFollowupAssistantText(
+      params.user.name,
+      params.executionPlan.missingInformationFollowup,
+    );
+  } else if (
+    params.executionPlan.route === "writeback_draft" &&
+    params.executionPlan.writebackPlan
+  ) {
+    ({
+      assistantText,
+      insight,
+      executionPreview,
+      directToolRun,
+      taskStatus,
+      resultStatus,
+    } = await executeWritebackDraftPlan({
+      user: params.user,
+      executionPlan: params.executionPlan,
+      dispatch: params.dispatch,
+    }));
+    terminalState = directToolRun?.status === "completed" ? "waiting_confirmation" : "failed";
+  } else if (
+    params.executionPlan.route === "capability_steps" &&
+    params.executionPlan.modelCapabilityStepPlan
+  ) {
+    const state = await runCapabilityStepMachine({
+      user: params.user,
+      threadId: params.threadId,
+      db: params.db,
+      now: params.now,
+      userMessageId: params.userMessageId,
+      normalizedPrompt: params.normalizedPrompt,
+      dispatch: params.dispatch,
+      stepPlan: params.executionPlan.modelCapabilityStepPlan,
+      capabilityDescriptors: params.capabilityDescriptors,
+    });
+    capabilityStepRuns = state.stepRuns;
+    capabilityStepToolRuns = state.toolRuns;
+    modelCapabilityStepPlan = state.stepPlan;
+    writebackDrafts = state.writebackDrafts;
+    missingInformationFollowup = state.missingInformationFollowup;
+    taskStatus = state.taskStatus;
+    resultStatus = state.resultStatus;
+    terminalState = state.terminalState;
+    executionPreview = state.executionPreview;
+    insight = state.insight;
+    assistantText = state.assistantText;
+
+    if (terminalState === "ready_to_delegate") {
+      longxiaHandoffPayload = buildLongxiaHandoffPayload({
+        threadId: params.threadId,
+        userMessageId: params.userMessageId,
+        stepPlan: state.stepPlan,
+        stepRuns: state.stepRuns,
+        toolRuns: state.toolRuns,
+      });
+
+      if (longxiaHandoffPayload) {
+        longxiaRun = await runLongxiaAgent(
+          { user: params.user },
+          longxiaHandoffPayload,
+        );
+        const longxiaContinuation = buildLongxiaContinuation({
+          run: longxiaRun,
+        });
+        writebackDrafts = longxiaContinuation.writebackDrafts;
+        taskStatus =
+          longxiaContinuation.terminalState === "completed"
+            ? "completed"
+            : longxiaRun.status === "completed"
+              ? "delegated"
+              : "failed";
+        resultStatus = longxiaRun.status === "completed" ? "ready" : "failed";
+        terminalState = longxiaContinuation.terminalState;
+        executionPreview = buildLongxiaExecutionPreview(longxiaRun);
+        insight = buildLongxiaInsight(params.dispatch.insight, longxiaRun);
+        assistantText = buildLongxiaAssistantText(params.user.name, longxiaRun);
+      }
+    }
+  } else if (
+    params.executionPlan.route === "direct_tool" &&
+    params.executionPlan.toolName
+  ) {
+    const directToolWorkOrderNo =
+      params.executionPlan.directToolInput?.workOrderNo ||
+      readTargetWorkOrderNo(params.dispatch.decision);
+
+    if (directToolWorkOrderNo) {
+      directToolRun = await runAiTool(
+        { user: params.user },
+        {
+          toolName: params.executionPlan.toolName,
+          input: {
+            workOrderNo: directToolWorkOrderNo,
+          },
+        },
+      );
+      taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
+      resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
+      terminalState = directToolRun.status === "failed" ? "failed" : "completed";
+      executionPreview = buildDirectToolExecutionPreview(directToolRun);
+      insight = buildDirectToolInsight(params.dispatch.insight, directToolRun);
+      assistantText = buildWorkOrderReadAssistantText(params.user.name, directToolRun);
+    }
+  } else if (
+    params.executionPlan.route === "capability_tool" &&
+    params.executionPlan.toolName
+  ) {
+    directToolRun = await runAiTool(
+      { user: params.user },
+      {
+        toolName: params.executionPlan.toolName,
+        input: params.executionPlan.modelCapabilityPlan?.args ?? {},
+      },
+    );
+    taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
+    resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
+    terminalState = directToolRun.status === "failed" ? "failed" : "completed";
+    executionPreview = buildCapabilityToolExecutionPreview(directToolRun);
+    insight = buildCapabilityToolInsight(params.dispatch.insight, directToolRun);
+    assistantText = buildCapabilityToolAssistantText(params.user.name, directToolRun);
+  } else if (
+    params.executionPlan.route === "work_order_create" &&
+    params.executionPlan.createPlan
+  ) {
+    directToolRun = await runAiTool(
+      { user: params.user },
+      {
+        toolName: "work_order.create",
+        input: {
+          ...params.executionPlan.createPlan,
+          sourcePrompt: params.normalizedPrompt,
+        },
+      },
+    );
+    taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
+    resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
+    terminalState = directToolRun.status === "failed" ? "failed" : "completed";
+    executionPreview = buildWorkOrderCreateExecutionPreview(directToolRun);
+    insight = buildWorkOrderCreateInsight(params.dispatch.insight, directToolRun);
+    assistantText = buildWorkOrderCreateAssistantText(params.user.name, directToolRun);
+  } else if (params.executionPlan.route === "workflow" && params.executionPlan.workflowId) {
+    workflowRun = await runAiWorkflow(
+      { user: params.user },
+      {
+        workflowId: params.executionPlan.workflowId,
+        input: {
+          workOrderNo: readTargetWorkOrderNo(params.dispatch.decision),
+        },
+      },
+    );
+    taskStatus = workflowRun.status === "failed" ? "failed" : "completed";
+    resultStatus = workflowRun.status === "failed" ? "failed" : "ready";
+    terminalState =
+      workflowRun.status === "waiting_confirmation"
+        ? "waiting_confirmation"
+        : workflowRun.status === "failed"
+          ? "failed"
+          : "completed";
+    executionPreview = buildWorkflowExecutionPreview(workflowRun);
+    insight = buildWorkflowInsight(params.dispatch.insight, workflowRun);
+    assistantText = buildWorkflowAssistantText(params.user.name, workflowRun);
+  } else if (params.executionPlan.route === "skill" && params.executionPlan.skillId) {
+    skillRun = await runAiSkill(
+      { user: params.user },
+      {
+        skillId: params.executionPlan.skillId,
+        input: {
+          workOrderNo: readTargetWorkOrderNo(params.dispatch.decision),
+        },
+      },
+    );
+    taskStatus = skillRun.status === "failed" ? "failed" : "completed";
+    resultStatus = skillRun.status === "failed" ? "failed" : "ready";
+    terminalState = skillRun.status === "failed" ? "failed" : "completed";
+    executionPreview = buildSkillExecutionPreview(skillRun);
+    insight = buildSkillInsight(params.dispatch.insight, skillRun);
+    assistantText = buildWorkOrderSummarySkillAssistantText(params.user.name, skillRun);
+  }
+
+  return {
+    assistantText,
+    insight,
+    executionPreview,
+    modelCapabilityStepPlan,
+    directToolRun,
+    writebackDraftToolRun,
+    writebackApplyToolRun,
+    writebackDrafts,
+    missingInformationFollowup,
+    capabilityStepRuns,
+    capabilityStepToolRuns,
+    longxiaRun,
+    longxiaHandoffPayload,
+    skillRun,
+    workflowRun,
+    terminalState,
+    taskStatus,
+    resultStatus,
+  };
+}
+
+function selectBpAskExecutionRoute(params: {
+  dispatchDecision: DispatchDecision;
+  prompt: string;
+  modelCapabilityPlan: ModelAiCapabilityPlan | null;
+  modelCapabilityStepPlan: ModelAiCapabilityStepPlan | null;
+  modelToolPlan: ModelWorkOrderToolPlan | null;
+  capabilityDescriptors: AiCapabilityDescriptor[];
+  stepPlannerPlan: BpAskWorkOrderStepPlannerPlan | null;
+  stepSlotFillContinuation: BpAskStepSlotFillContinuation | null;
+}): BpAskRouteSelection {
+  const modelCapabilityMissingInformationFollowup =
+    buildCapabilityMissingInformationFollowup(
+      params.modelCapabilityPlan,
+      params.capabilityDescriptors,
+    ) ??
+    buildCapabilityStepMissingInformationFollowup(
+      params.modelCapabilityStepPlan,
+      params.capabilityDescriptors,
+    );
+
+  const modelCapabilityExecutionPlan = modelCapabilityMissingInformationFollowup
+    ? null
+    : buildExecutionPlanFromModelCapabilityPlan(
+        params.modelCapabilityPlan,
+        params.prompt,
+      );
+
+  const searchProbeExecutionPlan: BpAskExecutionPlan | null =
+    canProbeCapabilityStepSearch(params.modelCapabilityStepPlan) &&
+    params.modelCapabilityStepPlan
+      ? {
+          route: "capability_steps",
+          modelCapabilityStepPlan: params.modelCapabilityStepPlan,
+        }
+      : null;
+
+  const modelCapabilityStepExecutionPlan: BpAskExecutionPlan | null =
+    shouldRunCapabilityStepPlan(params.modelCapabilityStepPlan, params.prompt, {
+      force: Boolean(params.stepSlotFillContinuation),
+    }) && params.modelCapabilityStepPlan
+      ? {
+          route: "capability_steps",
+          modelCapabilityStepPlan: params.modelCapabilityStepPlan,
+        }
+      : null;
+
+  const fallbackExecutionPlan = params.stepPlannerPlan
+    ? ({
+        route: "writeback_draft",
+        writebackPlan: {
+          workOrderNo: params.stepPlannerPlan.workOrderNo,
+          candidates: params.stepPlannerPlan.candidates,
+          directApply: true,
+        },
+      } satisfies BpAskExecutionPlan)
+    : planBpAskExecution(
+        params.dispatchDecision,
+        params.prompt,
+        params.modelToolPlan,
+      );
+
+  const executionPlan = modelCapabilityMissingInformationFollowup
+    ? searchProbeExecutionPlan ??
+      ({
+          route: "capability_followup",
+          modelCapabilityPlan: params.modelCapabilityPlan ?? undefined,
+          modelCapabilityStepPlan: params.modelCapabilityStepPlan ?? undefined,
+          missingInformationFollowup: modelCapabilityMissingInformationFollowup,
+        } satisfies BpAskExecutionPlan)
+    : modelCapabilityStepExecutionPlan ??
+      modelCapabilityExecutionPlan ??
+      fallbackExecutionPlan;
+
+  return {
+    executionPlan,
+    modelCapabilityMissingInformationFollowup,
+    stepPlannerPlan: params.stepPlannerPlan,
+  };
+}
+
+function buildExecutionPlanFromModelCapabilityPlan(
+  plan: ModelAiCapabilityPlan | null,
+  prompt: string,
+): BpAskExecutionPlan | null {
+  if (!plan || plan.confidence < 70) {
+    return null;
+  }
+
+  if (plan.toolName === "work_order.update" || plan.toolName === "work_order.archive") {
+    const writebackPlan = buildControlledWorkOrderWritebackPlanFromCapabilityPlan(plan);
+
+    if (!writebackPlan) {
+      return null;
+    }
+
+    return {
+      route: "writeback_draft",
+      writebackPlan,
+      modelCapabilityPlan: plan,
+    };
+  }
+
+  if (plan.toolName === "work_order.read") {
+    const workOrderNo = readCapabilityStringArg(plan, "workOrderNo");
+
+    if (!workOrderNo) {
+      return null;
+    }
+
+    return {
+      route: "direct_tool",
+      toolName: "work_order.read",
+      directToolInput: { workOrderNo },
+      modelCapabilityPlan: plan,
+    };
+  }
+
+  if (plan.toolName === "work_order.create") {
+    const title = readCapabilityStringArg(plan, "title");
+
+    if (!title) {
+      return null;
+    }
+
+    return {
+      route: "work_order_create",
+      toolName: "work_order.create",
+      createPlan: {
+        title: title.includes("工单") ? title : `${title}工单`,
+        sourceSummary: readCapabilityStringArg(plan, "sourceSummary") || prompt,
+        priority: readCapabilityStringArg(plan, "priority") || "normal",
+        stage: readCapabilityStringArg(plan, "stage") || "registration",
+        nextAction: readCapabilityStringArg(plan, "nextAction"),
+      },
+      modelCapabilityPlan: plan,
+    };
+  }
+
+  if (
+    plan.toolName === "document.list" ||
+    plan.toolName === "document.search" ||
+    plan.toolName === "document.read" ||
+    plan.toolName === "document.write_content" ||
+    plan.toolName === "document.create"
+  ) {
+    return {
+      route: "capability_tool",
+      toolName: plan.toolName,
+      modelCapabilityPlan: plan,
+    };
+  }
+
+  return null;
+}
+
+function buildExecutionPlanFromModelToolPlan(
+  decision: DispatchDecision,
+  prompt: string,
+  modelToolPlan: ModelWorkOrderToolPlan | null,
+): BpAskExecutionPlan | null {
+  if (!modelToolPlan || modelToolPlan.confidence < 70) {
+    return null;
+  }
+
+  const modelCreatePlan = buildWorkOrderCreatePlanFromModel(modelToolPlan, prompt);
+
+  if (modelCreatePlan) {
+    return {
+      route: "work_order_create",
+      toolName: "work_order.create",
+      createPlan: modelCreatePlan,
+      modelToolPlan,
+    };
+  }
+
+  const modelWritebackPlan = buildControlledWorkOrderWritebackPlanFromModel(
+    decision,
+    prompt,
+    modelToolPlan,
+  );
+
+  if (modelWritebackPlan) {
+    return {
+      route: "writeback_draft",
+      writebackPlan: modelWritebackPlan,
+      modelToolPlan,
+    };
+  }
+
+  if (modelToolPlan.tool === "work_order.read" && modelToolPlan.args.workOrderNo) {
+    return {
+      route: "direct_tool",
+      toolName: "work_order.read",
+      directToolInput: {
+        workOrderNo: modelToolPlan.args.workOrderNo,
+      },
+      modelToolPlan,
+    };
+  }
+
+  return null;
+}
+
 function planBpAskExecution(
   decision: DispatchDecision,
   prompt: string,
   modelToolPlan: ModelWorkOrderToolPlan | null = null,
 ): BpAskExecutionPlan {
+  const workflowMatch = matchAiWorkflow({ decision, prompt });
+
+  if (workflowMatch) {
+    return {
+      route: "workflow",
+      workflowId: workflowMatch.workflowId,
+    };
+  }
+
+  const modelExecutionPlan = buildExecutionPlanFromModelToolPlan(
+    decision,
+    prompt,
+    modelToolPlan,
+  );
+
+  if (modelExecutionPlan) {
+    return modelExecutionPlan;
+  }
+
   const createPlan = buildWorkOrderCreatePlan(decision, prompt);
 
   if (createPlan) {
@@ -1445,23 +4104,11 @@ function planBpAskExecution(
     };
   }
 
-  const workflowMatch = matchAiWorkflow({ decision, prompt });
-
-  if (workflowMatch) {
-    return {
-      route: "workflow",
-      workflowId: workflowMatch.workflowId,
-    };
-  }
-
-  if (shouldRunWorkOrderSummarySkill(decision, prompt)) {
-    return {
-      route: "skill",
-      skillId: "skill-work-order-summary",
-    };
-  }
-
-  if (shouldRunDirectWorkOrderRead(decision, prompt)) {
+  if (
+    decision.targetDomain === "work_order" &&
+    decision.executionMode === "retrieve_then_answer" &&
+    readTargetWorkOrderNo(decision)
+  ) {
     return {
       route: "direct_tool",
       toolName: "work_order.read",
@@ -1469,44 +4116,6 @@ function planBpAskExecution(
         workOrderNo: readTargetWorkOrderNo(decision),
       },
     };
-  }
-
-  if (modelToolPlan && modelToolPlan.confidence >= 70) {
-    const modelCreatePlan = buildWorkOrderCreatePlanFromModel(modelToolPlan, prompt);
-
-    if (modelCreatePlan) {
-      return {
-        route: "work_order_create",
-        toolName: "work_order.create",
-        createPlan: modelCreatePlan,
-        modelToolPlan,
-      };
-    }
-
-    const modelWritebackPlan = buildControlledWorkOrderWritebackPlanFromModel(
-      decision,
-      prompt,
-      modelToolPlan,
-    );
-
-    if (modelWritebackPlan) {
-      return {
-        route: "writeback_draft",
-        writebackPlan: modelWritebackPlan,
-        modelToolPlan,
-      };
-    }
-
-    if (modelToolPlan.tool === "work_order.read" && modelToolPlan.args.workOrderNo) {
-      return {
-        route: "direct_tool",
-        toolName: "work_order.read",
-        directToolInput: {
-          workOrderNo: modelToolPlan.args.workOrderNo,
-        },
-        modelToolPlan,
-      };
-    }
   }
 
   return {
@@ -1517,6 +4126,42 @@ function planBpAskExecution(
 function readWorkOrderFromToolRun(toolRun: AiToolRunRecord) {
   const payload = asRecord(toolRun.structuredPayload);
   return asRecord(payload?.workOrder);
+}
+
+function buildCapabilityToolExecutionPreview(toolRun: AiToolRunRecord): DispatchExecutionPreview {
+  return {
+    mode: "tool_result",
+    title: toolRun.status === "completed" ? "真实执行：能力工具已完成" : "真实执行：能力工具未完成",
+    summary: toolRun.summaryText,
+    nextStep: toolRun.status === "completed" ? "已把能力工具结果写入执行记录，并用于 BP问问本轮回复。" : "请补充必要对象或换一种说法重试。",
+    safety: "本轮由模型根据能力清单选择工具，旧关键词规则仅作为 fallback。",
+    simulatedActions: [
+      "模型读取 AI capability descriptors",
+      `选择并调用 ${toolRun.toolName}`,
+      "工具结果写入 execution_results",
+    ],
+    toolRuns: [compactToolRun(toolRun)],
+    changedObjects: readChangedObjectsFromToolRun(toolRun),
+  };
+}
+
+function buildCapabilityToolInsight(
+  insight: InsightBlock,
+  toolRun: AiToolRunRecord,
+): InsightBlock {
+  return {
+    ...insight,
+    metric: "CAPABILITY TOOL RUN",
+    findings: [
+      ...insight.findings,
+      `已由通用能力规划器调用 ${toolRun.toolName}，状态为 ${toolRun.status}。`,
+    ],
+    summary: `${insight.summary} ${toolRun.summaryText}`,
+  };
+}
+
+function buildCapabilityToolAssistantText(userName: string, toolRun: AiToolRunRecord) {
+  return `${userName}，${toolRun.summaryText}`;
 }
 
 function buildDirectToolExecutionPreview(toolRun: AiToolRunRecord): DispatchExecutionPreview {
@@ -1541,13 +4186,7 @@ function buildDirectToolExecutionPreview(toolRun: AiToolRunRecord): DispatchExec
       "BP问问直接调用 work_order.read",
       "工具结果写入 execution_results",
     ],
-    toolRuns: [
-      {
-        toolName: toolRun.toolName,
-        status: toolRun.status,
-        summaryText: toolRun.summaryText,
-      },
-    ],
+    toolRuns: [compactToolRun(toolRun)],
     changedObjects: [],
   };
 }
@@ -1593,13 +4232,7 @@ function buildWorkOrderCreateExecutionPreview(
       "工具结果写入 execution_results",
       `changedObjects：${changedObjects.join("；") || "无"}`,
     ],
-    toolRuns: [
-      {
-        toolName: toolRun.toolName,
-        status: toolRun.status,
-        summaryText: toolRun.summaryText,
-      },
-    ],
+    toolRuns: [compactToolRun(toolRun)],
     changedObjects,
   };
 }
@@ -2129,6 +4762,78 @@ async function getMessagesForThread(threadId: string) {
     .orderBy(asc(conversationMessages.sequence));
 
   return rows.map(mapMessage);
+}
+
+async function getLatestAssistantSlotFillSource(threadId: string): Promise<BpAskSlotFillSource | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: conversationMessages.id,
+      sequence: conversationMessages.sequence,
+      metadata: conversationMessages.metadata,
+    })
+    .from(conversationMessages)
+    .where(
+      and(
+        eq(conversationMessages.threadId, threadId),
+        eq(conversationMessages.role, "assistant"),
+      ),
+    )
+    .orderBy(desc(conversationMessages.sequence))
+    .limit(1);
+  const metadata = asRecord(row?.metadata);
+  const modelCapabilityPlan = readModelCapabilityPlan(metadata?.modelCapabilityPlan);
+  const missingInformationFollowup = readMissingInformationFollowup(
+    metadata?.missingInformationFollowup,
+  );
+
+  if (!row || !modelCapabilityPlan || !missingInformationFollowup) {
+    return null;
+  }
+
+  return {
+    messageId: row.id,
+    sequence: row.sequence,
+    modelCapabilityPlan,
+    missingInformationFollowup,
+  };
+}
+
+async function getLatestAssistantStepSlotFillSource(threadId: string): Promise<BpAskStepSlotFillSource | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({
+      id: conversationMessages.id,
+      sequence: conversationMessages.sequence,
+      metadata: conversationMessages.metadata,
+    })
+    .from(conversationMessages)
+    .where(
+      and(
+        eq(conversationMessages.threadId, threadId),
+        eq(conversationMessages.role, "assistant"),
+      ),
+    )
+    .orderBy(desc(conversationMessages.sequence))
+    .limit(1);
+  const metadata = asRecord(row?.metadata);
+  const modelCapabilityStepPlan = readModelCapabilityStepPlan(
+    metadata?.modelCapabilityStepPlan,
+  );
+  const missingInformationFollowup = readMissingInformationFollowup(
+    metadata?.missingInformationFollowup,
+  );
+
+  if (!row || !modelCapabilityStepPlan || !missingInformationFollowup) {
+    return null;
+  }
+
+  return {
+    messageId: row.id,
+    sequence: row.sequence,
+    modelCapabilityStepPlan,
+    missingInformationFollowup,
+  };
 }
 
 async function getLatestRollingSummary(threadId: string) {
@@ -3076,6 +5781,23 @@ function updatePostConfirmationPayload(params: {
   };
 }
 
+function compactToolRun(toolRun: AiToolRunRecord) {
+  return {
+    callId: toolRun.callId,
+    toolName: toolRun.toolName,
+    sourceKind: toolRun.sourceKind,
+    riskLevel: toolRun.riskLevel,
+    status: toolRun.status,
+    summaryText: toolRun.summaryText,
+    input: toolRun.input,
+    structuredPayload: toolRun.structuredPayload,
+    trace: toolRun.trace,
+    startedAt: toolRun.startedAt,
+    completedAt: toolRun.completedAt,
+    errorCode: toolRun.errorCode,
+  };
+}
+
 function appendToolRun(toolRuns: unknown, toolRun: AiToolRunRecord) {
   const existing = readArray(toolRuns);
   const hasSameRun = existing.some((item) => {
@@ -3088,7 +5810,7 @@ function appendToolRun(toolRuns: unknown, toolRun: AiToolRunRecord) {
     );
   });
 
-  return hasSameRun ? existing : [...existing, toolRun];
+  return hasSameRun ? existing : [...existing, compactToolRun(toolRun)];
 }
 
 function updateWorkflowRunsWritebackDrafts(
@@ -3488,6 +6210,7 @@ function updateWritebackApplyPayload(params: {
 
   return {
     ...params.payload,
+    terminalState: params.toolRun.status === "completed" ? "completed" : "failed",
     insight,
     workflowRuns,
     executionPreview: nextExecutionPreview,
@@ -4796,19 +7519,90 @@ export async function appendMessageToThreadForUser(
     factKey: fact.factKey,
     factValue: fact.factValue,
   }));
+  const capabilityDescriptors = listAiCapabilityDescriptors();
+  const slotFillContinuation = await resolveSlotFillContinuation({
+    threadId: thread.id,
+    prompt: normalizedPrompt,
+    capabilities: capabilityDescriptors,
+  });
+  const stepSlotFillContinuation = await resolveStepSlotFillContinuation({
+    threadId: thread.id,
+    prompt: normalizedPrompt,
+    capabilities: capabilityDescriptors,
+  });
+  const dispatchPrompt = slotFillContinuation
+    ? `${slotFillContinuation.originalModelCapabilityPlan.reason || slotFillContinuation.capabilityName}\n补充信息：${normalizedPrompt}`
+    : stepSlotFillContinuation
+      ? `${stepSlotFillContinuation.originalModelCapabilityStepPlan.reason || stepSlotFillContinuation.originalModelCapabilityStepPlan.taskTitle}\n补充信息：${normalizedPrompt}`
+      : normalizedPrompt;
   const dispatch = await dispatchBpAskPrompt({
     user,
-    prompt: normalizedPrompt,
+    prompt: dispatchPrompt,
     rollingSummary,
     recentMessages: recentDispatchMessages,
     memoryFacts: recentDispatchFacts,
   });
 
+  let modelCapabilityPlan: ModelAiCapabilityPlan | null =
+    slotFillContinuation?.mergedModelCapabilityPlan ?? null;
+  let modelCapabilityPlannerAttempted = Boolean(slotFillContinuation);
+  let modelCapabilityPlannerError: string | null = null;
+  let modelCapabilityStepPlan: ModelAiCapabilityStepPlan | null =
+    stepSlotFillContinuation?.mergedModelCapabilityStepPlan ?? null;
+  let modelCapabilityStepPlannerAttempted = Boolean(stepSlotFillContinuation);
+  let modelCapabilityStepPlannerError: string | null = null;
   let modelToolPlan: ModelWorkOrderToolPlan | null = null;
   let modelToolPlannerAttempted = false;
   let modelToolPlannerError: string | null = null;
 
-  if (shouldTryModelWorkOrderToolPlanner(dispatch.decision, normalizedPrompt)) {
+  if (!slotFillContinuation && !stepSlotFillContinuation) {
+    modelCapabilityStepPlannerAttempted = true;
+
+    try {
+      modelCapabilityStepPlan = await planAiCapabilityStepsWithModel({
+        prompt: normalizedPrompt,
+        rollingSummary,
+        recentMessages: recentDispatchMessages.map(
+          (message) => `${message.role}: ${message.text}`,
+        ),
+        memoryFacts: recentDispatchFacts.map(
+          (fact) => `${fact.factType}.${fact.factKey}: ${fact.factValue}`,
+        ),
+        capabilities: capabilityDescriptors,
+      });
+    } catch (error) {
+      modelCapabilityStepPlannerError =
+        error instanceof Error ? error.message : "MODEL_CAPABILITY_STEP_PLANNER_FAILED";
+    }
+  }
+
+  if (!slotFillContinuation && !stepSlotFillContinuation) {
+    modelCapabilityPlannerAttempted = true;
+
+    try {
+      modelCapabilityPlan = await planAiCapabilityWithModel({
+        prompt: normalizedPrompt,
+        rollingSummary,
+        recentMessages: recentDispatchMessages.map(
+          (message) => `${message.role}: ${message.text}`,
+        ),
+        memoryFacts: recentDispatchFacts.map(
+          (fact) => `${fact.factType}.${fact.factKey}: ${fact.factValue}`,
+        ),
+        capabilities: capabilityDescriptors,
+      });
+    } catch (error) {
+      modelCapabilityPlannerError =
+        error instanceof Error ? error.message : "MODEL_CAPABILITY_PLANNER_FAILED";
+    }
+
+    modelCapabilityPlan = clearImplicitWorkOrderNo(
+      modelCapabilityPlan,
+      normalizedPrompt,
+    );
+  }
+
+  if (!slotFillContinuation && !stepSlotFillContinuation && shouldTryModelWorkOrderToolPlanner(dispatch.decision, normalizedPrompt)) {
     modelToolPlannerAttempted = true;
 
     try {
@@ -4829,140 +7623,65 @@ export async function appendMessageToThreadForUser(
     }
   }
 
-  let assistantText = dispatch.assistantText;
-  let insight = dispatch.insight;
-  let executionPreview = dispatch.executionPreview;
   const stepPlannerWorkOrderNo = await resolveWorkOrderNoForPrompt(
     dispatch.decision,
     normalizedPrompt,
   );
-  const stepPlannerPlan = buildWorkOrderStepPlannerPlan(
-    dispatch.decision,
-    normalizedPrompt,
-    stepPlannerWorkOrderNo,
-  );
-  const executionPlan = stepPlannerPlan
-    ? ({ route: "writeback_draft", writebackPlan: { workOrderNo: stepPlannerPlan.workOrderNo, candidates: stepPlannerPlan.candidates, directApply: true } } satisfies BpAskExecutionPlan)
-    : planBpAskExecution(
-        dispatch.decision,
-        normalizedPrompt,
-        modelToolPlan,
-      );
+  const stepPlannerPlan =
+    modelCapabilityStepPlan || stepSlotFillContinuation
+      ? null
+      : buildWorkOrderStepPlannerPlan(
+          dispatch.decision,
+          normalizedPrompt,
+          stepPlannerWorkOrderNo,
+        );
+  const routeSelection = selectBpAskExecutionRoute({
+    dispatchDecision: dispatch.decision,
+    prompt: normalizedPrompt,
+    modelCapabilityPlan,
+    modelCapabilityStepPlan,
+    modelToolPlan,
+    capabilityDescriptors,
+    stepPlannerPlan,
+    stepSlotFillContinuation,
+  });
+  const { executionPlan } = routeSelection;
+
+  const modelCapabilityPlanUsed = executionPlan.modelCapabilityPlan === modelCapabilityPlan && Boolean(modelCapabilityPlan);
+  const modelCapabilityStepPlanUsed =
+    executionPlan.modelCapabilityStepPlan === modelCapabilityStepPlan && Boolean(modelCapabilityStepPlan);
   const modelToolPlanUsed = executionPlan.modelToolPlan === modelToolPlan && Boolean(modelToolPlan);
-  let directToolRun: AiToolRunRecord | null = null;
-  let writebackDraftToolRun: AiToolRunRecord | null = null;
-  let writebackApplyToolRun: AiToolRunRecord | null = null;
-  let writebackDrafts: BpAskWritebackDraft[] = [];
-  let skillRun: AiSkillRunRecord | null = null;
-  let workflowRun: AiWorkflowRunRecord | null = null;
+  const executionState = await executeBpAskPlan({
+    user,
+    threadId: thread.id,
+    db,
+    now,
+    userMessageId,
+    normalizedPrompt,
+    dispatch,
+    executionPlan,
+    capabilityDescriptors,
+  });
+  let assistantText = executionState.assistantText;
+  let insight = executionState.insight;
+  let executionPreview = executionState.executionPreview;
+  const directToolRun = executionState.directToolRun;
+  let writebackDraftToolRun = executionState.writebackDraftToolRun;
+  let writebackApplyToolRun = executionState.writebackApplyToolRun;
+  let writebackDrafts = executionState.writebackDrafts;
+  const missingInformationFollowup = executionState.missingInformationFollowup;
+  const capabilityStepRuns = executionState.capabilityStepRuns;
+  const capabilityStepToolRuns = executionState.capabilityStepToolRuns;
+  const longxiaRun = executionState.longxiaRun;
+  const longxiaHandoffPayload = executionState.longxiaHandoffPayload;
+  const skillRun = executionState.skillRun;
+  const workflowRun = executionState.workflowRun;
+  const terminalState = executionState.terminalState;
+  let taskStatus = executionState.taskStatus;
+  let resultStatus = executionState.resultStatus;
   const executionRoute: BpAskExecutionRoute = executionPlan.route;
-  let taskStatus: "planned" | "delegated" | "completed" | "failed" =
-    dispatch.decision.suggestedExecutor === "longxia" ? "delegated" : "planned";
-  let resultStatus: "ready" | "failed" = "ready";
-
-  if (executionPlan.route === "writeback_draft" && executionPlan.writebackPlan) {
-    directToolRun = await runAiTool(
-      { user },
-      {
-        toolName: "work_order.read",
-        input: {
-          workOrderNo: executionPlan.writebackPlan.workOrderNo,
-        },
-      },
-    );
-    taskStatus = directToolRun.status === "completed" ? "planned" : "failed";
-    resultStatus = directToolRun.status === "completed" ? "ready" : "failed";
-    executionPreview = buildControlledWritebackExecutionPreview({
-      plan: executionPlan.writebackPlan,
-      readToolRun: directToolRun,
-      draftToolRun: null,
-      writebackDrafts: [],
-    });
-    insight = buildControlledWritebackInsight({
-      insight: dispatch.insight,
-      plan: executionPlan.writebackPlan,
-      readToolRun: directToolRun,
-      draftToolRun: null,
-      writebackDrafts: [],
-    });
-    assistantText = buildControlledWritebackAssistantText({
-      userName: user.name,
-      plan: executionPlan.writebackPlan,
-      readToolRun: directToolRun,
-      draftToolRun: null,
-      writebackDrafts: [],
-    });
-  } else if (
-    executionPlan.route === "work_order_create" &&
-    executionPlan.createPlan
-  ) {
-    directToolRun = await runAiTool(
-      { user },
-      {
-        toolName: "work_order.create",
-        input: {
-          ...executionPlan.createPlan,
-          sourcePrompt: normalizedPrompt,
-        },
-      },
-    );
-    taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
-    resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
-    executionPreview = buildWorkOrderCreateExecutionPreview(directToolRun);
-    insight = buildWorkOrderCreateInsight(dispatch.insight, directToolRun);
-    assistantText = buildWorkOrderCreateAssistantText(user.name, directToolRun);
-  } else if (executionPlan.route === "workflow" && executionPlan.workflowId) {
-    workflowRun = await runAiWorkflow(
-      { user },
-      {
-        workflowId: executionPlan.workflowId,
-        input: {
-          workOrderNo: readTargetWorkOrderNo(dispatch.decision),
-        },
-      },
-    );
-    taskStatus = workflowRun.status === "failed" ? "failed" : "completed";
-    resultStatus = workflowRun.status === "failed" ? "failed" : "ready";
-    executionPreview = buildWorkflowExecutionPreview(workflowRun);
-    insight = buildWorkflowInsight(dispatch.insight, workflowRun);
-    assistantText = buildWorkflowAssistantText(user.name, workflowRun);
-  } else if (executionPlan.route === "skill" && executionPlan.skillId) {
-    skillRun = await runAiSkill(
-      { user },
-      {
-        skillId: executionPlan.skillId,
-        input: {
-          workOrderNo: readTargetWorkOrderNo(dispatch.decision),
-        },
-      },
-    );
-    taskStatus = skillRun.status === "failed" ? "failed" : "completed";
-    resultStatus = skillRun.status === "failed" ? "failed" : "ready";
-    executionPreview = buildSkillExecutionPreview(skillRun);
-    insight = buildSkillInsight(dispatch.insight, skillRun);
-    assistantText = buildWorkOrderSummarySkillAssistantText(user.name, skillRun);
-  } else if (executionPlan.route === "direct_tool" && executionPlan.toolName) {
-    const directToolWorkOrderNo =
-      executionPlan.directToolInput?.workOrderNo ||
-      readTargetWorkOrderNo(dispatch.decision);
-
-    if (directToolWorkOrderNo) {
-      directToolRun = await runAiTool(
-        { user },
-        {
-          toolName: executionPlan.toolName,
-          input: {
-            workOrderNo: directToolWorkOrderNo,
-          },
-        },
-      );
-      taskStatus = directToolRun.status === "failed" ? "failed" : "completed";
-      resultStatus = directToolRun.status === "failed" ? "failed" : "ready";
-      executionPreview = buildDirectToolExecutionPreview(directToolRun);
-      insight = buildDirectToolInsight(dispatch.insight, directToolRun);
-      assistantText = buildWorkOrderReadAssistantText(user.name, directToolRun);
-    }
-  }
+  const effectiveModelCapabilityStepPlan =
+    executionState.modelCapabilityStepPlan ?? modelCapabilityStepPlan;
 
   const executionTaskId = buildId("exec-task");
   const executionResultId = buildId("exec-result");
@@ -5002,11 +7721,28 @@ export async function appendMessageToThreadForUser(
       followupQuestion: dispatch.decision.followupQuestion,
       executionRoute,
       directToolName: directToolRun?.toolName ?? null,
-      directToolStatus: directToolRun?.status ?? null,
+      terminalState: executionPlan.route === "writeback_draft"
+        ? directToolRun?.status === "completed"
+          ? "waiting_confirmation"
+          : "failed"
+        : terminalState,
+      longxiaHandoffPayload,
       skillId: skillRun?.skillId ?? executionPlan.skillId ?? null,
       skillStatus: skillRun?.status ?? null,
       workflowId: workflowRun?.workflowId ?? executionPlan.workflowId ?? null,
       workflowStatus: workflowRun?.status ?? null,
+      modelCapabilityPlannerAttempted,
+      modelCapabilityPlanUsed,
+      modelCapabilityPlannerError,
+      modelCapabilityPlan,
+      modelCapabilityStepPlannerAttempted,
+      modelCapabilityStepPlanUsed,
+      modelCapabilityStepPlannerError,
+      modelCapabilityStepPlan: effectiveModelCapabilityStepPlan,
+      capabilityStepRuns,
+      missingInformationFollowup,
+      slotFillContinuation,
+      stepSlotFillContinuation,
       modelToolPlannerAttempted,
       modelToolPlanUsed,
       modelToolPlannerError,
@@ -5014,7 +7750,7 @@ export async function appendMessageToThreadForUser(
       createPlan: executionPlan.createPlan ?? null,
       writebackOperations:
         executionPlan.writebackPlan?.candidates.map(
-          (candidate) => candidate.operation,
+          (candidate: BpAskControlledWritebackCandidate) => candidate.operation,
         ) ?? [],
       writebackCandidateCount:
         executionPlan.writebackPlan?.candidates.length ?? 0,
@@ -5029,6 +7765,23 @@ export async function appendMessageToThreadForUser(
     insight,
     executionPreview,
     executionRoute,
+    terminalState,
+    slotFillContinuation,
+    stepSlotFillContinuation,
+    modelCapabilityPlanner: {
+      attempted: modelCapabilityPlannerAttempted,
+      used: modelCapabilityPlanUsed,
+      error: modelCapabilityPlannerError,
+    },
+    modelCapabilityPlan,
+    modelCapabilityStepPlanner: {
+      attempted: modelCapabilityStepPlannerAttempted,
+      used: modelCapabilityStepPlanUsed,
+      error: modelCapabilityStepPlannerError,
+    },
+    modelCapabilityStepPlan: effectiveModelCapabilityStepPlan,
+    capabilityStepRuns,
+    missingInformationFollowup,
     modelToolPlanner: {
       attempted: modelToolPlannerAttempted,
       used: modelToolPlanUsed,
@@ -5038,14 +7791,20 @@ export async function appendMessageToThreadForUser(
     stepPlannerPlan,
     workflowRuns: workflowRun ? [workflowRun] : [],
     skillRuns: skillRun ? [skillRun] : (workflowRun?.skillRuns ?? []),
-    agentRuns: workflowRun?.agentRuns ?? [],
-    toolRuns: directToolRun
-      ? [directToolRun]
-      : (skillRun?.toolRuns ?? workflowRun?.toolRuns ?? []),
+    agentRuns: longxiaRun ? [longxiaRun] : (workflowRun?.agentRuns ?? []),
+    toolRuns: capabilityStepToolRuns.length > 0
+      ? capabilityStepToolRuns
+      : directToolRun
+        ? [directToolRun]
+        : (skillRun?.toolRuns ?? workflowRun?.toolRuns ?? []),
     changedObjects:
-      workflowRun?.changedObjects ??
-      skillRun?.changedObjects ??
-      (directToolRun ? readChangedObjectsFromToolRun(directToolRun) : []),
+      capabilityStepToolRuns.length > 0
+        ? mergeChangedObjects(
+            ...capabilityStepToolRuns.map((toolRun: AiToolRunRecord) => readChangedObjectsFromToolRun(toolRun)),
+          )
+        : workflowRun?.changedObjects ??
+          skillRun?.changedObjects ??
+          (directToolRun ? readChangedObjectsFromToolRun(directToolRun) : []),
     artifacts: workflowRun?.artifacts ?? skillRun?.artifacts ?? [],
   };
 
@@ -5125,7 +7884,7 @@ export async function appendMessageToThreadForUser(
       writebackDraftToolRun.status === "completed" &&
       writebackDrafts.length > 0
     ) {
-      const draftIds = writebackDrafts.map((draft) => draft.draftId);
+      const draftIds = writebackDrafts.map((draft: BpAskWritebackDraft) => draft.draftId);
 
       await db
         .update(executionWritebackDrafts)
@@ -5176,7 +7935,7 @@ export async function appendMessageToThreadForUser(
         assistantText = [
           `${user.name}，我已经按多步骤工单计划真实处理完 ${stepPlannerPlan.workOrderNo}。`,
           stepPlannerPlan.summary,
-          `本次真实执行了 ${writebackDrafts.length} 个动作：${writebackDrafts.map((draft) => writebackOperationLabel(draft.operation)).join("、")}。`,
+          `本次真实执行了 ${writebackDrafts.length} 个动作：${writebackDrafts.map((draft: BpAskWritebackDraft) => writebackOperationLabel(draft.operation)).join("、")}。`,
           "前端重新读取工单后会看到这些字段变化。",
         ].join("\n");
       }
@@ -5219,6 +7978,14 @@ export async function appendMessageToThreadForUser(
         executionTaskId,
         executionResultId,
         executionRoute,
+        modelCapabilityPlanner: resultStructuredPayload.modelCapabilityPlanner,
+        modelCapabilityPlan: resultStructuredPayload.modelCapabilityPlan,
+        modelCapabilityStepPlanner: resultStructuredPayload.modelCapabilityStepPlanner,
+        modelCapabilityStepPlan: resultStructuredPayload.modelCapabilityStepPlan,
+        capabilityStepRuns: resultStructuredPayload.capabilityStepRuns,
+        missingInformationFollowup: resultStructuredPayload.missingInformationFollowup,
+        slotFillContinuation: resultStructuredPayload.slotFillContinuation,
+        stepSlotFillContinuation: resultStructuredPayload.stepSlotFillContinuation,
         modelToolPlanner: resultStructuredPayload.modelToolPlanner,
         modelToolPlan: resultStructuredPayload.modelToolPlan,
         stepPlannerPlan: resultStructuredPayload.stepPlannerPlan,

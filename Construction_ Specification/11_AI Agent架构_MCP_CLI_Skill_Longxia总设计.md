@@ -29,7 +29,7 @@ BPAI 已经有 BP问问、execution task/result、AI宿舍、Skill 仓库页面�
 | 能力 | 当前状态 | 代码锚点 |
 | --- | --- | --- |
 | BP问问入口 | 已落地 | `frontend/src/app/bp-ask/page.tsx` |
-| 意图识别与调度 | 已落地，规则优先，模型复核 | `frontend/src/lib/bp-ask/dispatch.ts` |
+| 意图识别与调度 | 已落地，正在从规则优先迁移到 capability-first；旧规则保留为 fallback | `frontend/src/lib/bp-ask/dispatch.ts`、`frontend/src/lib/bp-ask/server.ts`、`frontend/src/lib/bp-ask/model-provider.ts` |
 | 模型 provider | 已落地，DeepSeek / Kimi 可切换 | `frontend/src/lib/bp-ask/model-provider.ts` |
 | 对话与记忆表 | 已落地 | `conversation_*`、`memory_facts` |
 | execution task/result | 已落地 | `execution_tasks`、`execution_results` |
@@ -39,7 +39,7 @@ BPAI 已经有 BP问问、execution task/result、AI宿舍、Skill 仓库页面�
 | AI员工/龙虾目录 | 页面和 blueprint 已落地 | `/ai-dorm/agents` |
 | OpenClaw sidecar 发射入口 | 已落地；新增 Gateway 连接配置，Docker dev 下 work-order sidecar 走 `ws://openclaw-gateway:18789/` | `frontend/src/lib/ai-dorm/openclaw.ts`、`/api/ai-dorm/openclaw/**` |
 | LongxiaAdapter | 已最小落地 dry-run，当前支持 `work-order-longxia` 生成承接预案与待确认项；已新增 OpenClaw Gateway Adapter，支持 probe-only 探测和经 `OPENCLAW_WORK_ORDER_SUBMIT_ENABLED` 控制的真实 `chat.send` 下发 | `frontend/src/lib/ai-dorm/longxia-adapter.ts`、`frontend/src/lib/ai-dorm/openclaw-gateway.ts` |
-| MCP Registry / Tool Gateway | Tool Gateway 最小链路已落地 `work_order.read`、`work_order.writeback_draft.create` 和 `work_order.writeback.apply`；正式写回只处理 ready 草案和白名单字段；草案审阅 API 已支持 `ready / rejected / cancelled / applied`；MCP Registry 未落地 | `frontend/src/lib/ai-tools/gateway.ts`、`/api/bp-ask/threads/[threadId]/writeback-drafts` |
+| MCP Registry / Tool Gateway | Tool Gateway 最小链路已落地；已注册 `work_order.read/create/update/archive/writeback_draft.create/writeback.apply`、`document.list/read/create`、`openclaw.work_order.execute`；正式工单写回通过草案和白名单字段落到 `work_orders`；BP问问 server 侧已新增统一 route selection、统一 execution layer、capability step state machine、terminal states、Longxia handoff payload 与 Longxia result re-entry；MCP Registry 未落地 | `frontend/src/lib/ai-tools/gateway.ts`、`frontend/src/lib/bp-ask/server.ts`、`/api/bp-ask/threads/[threadId]/writeback-drafts` |
 | BPAI CLI | 未落地 | 当前仅有设计需求 |
 
 ## 3. 当前核心判断
@@ -72,17 +72,18 @@ BP问问的目标形态不是“一次判断后把任务扔出去”，而是一
 推荐循环如下：
 
 ```text
-用户提出目标
--> BP问问识别对象、约束、风险和目标域
+用户自然说话
+-> BP问问保持普通聊天能力，不把每句话都硬转成任务
+-> 识别“现在要做事了”：目标、对象、约束、成功标准
 -> 如果信息不足，先追问关键细节
--> 如果信息足够，评估谁最适合处理
--> 简单只读 / 低风险 Tool 由 BP问问直接执行
--> 复杂多步骤任务先查是否有现成工作流
--> 有工作流：按 AI员工协同工作流推进
--> 无工作流或范围过大：外包给合适龙虾 / Agent
--> 龙虾 / Agent 返回结构化结果、日志、产物或待确认项
--> BP问问把返回结果纳入当前上下文，继续下一步
--> 任务完成后，BP问问汇总整体结果，并说明改变了哪些对象、文件或记录
+-> 如果信息足够，先读取 Tool Gateway / capability descriptors
+-> 系统内能力可以直接完成：BP问问直接 tool calling，并把结果写入 execution_tasks / execution_results
+-> 系统内能力只能部分完成：先执行可完成部分，再判断剩余缺口
+-> 系统内能力无法完成：匹配 Skill / Workflow / Longxia / Agent
+-> 龙虾 / Agent 接收 BP问问转写后的目标、上下文、允许动作和期望输出
+-> 龙虾 / Agent 返回结构化结果、日志、产物、候选写回或追问
+-> BP问问把返回结果纳入当前上下文，判断是否已经满足用户目标
+-> 未满足则继续追问/执行/外包，满足后给用户总结改变了哪些对象、文件或记录
 ```
 
 这个循环意味着 BP问问至少要具备六种能力：
@@ -103,11 +104,12 @@ BP问问判断“谁来做”时，建议按以下梯度走：
 | 梯度 | 条件 | 执行方式 |
 | --- | --- | --- |
 | 直接回答 | 纯解释、问候、能力说明、轻量上下文问题 | BP问问直接回答 |
-| 简单工具 | 单对象、只读、低风险、一步查询或摘要 | BP问问通过 Tool Gateway 直接执行 |
+| 补充信息 | 用户目标像任务但缺对象、字段、范围或输出标准 | BP问问主动追问，不编造参数 |
+| 直接 Tool | 单对象、短链路、系统内 capability 足够完成 | BP问问通过 Tool Gateway 直接执行 |
 | Skill | 单点可复用能力，例如工单摘要、待确认意见扫描 | BP问问调用 Skill Runner |
 | Workflow | 多步骤、多角色、需要 AI员工协作或人工确认 | AI宿舍按工作流推进 |
-| 龙虾 / Agent | 范围大、任务复杂、需要专业执行体或浏览器执行 | 外包给对应龙虾 / Agent |
-| 人工确认 | 写入、权限、删除、外部动作、不可逆操作 | 进入确认节点，再继续执行 |
+| 龙虾 / Agent | 内置 tools 不足、范围大、任务复杂、需要专业执行体或浏览器执行 | BP问问转写任务并外包给对应龙虾 / Agent |
+| 人工确认 | 高风险写入、权限、外部动作、不可逆操作 | 进入确认节点，再继续执行 |
 
 所以，Workflow 的定位不应是“具体 tool 该怎么调的底层脚本”，而应是：
 
@@ -194,6 +196,11 @@ BPAI 后续也需要 CLI 来做：
 - `frontend/src/lib/bp-ask/dispatch.ts`
 - `frontend/src/lib/bp-ask/server.ts`
 - `frontend/src/lib/bp-ask/model-provider.ts`
+
+当前接续状态（2026-04-29）：
+- `server.ts` 已不再只是“消息追加函数”，而是开始形成真正的 coordinator runtime：`selectBpAskExecutionRoute` 统一选路，`executeBpAskPlan` 统一执行低风险分支，`runCapabilityStepMachine` 承担多步内部执行，`BpAskOrchestrationTerminalState` 明确表达 `needs_followup / waiting_confirmation / ready_to_delegate / completed / failed`。
+- 当 capability step state machine 返回 `ready_to_delegate` 时，BP问问会通过 `buildLongxiaHandoffPayload` 组装标准 handoff，再调用 `runLongxiaAgent(dry_run)`，并通过 `buildLongxiaContinuation` 把 Longxia 结果重新翻译成 BP问问自己的终态、确认项和草案语义。
+- Longxia 的 `requiredConfirmations` 已映射为 BP问问原生 `confirmationRequests`，`writebackCandidates` 已映射为 `writebackDrafts` 语义对象，但仍主要停留在 payload / preview 层，尚未完全接入真实草案落库和 apply 主链。
 
 不应承担：
 
@@ -390,16 +397,61 @@ BP问问可以直接调用 Tool Gateway 中低风险、短链路、可审计的�
 | Tool | 风险级别 | 说明 |
 | --- | --- | --- |
 | `work_order.read` | read | 读取工单详情 |
-| `work_order.search` | read | 搜索工单 |
-| `document.read_metadata` | read | 读取文档元数据 |
-| `workspace.read` | read | 读取合作空间信息 |
-| `system_form.read` | read | 读取表单 |
-| `execution_result.write` | safe_write | 写入执行结果 |
-| `work_order.draft_dispatch` | draft_write | 生成派单草案 |
+| `work_order.create` | restricted_write | 创建 demo 工单 |
+| `work_order.update` | restricted_write | 规划并应用工单字段更新，当前通过写回草案和白名单 apply 实现 |
+| `work_order.archive` | restricted_write | 归档 demo 工单，当前通过 `archive_work_order` 写回操作实现 |
+| `work_order.search` | read | 搜索工单，尚未落地 |
+| `document.list` | read | 列出工作区文档资产 |
+| `document.read` | read | 读取文档元数据和打开路径 |
+| `document.create` | restricted_write | 从样例创建文档/表格/演示资产 |
+| `document.write_content` | restricted_write | 修改文档正文或表格内容，尚未落地 |
+| `workspace.read` | read | 读取合作空间信息，尚未落地 |
+| `system_form.read` | read | 读取表单，尚未落地 |
+| `execution_result.write` | safe_write | 写入执行结果，尚未独立成 Tool |
+| `openclaw.work_order.execute` | external_action | 把工单执行任务下发给 OpenClaw work-order sidecar |
 
-写入类 Tool 必须走权限和确认。
+写入类 Tool 长期必须走权限、确认和审计；当前原型阶段的 demo 工单和 demo 文档允许 BP问问直接真实变更，以便优先验证“模型自主规划 -> Tool Gateway -> 业务对象改变”的主链路。
 
-### 5.6.1 BP问问可直接执行的 Tool 条件
+### 5.6.1 系统级 Capability Descriptor 协议
+
+所有内部 Tool、未来 MCP tool、Longxia/Agent 后备执行入口，都应先归一成同一种 capability descriptor，再交给 BP问问做规划。当前代码锚点是 `frontend/src/lib/ai-tools/gateway.ts` 的 `AiCapabilityDescriptor`。
+
+字段定义：
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `name` | string | 稳定机器名，建议 `<domain>.<action>`，例如 `work_order.update` |
+| `displayName` | string | 给 UI / 日志使用的人类名称 |
+| `domain` | enum | 业务域，目前包括 `work_order`、`document`、`openclaw` |
+| `action` | enum | 动作语义：`read/list/search/create/update/archive/draft/apply/delegate` |
+| `sourceKind` | enum | 能力来源：`internal`、`mcp`、`longxia` |
+| `riskLevel` | enum | 风险级别：`read/analysis/draft_write/safe_write/restricted_write/external_action/destructive` |
+| `executionMode` | enum | 执行方式：`direct` 可直接 run；`orchestrated` 需要 BP问问编排多步；`plan_only` 只作为高层意图入口 |
+| `description` | string | 给模型和开发者看的能力说明 |
+| `target.objectType` | string | 主要作用对象，例如 `work_order`、`document` |
+| `target.identifierKeys` | string[] | 可定位对象的参数名，例如 `workOrderNo`、`documentId` |
+| `target.mutates` | boolean | 是否会改变目标对象或相关业务记录 |
+| `inputSchema` | JSON Schema-like object | 模型必须遵守的输入参数协议 |
+| `outputSchema` | JSON Schema-like object | 工具返回结构的协议，供后续 planner / UI 使用 |
+| `requiredContext` | string[] | 运行时必须由系统提供的上下文，例如 `currentUser`、`executionTask` |
+| `plannerHints.whenToUse` | string | 什么时候该选这个能力 |
+| `plannerHints.requiredInformation` | string[] | 用户或上下文必须提供的信息；缺失时应追问 |
+| `plannerHints.missingInformationPrompt` | string | 缺参时 BP问问可直接改写使用的追问提示 |
+| `plannerHints.examples` | string[] | 自然语言触发样例，帮助模型匹配能力 |
+| `failureModes` | string[] | 预期失败类型，供 BP问问解释和恢复 |
+| `mutatesDemoData` | boolean | 当前原型 demo 数据是否会被真实改变 |
+| `requiresConfirmationDefault` | boolean | 默认是否需要人工确认 |
+
+协议原则：
+
+- BP问问只基于 capability descriptor 做 planning，不再为每种说法追加关键词。
+- `inputSchema` 是模型可填参数的边界；模型不得发明 schema 外参数。
+- `plannerHints.requiredInformation` 是缺参追问依据；缺少必要对象时优先追问，不编造 ID。
+- `executionMode=orchestrated` 表示用户看到的是一个能力，但系统内部可拆成读工单、生成草案、批准、正式 apply 等多步。
+- MCP 接入后，外部 MCP tools 也必须映射成同一 descriptor，再进入 Tool Gateway。
+- Longxia/Agent 后备执行也可以表现成 `sourceKind=longxia`、`action=delegate` 的 capability。
+
+### 5.6.2 BP问问可直接执行的 Tool 条件
 
 满足以下条件时，BP问问可以直接执行：
 
@@ -442,12 +494,12 @@ BPAI 的 MCP 设计原则：
 
 ### 5.8 LongxiaAdapter
 
-LongxiaAdapter 是 AI宿舍到 OpenClaw / 浏览器执行器之间的桥。
+LongxiaAdapter 是 AI宿舍到 OpenClaw / 浏览器执行器之间的桥，也是 BP问问在内部 Tool Gateway 无法完成任务时的后备执行层。
 
 职责：
 
 - 把 `execution_task` 转成 Longxia 输入
-- 在没有合适 Workflow 或任务范围过大时承接外包执行
+- 在没有合适 Workflow、内部 tools 覆盖不全、或任务范围过大时承接外包执行
 - 下发允许动作、对象范围、权限边界
 - 发起 OpenClaw sidecar 或调用 gateway
 - 收集执行日志、截图、结果对象

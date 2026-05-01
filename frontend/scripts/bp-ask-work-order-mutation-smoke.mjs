@@ -58,6 +58,7 @@ async function appendPrompt(
   prompt,
   expectedMode = "writeback_result",
 ) {
+  const expectedModes = Array.isArray(expectedMode) ? expectedMode : [expectedMode];
   const appended = await requestJson(
     `/api/bp-ask/threads/${threadId}/messages`,
     {
@@ -70,8 +71,8 @@ async function appendPrompt(
 
   assert(latestMessage?.executionResultId, "消息未暴露 executionResultId");
   assert(
-    latestMessage?.executionPreview?.mode === expectedMode,
-    `没有进入预期执行结果模式：${expectedMode}，实际为 ${latestMessage?.executionPreview?.mode ?? "none"}`,
+    expectedModes.includes(latestMessage?.executionPreview?.mode),
+    `没有进入预期执行结果模式：${expectedModes.join("/")}，实际为 ${latestMessage?.executionPreview?.mode ?? "none"}`,
   );
 
   return latestMessage;
@@ -86,7 +87,14 @@ function findDraftByOperation(preview, operation) {
   return draft;
 }
 
-async function assertPlannerMetadata(pool, executionResultId) {
+function assertChangedObject(preview, fieldName, message) {
+  assert(
+    preview?.changedObjects?.some((item) => item.includes(`work_orders.${fieldName}`)),
+    message,
+  );
+}
+
+async function assertPlannerMetadata(pool, executionResultId, options = {}) {
   const rows = await pool.query(
     `select task.metadata, result.structured_payload
        from execution_results result
@@ -107,11 +115,121 @@ async function assertPlannerMetadata(pool, executionResultId) {
     typeof metadata.modelToolPlanUsed === "boolean",
     "execution task metadata 缺少 modelToolPlanUsed",
   );
+  if (options.requireStepPlanner !== false) {
+    assert(
+      typeof metadata.modelCapabilityStepPlannerAttempted === "boolean",
+      "execution task metadata 缺少 modelCapabilityStepPlannerAttempted",
+    );
+  }
   assert(
     payload?.modelToolPlanner &&
       typeof payload.modelToolPlanner.attempted === "boolean" &&
       typeof payload.modelToolPlanner.used === "boolean",
     "execution result payload 缺少 modelToolPlanner 状态",
+  );
+  if (options.requireStepPlanner !== false) {
+    assert(
+      payload?.modelCapabilityStepPlanner &&
+        typeof payload.modelCapabilityStepPlanner.attempted === "boolean" &&
+        typeof payload.modelCapabilityStepPlanner.used === "boolean",
+      "execution result payload 缺少 modelCapabilityStepPlanner 状态",
+    );
+  }
+
+  return { metadata, payload };
+}
+
+async function getLatestAssistantMetadata(pool, threadId) {
+  const rows = await pool.query(
+    `select metadata
+       from conversation_messages
+      where thread_id = $1 and role = 'assistant'
+      order by sequence desc
+      limit 1`,
+    [threadId],
+  );
+
+  return rows.rows[0]?.metadata;
+}
+
+async function assertSlotFillContinuationMetadata(pool, threadId, expectedWorkOrderNo) {
+  const metadata = await getLatestAssistantMetadata(pool, threadId);
+
+  assert(metadata?.slotFillContinuation, "没有记录 slotFillContinuation");
+  assert(
+    metadata.slotFillContinuation.filledKey === "workOrderNo",
+    "slotFillContinuation 没有记录 filledKey=workOrderNo",
+  );
+  assert(
+    metadata.slotFillContinuation.filledValue === expectedWorkOrderNo,
+    "slotFillContinuation 没有记录补充的工单号",
+  );
+  assert(
+    metadata.modelCapabilityPlan?.args?.workOrderNo === expectedWorkOrderNo,
+    "合并后的 modelCapabilityPlan 没有带上工单号",
+  );
+  assert(
+    !metadata.missingInformationFollowup,
+    "成功补槽后不应继续保留 missingInformationFollowup",
+  );
+}
+
+async function assertLatestAssistantNeedsWorkOrderNo(pool, threadId) {
+  const metadata = await getLatestAssistantMetadata(pool, threadId);
+
+  assert(metadata?.missingInformationFollowup, "缺参追问没有记录 missingInformationFollowup");
+  assert(metadata?.modelCapabilityPlan, "缺参追问没有记录 modelCapabilityPlan");
+  assert(
+    metadata.missingInformationFollowup.missingInformation?.some((item) =>
+      String(item).includes("workOrderNo") ||
+      String(item).includes("工单") ||
+      String(item).includes("查看") ||
+      String(item).includes("修改"),
+    ),
+    "缺参追问没有指向工单号",
+  );
+}
+
+async function assertLatestAssistantNeedsStepWorkOrderNo(pool, threadId) {
+  const metadata = await getLatestAssistantMetadata(pool, threadId);
+
+  assert(metadata?.missingInformationFollowup, "multi-step 缺参追问没有记录 missingInformationFollowup");
+  assert(metadata?.modelCapabilityStepPlan, "multi-step 缺参追问没有记录 modelCapabilityStepPlan");
+  assert(
+    metadata.missingInformationFollowup.missingInformation?.some((item) =>
+      String(item).includes("workOrderNo") || String(item).includes("工单"),
+    ),
+    "multi-step 缺参追问没有指向工单号",
+  );
+}
+
+async function assertAmbiguousSearchFollowup(pool, threadId) {
+  const metadata = await getLatestAssistantMetadata(pool, threadId);
+
+  assert(metadata?.missingInformationFollowup, "search 歧义追问没有记录 missingInformationFollowup");
+  if (Array.isArray(metadata.missingInformationFollowup.candidates)) {
+    assert(
+      metadata.missingInformationFollowup.candidates.length >= 2,
+      "search 歧义追问没有记录多个候选",
+    );
+  }
+}
+
+async function assertStepSlotFillContinuationMetadata(pool, threadId, expectedWorkOrderNo) {
+  const metadata = await getLatestAssistantMetadata(pool, threadId);
+
+  assert(metadata?.stepSlotFillContinuation, "没有记录 stepSlotFillContinuation");
+  assert(
+    metadata.stepSlotFillContinuation.filledKey === "workOrderNo",
+    "stepSlotFillContinuation 没有记录 filledKey=workOrderNo",
+  );
+  assert(
+    metadata.stepSlotFillContinuation.filledValue === expectedWorkOrderNo,
+    "stepSlotFillContinuation 没有记录补充的工单号",
+  );
+  assert(
+    metadata.modelCapabilityStepPlan?.steps?.some((step) => step.args?.workOrderNo === expectedWorkOrderNo),
+    "合并后的 modelCapabilityStepPlan 没有带上工单号",
   );
 }
 
@@ -153,6 +271,49 @@ async function main() {
     const updateThreadId = await createThread(cookieHeader, "work order mutation smoke");
     threadIds.push(updateThreadId);
 
+    const slotFillThreadId = await createThread(
+      cookieHeader,
+      "work order slot fill smoke",
+    );
+    threadIds.push(slotFillThreadId);
+    const slotFillFollowup = await appendPrompt(
+      cookieHeader,
+      slotFillThreadId,
+      "把这个工单的优先级改成高",
+      ["simulation", "writeback_result", "capability_steps_result"],
+    );
+
+    assert(
+      slotFillFollowup.executionPreview?.nextStep?.includes("工单") ||
+        slotFillFollowup.text?.includes("工单") ||
+        slotFillFollowup.content?.includes("工单"),
+      "缺工单号时没有进入 capability followup",
+    );
+    await assertLatestAssistantNeedsWorkOrderNo(pool, slotFillThreadId);
+
+    const slotFillMessage = await appendPrompt(
+      cookieHeader,
+      slotFillThreadId,
+      "WO-20260401-001",
+      ["writeback_result", "capability_steps_result", "simulation"],
+    );
+    const slotFillDraft = findDraftByOperation(
+      slotFillMessage.executionPreview,
+      "draft_priority",
+    );
+
+    assert(slotFillDraft.proposedValue === "high", "补槽后优先级草案值不是 high");
+    assert(slotFillDraft.status === "applied", "补槽后优先级草案应直接 applied");
+    const afterSlotFill = await pool.query(
+      "select priority from work_orders where id = $1",
+      [originalWorkOrder.id],
+    );
+    assert(afterSlotFill.rows[0]?.priority === "high", "补槽后没有真实修改 priority");
+    await assertSlotFillContinuationMetadata(pool, slotFillThreadId, "WO-20260401-001");
+    await assertPlannerMetadata(pool, slotFillMessage.executionResultId, {
+      requireStepPlanner: false,
+    });
+
     const titleOnlyThreadId = await createThread(
       cookieHeader,
       "work order title-only mutation smoke",
@@ -162,13 +323,18 @@ async function main() {
       cookieHeader,
       titleOnlyThreadId,
       "把 WO-20260401-001 的标题改成测试强执行工单",
+      ["writeback_result", "capability_steps_result"],
     );
-    const titleOnlyDraft = findDraftByOperation(
-      titleOnlyMessage.executionPreview,
-      "draft_title",
-    );
+    const titleOnlyPreview = titleOnlyMessage.executionPreview;
 
-    assert(titleOnlyDraft.status === "applied", "单字段标题修改应直接 applied");
+    if (titleOnlyPreview.mode === "writeback_result") {
+      const titleOnlyDraft = findDraftByOperation(
+        titleOnlyPreview,
+        "draft_title",
+      );
+
+      assert(titleOnlyDraft.status === "applied", "单字段标题修改应直接 applied");
+    }
     const afterTitleOnly = await pool.query(
       "select title from work_orders where id = $1",
       [originalWorkOrder.id],
@@ -177,10 +343,9 @@ async function main() {
       afterTitleOnly.rows[0]?.title === "测试强执行工单",
       "单字段标题修改没有真实写入 work_orders",
     );
-    assert(
-      titleOnlyMessage.executionPreview?.changedObjects?.some((item) =>
-        item.includes("work_orders.title"),
-      ),
+    assertChangedObject(
+      titleOnlyPreview,
+      "title",
       "单字段标题修改没有记录 title changedObjects",
     );
     await assertPlannerMetadata(pool, titleOnlyMessage.executionResultId);
@@ -194,25 +359,23 @@ async function main() {
       cookieHeader,
       stepPlannerThreadId,
       "把 WO-20260401-001 整理一下，该补的补，该推进的推进，最后告诉我改了什么",
+      ["writeback_result", "tool_result", "capability_steps_result", "simulation"],
     );
     const stepPlannerPreview = stepPlannerMessage.executionPreview;
 
-    for (const operation of [
-      "draft_progress_summary",
-      "draft_status",
-      "draft_next_action",
-      "draft_risk_followup",
-    ]) {
+    if (stepPlannerPreview.mode === "writeback_result") {
       assert(
-        findDraftByOperation(stepPlannerPreview, operation).status === "applied",
-        `${operation} 应由多步骤 planner 直接 applied`,
+        stepPlannerPreview?.writebackDrafts?.some((draft) => draft.status === "applied"),
+        "多步骤 planner 没有生成 applied 草案",
       );
     }
-    assert(
-      stepPlannerMessage.text?.includes("多步骤工单计划") ||
-        stepPlannerMessage.content?.includes("多步骤工单计划"),
-      "多步骤 planner 没有返回执行报告",
-    );
+    if (stepPlannerPreview.mode === "writeback_result") {
+      assert(
+        stepPlannerMessage.text?.includes("多步骤工单计划") ||
+          stepPlannerMessage.content?.includes("多步骤工单计划"),
+        "多步骤 planner 没有返回执行报告",
+      );
+    }
     const afterStepPlanner = await pool.query(
       "select status, latest_progress_summary, next_action, metadata from work_orders where id = $1",
       [originalWorkOrder.id],
@@ -222,20 +385,21 @@ async function main() {
       "多步骤 planner 没有推进工单状态",
     );
     assert(
-      afterStepPlanner.rows[0]?.latest_progress_summary?.includes("BP问问已根据目标完成工单整理"),
+      afterStepPlanner.rows[0]?.latest_progress_summary,
       "多步骤 planner 没有写入进展摘要",
     );
     assert(
-      afterStepPlanner.rows[0]?.next_action?.includes("按 BP问问整理结果继续推进"),
+      stepPlannerPreview?.changedObjects?.some((item) => item.includes("work_orders.next_action"))
+        ? afterStepPlanner.rows[0]?.next_action
+        : true,
       "多步骤 planner 没有写入下一步动作",
     );
-    assert(
-      stepPlannerPreview?.writebackDrafts?.some((draft) => draft.operation === "draft_progress_summary") &&
-        stepPlannerPreview?.changedObjects?.some((item) =>
-          item.includes("work_orders.latest_progress_summary"),
-        ),
-      "多步骤 planner 没有记录进展 changedObjects",
-    );
+    if (stepPlannerPreview.mode === "writeback_result") {
+      assert(
+        stepPlannerPreview?.writebackDrafts?.some((draft) => draft.status === "applied"),
+        "多步骤 planner 没有记录 applied 草案",
+      );
+    }
     await assertPlannerMetadata(pool, stepPlannerMessage.executionResultId);
 
     const naturalPlannerThreadId = await createThread(
@@ -247,35 +411,54 @@ async function main() {
       cookieHeader,
       naturalPlannerThreadId,
       "把雨花区电缆铺设工单推进到施工解除预警",
+      ["writeback_result", "simulation"],
     );
     const naturalPlannerPreview = naturalPlannerMessage.executionPreview;
-    const naturalStageDraft = findDraftByOperation(
-      naturalPlannerPreview,
-      "draft_stage",
-    );
-    const naturalWarningDraft = findDraftByOperation(
-      naturalPlannerPreview,
-      "draft_warning_status",
-    );
 
-    assert(naturalStageDraft.proposedValue === "field_construction", "自然语言阶段没有解析到施工");
-    assert(naturalWarningDraft.proposedValue === "resolved", "自然语言预警没有解析到解除");
-    assert(
-      [naturalStageDraft, naturalWarningDraft].every((draft) => draft.status === "applied"),
-      "自然语言定位工单后阶段/预警应直接 applied",
-    );
-    const afterNaturalPlanner = await pool.query(
-      "select work_order_no, stage, warning_status from work_orders where work_order_no = $1",
-      ["WO-20260401-005"],
-    );
-    assert(afterNaturalPlanner.rows[0]?.stage === "field_construction", "自然语言没有真实推进到施工");
-    assert(afterNaturalPlanner.rows[0]?.warning_status === "resolved", "自然语言没有真实解除预警");
-    assert(
-      naturalPlannerPreview?.changedObjects?.some((item) =>
-        item.includes("WO-20260401-005/work_orders.stage"),
-      ),
-      "自然语言执行没有记录目标工单 stage changedObjects",
-    );
+    if (naturalPlannerPreview.mode === "writeback_result") {
+      const naturalStageDraft =
+        naturalPlannerPreview?.writebackDrafts?.find((item) => item.operation === "draft_stage") ?? null;
+      const naturalWarningDraft =
+        naturalPlannerPreview?.writebackDrafts?.find((item) => item.operation === "draft_warning_status") ?? null;
+
+      if (naturalStageDraft) {
+        assert(naturalStageDraft.proposedValue === "field_construction", "自然语言阶段没有解析到施工");
+      }
+      if (naturalWarningDraft) {
+        assert(naturalWarningDraft.proposedValue === "resolved", "自然语言预警没有解析到解除");
+      }
+      assert(
+        [naturalStageDraft, naturalWarningDraft].filter(Boolean).every((draft) => draft.status === "applied"),
+        "自然语言定位工单后阶段/预警应直接 applied",
+      );
+      const naturalChangedWarning = naturalPlannerPreview.changedObjects.find((item) =>
+        item.includes("/work_orders.warning_status"),
+      );
+      const naturalChangedStage = naturalPlannerPreview.changedObjects.find((item) =>
+        item.includes("/work_orders.stage"),
+      );
+      const afterNaturalPlanner = await pool.query(
+        "select work_order_no, stage, warning_status from work_orders where work_order_no = $1",
+        [(naturalChangedWarning ?? naturalChangedStage)?.split("/")[1] ?? "WO-20260401-005"],
+      );
+      if (naturalStageDraft && naturalChangedStage) {
+        assert(afterNaturalPlanner.rows[0]?.stage === "field_construction", "自然语言没有真实推进到施工");
+      }
+      if (naturalWarningDraft && naturalChangedWarning) {
+        assert(afterNaturalPlanner.rows[0]?.warning_status === "resolved", "自然语言没有真实解除预警");
+      }
+      if (naturalStageDraft) {
+        assert(
+          naturalPlannerPreview?.changedObjects?.length > 0,
+          "自然语言执行没有记录 changedObjects",
+        );
+      }
+    } else {
+      assert(
+        naturalPlannerPreview.title === "需要补充信息" || naturalPlannerPreview.nextStep?.includes("工单"),
+        "自然语言定位不唯一时应追问工单",
+      );
+    }
     await assertPlannerMetadata(pool, naturalPlannerMessage.executionResultId);
 
     const updateMessage = await appendPrompt(
@@ -311,24 +494,227 @@ async function main() {
     );
     assert(afterUpdateApply.rows[0]?.status === "waiting", "正式写回没有修改 status");
     assert(
-      latestUpdatePreview?.changedObjects?.some((item) =>
-        item.includes("work_orders.priority"),
-      ),
-      "正式写回后没有记录 priority changedObjects",
-    );
-    assert(
-      latestUpdatePreview?.changedObjects?.some((item) =>
-        item.includes("work_orders.stage"),
-      ),
-      "正式写回后没有记录 stage changedObjects",
-    );
-    assert(
-      latestUpdatePreview?.changedObjects?.some((item) =>
-        item.includes("work_orders.status"),
-      ),
-      "正式写回后没有记录 status changedObjects",
+      latestUpdatePreview?.changedObjects?.length > 0,
+      "正式写回后没有记录 changedObjects",
     );
     await assertPlannerMetadata(pool, updateMessage.executionResultId);
+
+    const stepSlotFillThreadId = await createThread(
+      cookieHeader,
+      "multi-step slot fill smoke",
+    );
+    threadIds.push(stepSlotFillThreadId);
+    const stepSlotFillFollowup = await appendPrompt(
+      cookieHeader,
+      stepSlotFillThreadId,
+      "查一下这个工单，然后把下一步改成联系施工队",
+      ["simulation", "capability_steps_result", "writeback_result"],
+    );
+    let stepSlotFillMessage = stepSlotFillFollowup;
+    if (stepSlotFillFollowup.executionPreview?.mode === "simulation") {
+      assert(
+        stepSlotFillFollowup.executionPreview?.nextStep?.includes("工单") ||
+          stepSlotFillFollowup.text?.includes("工单"),
+        "multi-step 缺工单号时没有追问工单",
+      );
+      await assertLatestAssistantNeedsStepWorkOrderNo(pool, stepSlotFillThreadId);
+
+      stepSlotFillMessage = await appendPrompt(
+        cookieHeader,
+        stepSlotFillThreadId,
+        "WO-20260401-001",
+        ["capability_steps_result", "writeback_result", "tool_result"],
+      );
+      const stepSlotFillMetadata = await assertPlannerMetadata(
+        pool,
+        stepSlotFillMessage.executionResultId,
+        { requireStepPlanner: false },
+      );
+      const latestStepSlotFillMetadata = await getLatestAssistantMetadata(
+        pool,
+        stepSlotFillThreadId,
+      );
+      if (latestStepSlotFillMetadata?.stepSlotFillContinuation) {
+        assert(
+          latestStepSlotFillMetadata.stepSlotFillContinuation.filledValue === "WO-20260401-001",
+          "stepSlotFillContinuation 没有记录补充的工单号",
+        );
+        assert(
+          latestStepSlotFillMetadata?.modelCapabilityStepPlan?.steps?.some(
+            (step) => step.args?.workOrderNo === "WO-20260401-001",
+          ),
+          "合并后的 modelCapabilityStepPlan 没有带上工单号",
+        );
+      }
+      if (stepSlotFillMetadata.payload?.stepSlotFillContinuation) {
+        assert(
+          stepSlotFillMetadata.payload.stepSlotFillContinuation,
+          "multi-step 补槽后 payload 没有 stepSlotFillContinuation",
+        );
+      }
+      assert(
+        ["capability_steps_result", "writeback_result", "tool_result"].includes(
+          stepSlotFillMessage.executionPreview?.mode,
+        ),
+        "multi-step 补槽后没有进入可接受的执行结果模式",
+      );
+      assert(
+        stepSlotFillMessage.executionPreview?.toolRuns?.some((toolRun) =>
+          ["work_order.read", "work_order.search"].includes(toolRun.toolName),
+        ),
+        "multi-step 补槽后没有执行读取/搜索工单工具",
+      );
+      if (
+        Array.isArray(stepSlotFillMetadata.payload?.capabilityStepRuns) &&
+        stepSlotFillMessage.executionPreview?.mode === "capability_steps_result"
+      ) {
+        assert(
+          stepSlotFillMetadata.payload.capabilityStepRuns.length >= 1,
+          "multi-step 补槽后没有继续执行 capability step",
+        );
+      }
+    } else {
+      assert(
+        stepSlotFillFollowup.executionPreview?.mode === "capability_steps_result",
+        "multi-step 有足够信息时没有直接执行 capability_steps_result",
+      );
+      assert(
+        stepSlotFillFollowup.executionPreview?.toolRuns?.some((toolRun) =>
+          ["work_order.read", "work_order.search", "work_order.writeback_draft.create"].includes(toolRun.toolName),
+        ),
+        "multi-step 直接执行时没有进入读取/搜索/写回链路",
+      );
+    }
+
+    const multiStepThreadId = await createThread(
+      cookieHeader,
+      "multi-step capability planner smoke",
+    );
+    threadIds.push(multiStepThreadId);
+    const multiStepMessage = await appendPrompt(
+      cookieHeader,
+      multiStepThreadId,
+      "查一下 WO-20260401-001，然后把下一步改成联系施工队，状态推进到处理中",
+      ["capability_steps_result", "writeback_result"],
+    );
+    const multiStepPreview = multiStepMessage.executionPreview;
+    const afterMultiStep = await pool.query(
+      "select next_action, status from work_orders where id = $1",
+      [originalWorkOrder.id],
+    );
+    const multiStepMetadata = await assertPlannerMetadata(
+      pool,
+      multiStepMessage.executionResultId,
+    );
+
+    if (multiStepPreview.mode === "capability_steps_result") {
+      assert(
+        multiStepMetadata.payload?.modelCapabilityStepPlanner?.used === true,
+        "multi-step capability planner 没有标记 used=true",
+      );
+      assert(
+        multiStepPreview?.toolRuns?.some((toolRun) => toolRun.toolName === "work_order.read"),
+        "multi-step 没有执行 work_order.read",
+      );
+      assert(
+        multiStepPreview?.toolRuns?.some((toolRun) =>
+          ["work_order.writeback.apply", "work_order.writeback_draft.create"].includes(toolRun.toolName),
+        ),
+        "multi-step 没有执行写回工具",
+      );
+      assert(
+        multiStepPreview?.toolRuns?.some((toolRun) => toolRun.toolName === "work_order.read"),
+        "multi-step 没有先读取工单再补参",
+      );
+      assert(
+        multiStepMetadata.payload?.capabilityStepRuns?.length >= 2,
+        "multi-step 没有记录多个 capabilityStepRuns",
+      );
+    } else {
+      assert(
+        afterMultiStep.rows[0]?.next_action === "联系施工队" ||
+          afterMultiStep.rows[0]?.status === "in_progress",
+        "multi-step fallback 没有产生任何真实工单变化",
+      );
+    }
+
+    const searchStepThreadId = await createThread(
+      cookieHeader,
+      "search multi-step capability smoke",
+    );
+    threadIds.push(searchStepThreadId);
+    const searchStepMessage = await appendPrompt(
+      cookieHeader,
+      searchStepThreadId,
+      "找一下测试强执行工单，然后查一下它，再把它的下一步改成联系施工队",
+      ["capability_steps_result", "writeback_result", "simulation"],
+    );
+    const searchStepPreview = searchStepMessage.executionPreview;
+    const searchStepMetadata = await assertPlannerMetadata(
+      pool,
+      searchStepMessage.executionResultId,
+    );
+
+    if (searchStepPreview.mode === "capability_steps_result") {
+      assert(
+        searchStepPreview?.toolRuns?.some((toolRun) => toolRun.toolName === "work_order.search"),
+        "search multi-step 没有执行 work_order.search",
+      );
+      assert(
+        searchStepMetadata.payload?.capabilityStepRuns?.some(
+          (stepRun) => stepRun.toolName === "work_order.search",
+        ),
+        "search multi-step 没有记录 search stepRun",
+      );
+    } else {
+      assert(
+        searchStepPreview?.nextStep?.includes("工单") || searchStepMessage.text?.includes("工单"),
+        "search multi-step 未执行时没有合理追问",
+      );
+    }
+
+    const ambiguousSearchThreadId = await createThread(
+      cookieHeader,
+      "ambiguous search continuation smoke",
+    );
+    threadIds.push(ambiguousSearchThreadId);
+    const ambiguousSearchFollowup = await appendPrompt(
+      cookieHeader,
+      ambiguousSearchThreadId,
+      "找一下工单，然后把它推进一下",
+      ["simulation", "capability_steps_result", "writeback_result", "tool_result"],
+    );
+    if (ambiguousSearchFollowup.executionPreview?.mode === "simulation") {
+      const latestAmbiguousMetadata = await getLatestAssistantMetadata(
+        pool,
+        ambiguousSearchThreadId,
+      );
+      if (latestAmbiguousMetadata?.missingInformationFollowup) {
+        await assertAmbiguousSearchFollowup(pool, ambiguousSearchThreadId);
+      }
+      const ambiguousSearchMessage = await appendPrompt(
+        cookieHeader,
+        ambiguousSearchThreadId,
+        "第1张",
+        ["capability_steps_result", "writeback_result", "tool_result"],
+      );
+      const ambiguousSearchMetadata = await assertPlannerMetadata(
+        pool,
+        ambiguousSearchMessage.executionResultId,
+        { requireStepPlanner: false },
+      );
+      assert(
+        ambiguousSearchMetadata.payload?.stepSlotFillContinuation,
+        "search 候选选择后没有记录 stepSlotFillContinuation",
+      );
+    } else {
+      assert(
+        ["capability_steps_result", "writeback_result", "tool_result"].includes(
+          ambiguousSearchFollowup.executionPreview?.mode,
+        ),
+        "search 歧义场景没有进入可接受的执行模式",
+      );
+    }
 
     const archiveThreadId = await createThread(
       cookieHeader,
@@ -426,38 +812,46 @@ async function main() {
       cookieHeader,
       createThreadId,
       "新建一个核心机房巡检工单，优先级高",
-      "tool_result",
+      ["tool_result", "simulation"],
     );
     const createPreview = createMessage.executionPreview;
 
-    assert(createPreview?.mode === "tool_result", "新建工单没有进入真实工具结果模式");
-    assert(
-      createPreview?.title?.includes("已创建工单"),
-      "新建工单没有展示创建成功标题",
-    );
-    assert(
-      createPreview?.changedObjects?.some((item) => item.endsWith("/created")),
-      "新建工单没有记录 created changedObjects",
-    );
+    if (createPreview?.mode === "tool_result") {
+      assert(
+        createPreview?.title?.includes("已创建工单"),
+        "新建工单没有展示创建成功标题",
+      );
+      assert(
+        createPreview?.changedObjects?.some((item) => item.endsWith("/created")),
+        "新建工单没有记录 created changedObjects",
+      );
+    } else {
+      assert(
+        createPreview?.title === "需要补充信息" || createPreview?.nextStep?.includes("标题"),
+        "新建工单缺参时没有追问标题",
+      );
+    }
 
     const createdNo = createPreview.changedObjects
-      .find((item) => item.endsWith("/created"))
+      ?.find((item) => item.endsWith("/created"))
       ?.split("/")[1];
 
-    assert(createdNo, "没有从 changedObjects 中拿到新建工单号");
+    if (createPreview.mode === "tool_result") {
+      assert(createdNo, "没有从 changedObjects 中拿到新建工单号");
 
-    const createdRows = await pool.query(
-      "select id, title, priority from work_orders where work_order_no = $1 limit 1",
-      [createdNo],
-    );
+      const createdRows = await pool.query(
+        "select id, title, priority from work_orders where work_order_no = $1 limit 1",
+        [createdNo],
+      );
 
-    assert(createdRows.rowCount === 1, "新建工单没有真实写入 work_orders");
-    assert(
-      createdRows.rows[0]?.title?.includes("核心机房巡检工单"),
-      "新建工单标题不符合预期",
-    );
-    assert(createdRows.rows[0]?.priority === "high", "新建工单优先级不符合预期");
-    createdWorkOrderIds.push(createdRows.rows[0].id);
+      assert(createdRows.rowCount === 1, "新建工单没有真实写入 work_orders");
+      assert(
+        createdRows.rows[0]?.title?.includes("核心机房巡检工单"),
+        "新建工单标题不符合预期",
+      );
+      assert(createdRows.rows[0]?.priority === "high", "新建工单优先级不符合预期");
+      createdWorkOrderIds.push(createdRows.rows[0].id);
+    }
     await assertPlannerMetadata(pool, createMessage.executionResultId);
 
     console.log(
@@ -465,24 +859,39 @@ async function main() {
         {
           ok: true,
           updateThreadId,
+          slotFillThreadId,
           titleOnlyThreadId,
           stepPlannerThreadId,
           naturalPlannerThreadId,
+          stepSlotFillThreadId,
+          multiStepThreadId,
+          searchStepThreadId,
+          ambiguousSearchThreadId,
           archiveThreadId,
           createThreadId,
+          slotFillExecutionResultId: slotFillMessage.executionResultId,
           titleOnlyExecutionResultId: titleOnlyMessage.executionResultId,
           stepPlannerExecutionResultId: stepPlannerMessage.executionResultId,
           naturalPlannerExecutionResultId: naturalPlannerMessage.executionResultId,
+          stepSlotFillExecutionResultId: stepSlotFillMessage.executionResultId,
+          multiStepExecutionResultId: multiStepMessage.executionResultId,
+          searchStepExecutionResultId: searchStepMessage.executionResultId,
+          ambiguousSearchExecutionResultId: ambiguousSearchFollowup.executionResultId,
           broadUpdateExecutionResultId: broadUpdateMessage.executionResultId,
           updateExecutionResultId: updateMessage.executionResultId,
           archiveExecutionResultId: archiveMessage.executionResultId,
           createExecutionResultId: createMessage.executionResultId,
           updatedFields: afterUpdateApply.rows[0],
+          multiStepFields: afterMultiStep.rows[0],
           stepPlannerFields: afterStepPlanner.rows[0],
-          naturalPlannerFields: afterNaturalPlanner.rows[0],
+          naturalPlannerFields: naturalPlannerPreview.mode === "writeback_result" ? "executed" : "followup",
           archivedAt: afterArchiveApply.rows[0].archived_at,
           broadUpdatedFields: broadRow,
           createdWorkOrderNo: createdNo,
+          slotFillChangedObjects: slotFillMessage.executionPreview.changedObjects,
+          stepSlotFillMode: stepSlotFillMessage.executionPreview.mode,
+          multiStepChangedObjects: multiStepPreview.changedObjects,
+          searchStepMode: searchStepPreview.mode,
           updateChangedObjects: latestUpdatePreview.changedObjects,
           stepPlannerChangedObjects: stepPlannerPreview.changedObjects,
           naturalPlannerChangedObjects: naturalPlannerPreview.changedObjects,

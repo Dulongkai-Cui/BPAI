@@ -17,6 +17,17 @@ type AiDormSidebarProps = {
   };
 };
 
+type CountKey = keyof AiDormSidebarProps["counts"];
+
+type SidebarItem = {
+  href: string;
+  label: string;
+  description: string;
+  countKey?: CountKey;
+  count?: number;
+  icon: ReactNode;
+};
+
 function SidebarIcon({ children }: { children: ReactNode }) {
   return (
     <span className="flex h-5 w-5 items-center justify-center text-current">
@@ -35,7 +46,7 @@ function SidebarIcon({ children }: { children: ReactNode }) {
   );
 }
 
-const coreItems = [
+const coreItems: SidebarItem[] = [
   {
     href: "/ai-dorm/workflows",
     label: "工作流工坊",
@@ -82,7 +93,23 @@ const coreItems = [
   },
 ];
 
-const secondaryItems = [
+const secondaryItems: SidebarItem[] = [
+  {
+    href: "/ai-dorm/tool-registry",
+    label: "Tool Registry",
+    description: "查看 MCP-lite 工具与资源",
+    count: 10,
+    icon: (
+      <SidebarIcon>
+        <path d="M6 7.5h12" />
+        <path d="M6 12h12" />
+        <path d="M6 16.5h12" />
+        <path d="M8.25 5.75v3.5" />
+        <path d="M15.75 10.25v3.5" />
+        <path d="M10.5 14.75v3.5" />
+      </SidebarIcon>
+    ),
+  },
   {
     href: "/ai-dorm/tasks",
     label: "任务收件箱",
@@ -176,7 +203,7 @@ export function AiDormSidebar({ user, counts }: AiDormSidebarProps) {
               href={item.href}
               label={item.label}
               description={item.description}
-              count={counts[item.countKey]}
+              count={item.countKey ? counts[item.countKey] : (item.count ?? 0)}
               active={isActive(pathname, item.href)}
               icon={item.icon}
             />
@@ -194,7 +221,7 @@ export function AiDormSidebar({ user, counts }: AiDormSidebarProps) {
                 href={item.href}
                 label={item.label}
                 description={item.description}
-                count={counts[item.countKey]}
+                count={item.countKey ? counts[item.countKey] : (item.count ?? 0)}
                 active={isActive(pathname, item.href)}
                 icon={item.icon}
               />

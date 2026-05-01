@@ -15,15 +15,9 @@ function shouldShowTaskPreview(message: BpAskMessage) {
     return false;
   }
 
-  const status = message.insight.status;
-  const findings = message.insight.findings.join(" ");
   const summary = message.insight.summary;
 
-  return (
-    status !== "直接回答" &&
-    !summary.includes("Simple greeting") &&
-    !findings.includes("BP问问")
-  );
+  return !summary.includes("Simple greeting");
 }
 
 function previewToneClasses(mode?: DispatchExecutionPreview["mode"]) {
@@ -219,6 +213,128 @@ function postConfirmationRunSafeguards(preview?: DispatchExecutionPreview) {
   ];
 }
 
+type TimelineStep = {
+  title: string;
+  description: string;
+  status: "completed" | "waiting" | "failed";
+  meta?: string;
+};
+
+function toolRunDurationText(toolRun: NonNullable<DispatchExecutionPreview["toolRuns"]>[number]) {
+  const startedAt = toolRun.startedAt ?? toolRun.trace?.startedAt;
+  const completedAt = toolRun.completedAt ?? toolRun.trace?.completedAt;
+
+  if (!startedAt || !completedAt) {
+    return "";
+  }
+
+  const duration = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+  return Number.isFinite(duration) && duration >= 0 ? `${duration}ms` : "";
+}
+
+function toolRunDisplayName(toolName: string) {
+  const labels: Record<string, string> = {
+    "work_order.read": "读取工单",
+    "work_order.create": "创建工单",
+    "work_order.writeback_draft.create": "生成写回草案",
+    "work_order.writeback.apply": "正式写回",
+    "document.list": "列出文档",
+    "document.read": "读取文档",
+    "document.create": "创建文档",
+    "openclaw.work_order.execute": "交给 OpenClaw",
+  };
+
+  return labels[toolName] ?? toolName;
+}
+
+function buildProcessingTimeline(preview?: DispatchExecutionPreview): TimelineStep[] {
+  if (!preview) {
+    return [];
+  }
+
+  const steps: TimelineStep[] = [
+    {
+      title: "理解请求",
+      description: preview.summary,
+      status: preview.mode === "simulation" ? "waiting" : "completed",
+      meta: preview.mode,
+    },
+  ];
+
+  for (const toolRun of preview.toolRuns ?? []) {
+    steps.push({
+      title: toolRunDisplayName(toolRun.toolName),
+      description: toolRun.summaryText,
+      status: toolRun.status === "failed" ? "failed" : "completed",
+      meta: [toolRun.toolName, toolRunDurationText(toolRun)].filter(Boolean).join(" · "),
+    });
+  }
+
+  if (preview.writebackCandidates?.length) {
+    steps.push({
+      title: "准备候选写回",
+      description: `形成 ${preview.writebackCandidates.length} 个候选变更。`,
+      status: "completed",
+      meta: "candidate writeback",
+    });
+  }
+
+  if (preview.writebackDrafts?.length) {
+    const appliedCount = appliedWritebackDraftCount(preview);
+    steps.push({
+      title: appliedCount > 0 ? "正式写回" : "生成写回草案",
+      description:
+        appliedCount > 0
+          ? `已应用 ${appliedCount} 个草案，修改 ${writebackFieldPathDisplayCount(preview)} 个字段路径。`
+          : `已生成 ${preview.writebackDrafts.length} 个写回草案，等待审阅或正式写回。`,
+      status: appliedCount > 0 ? "completed" : "waiting",
+      meta: "writeback",
+    });
+  }
+
+  if (preview.openClawRuns?.length) {
+    for (const run of preview.openClawRuns) {
+      steps.push({
+        title: "OpenClaw 执行",
+        description: run.summaryText,
+        status: run.status === "failed" ? "failed" : "completed",
+        meta: run.agentId,
+      });
+    }
+  }
+
+  if (preview.changedObjects?.length) {
+    steps.push({
+      title: "记录变更",
+      description: `已记录 ${preview.changedObjects.length} 个 changedObjects。`,
+      status: "completed",
+      meta: preview.changedObjects.slice(0, 2).join("；"),
+    });
+  }
+
+  steps.push({
+    title: preview.mode === "simulation" ? "等待补充" : "完成",
+    description: executionPreviewNextStepText(preview) ?? preview.nextStep,
+    status: preview.mode === "simulation" ? "waiting" : "completed",
+  });
+
+  return steps;
+}
+
+function processingCapsuleText(preview?: DispatchExecutionPreview) {
+  const toolCount = preview?.toolRuns?.length ?? 0;
+  const changedCount = writebackFieldPathDisplayCount(preview);
+  const draftCount = appliedWritebackDraftCount(preview);
+  const parts = [
+    preview?.mode === "simulation" ? "等待补充" : "已处理",
+    toolCount > 0 ? `${toolCount} 个工具` : null,
+    draftCount > 0 ? `${draftCount} 个写回` : null,
+    changedCount > 0 ? `${changedCount} 个字段变更` : null,
+  ].filter(Boolean);
+
+  return parts.join(" · ");
+}
+
 function shouldOfferOpenClawRun(preview?: DispatchExecutionPreview) {
   return hasAppliedWriteback(preview) && !(preview?.openClawRuns?.length);
 }
@@ -408,6 +524,7 @@ export function BpAskWorkbench({
             const isAssistant = message.role === "assistant";
             const previewMode = message.executionPreview?.mode;
             const previewAccent = previewAccentClasses(previewMode);
+            const processingTimeline = buildProcessingTimeline(message.executionPreview);
 
             return (
               <div
@@ -439,9 +556,52 @@ export function BpAskWorkbench({
                       <div className="mt-4">
                         <details className="group rounded-[20px] border border-slate-200 bg-slate-50/80 p-4">
                           <summary className="cursor-pointer list-none text-sm font-semibold text-slate-700">
-                            查看处理细节
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              <span>处理过程</span>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                                {processingCapsuleText(message.executionPreview)}
+                              </span>
+                            </span>
                           </summary>
                           <div className="mt-4 space-y-4">
+                            {processingTimeline.length ? (
+                              <div className="rounded-[20px] border border-slate-200 bg-white p-4">
+                                <div className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                                  Timeline
+                                </div>
+                                <div className="space-y-3">
+                                  {processingTimeline.map((step, index) => (
+                                    <div key={`${message.id}-timeline-${index}`} className="flex gap-3">
+                                      <span
+                                        className={
+                                          step.status === "failed"
+                                            ? "mt-1.5 h-3 w-3 shrink-0 rounded-full bg-rose-500"
+                                            : step.status === "waiting"
+                                              ? "mt-1.5 h-3 w-3 shrink-0 rounded-full bg-amber-400"
+                                              : "mt-1.5 h-3 w-3 shrink-0 rounded-full bg-emerald-500"
+                                        }
+                                      />
+                                      <div className="min-w-0 flex-1 rounded-2xl bg-slate-50 px-3 py-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="text-sm font-bold text-slate-800">{step.title}</span>
+                                          {step.meta ? (
+                                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                              {step.meta}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="mt-1 text-xs leading-5 text-slate-500">{step.description}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                            <details className="rounded-[18px] border border-slate-200 bg-white/70 p-3">
+                              <summary className="cursor-pointer list-none text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+                                技术详情
+                              </summary>
+                              <div className="mt-3 space-y-3">
                             <div className={`rounded-[20px] border p-4 ${previewToneClasses(previewMode)}`}>
                               <div className="flex items-center justify-between gap-3">
                                 <div>
@@ -905,6 +1065,8 @@ export function BpAskWorkbench({
                                 </p>
                               </div>
                             ) : null}
+                              </div>
+                            </details>
                           </div>
                         </details>
                       </div>

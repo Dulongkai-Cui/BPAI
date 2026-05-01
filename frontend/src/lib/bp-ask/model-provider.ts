@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { AiCapabilityDescriptor } from "@/lib/ai-tools/gateway";
 import {
   EXECUTION_MODES,
   PRIMARY_INTENTS,
@@ -69,6 +70,45 @@ export type ModelWorkOrderToolPlan = {
 
 export type ModelWorkOrderToolPlannerInput = ModelDispatchInput & {
   dispatchDecision: DispatchDecision;
+};
+
+export type ModelAiCapabilityPlan = {
+  toolName: string;
+  args: Record<string, unknown>;
+  confidence: number;
+  reason: string;
+};
+
+export type ModelAiCapabilityStepPlanMode = "chat" | "task" | "delegate";
+
+export type ModelAiCapabilityStep = {
+  stepId: string;
+  toolName: string;
+  args: Record<string, unknown>;
+  purpose: string;
+  requiresPreviousResult: boolean;
+};
+
+export type ModelAiCapabilityStepPlan = {
+  mode: ModelAiCapabilityStepPlanMode;
+  taskTitle: string;
+  steps: ModelAiCapabilityStep[];
+  missingInformation: string[];
+  followupQuestion: string;
+  delegateTarget: string;
+  delegateReason: string;
+  confidence: number;
+  reason: string;
+};
+
+export type ModelWorkOrderPatchRefineInput = {
+  prompt: string;
+  workOrder: Record<string, unknown>;
+  existingArgs: Record<string, unknown>;
+};
+
+export type ModelAiCapabilityPlannerInput = ModelDispatchInput & {
+  capabilities: AiCapabilityDescriptor[];
 };
 
 type BpAskModelProvider = "deepseek" | "kimi";
@@ -269,6 +309,136 @@ function buildChatPrompt(input: ModelChatGenerationInput) {
   ].join("\n");
 }
 
+function buildWorkOrderPatchRefinePrompt(input: ModelWorkOrderPatchRefineInput) {
+  return [
+    "Return one JSON object only. Do not use markdown fences.",
+    "You are BPAI's work-order patch refiner. Based on the user's original request and the resolved work order, fill only clear update fields.",
+    'Allowed output schema: { "args": { ... }, "confidence": 0-100, "reason": "short reason" }',
+    "Rules:",
+    "- Keep workOrderNo from existingArgs if present.",
+    "- Only fill fields that are clearly implied by the user's request.",
+    "- Allowed fields: priority, stage, status, nextAction, riskFollowup, title, sourceSummary, projectName, siteName, siteAddress, responsibleTeam, progressSummary, materialCompleteness, missingItemCount, blockingItemCount, warningStatus.",
+    "- Use canonical enum values when possible.",
+    "- Do not invent facts from the workOrder object; use it only to resolve context.",
+    "",
+    `existingArgs:\n${JSON.stringify(input.existingArgs, null, 2)}`,
+    "",
+    `workOrder:\n${JSON.stringify(input.workOrder, null, 2)}`,
+    "",
+    `userPrompt:\n${input.prompt}`,
+  ].join("\n");
+}
+
+function buildAiCapabilityPlannerPrompt(input: ModelAiCapabilityPlannerInput) {
+  const rollingSummary = input.rollingSummary?.trim() || "(none)";
+  const recentMessages = safeSlice(input.recentMessages, 8).join("\n") || "(none)";
+  const memoryFacts = safeSlice(input.memoryFacts, 6).join("\n") || "(none)";
+  const capabilities = input.capabilities.map((capability) => ({
+    name: capability.name,
+    displayName: capability.displayName,
+    domain: capability.domain,
+    action: capability.action,
+    sourceKind: capability.sourceKind,
+    riskLevel: capability.riskLevel,
+    executionMode: capability.executionMode,
+    description: capability.description,
+    target: capability.target,
+    inputSchema: capability.inputSchema,
+    requiredContext: capability.requiredContext,
+    plannerHints: capability.plannerHints,
+    failureModes: capability.failureModes,
+    mutatesDemoData: capability.mutatesDemoData,
+    requiresConfirmationDefault: capability.requiresConfirmationDefault,
+  }));
+
+  return [
+    "Return one JSON object only. Do not use markdown fences.",
+    "You are BPAI's capability planner. Choose zero or one tool from the provided capability list.",
+    'Allowed output schema: { "toolName": "capability.name|none", "args": { ... }, "confidence": 0-100, "reason": "short reason" }',
+    "Rules:",
+    "- Prefer the provided capability list over keyword routing. If the user asks to read, create, update, archive, list, or create documents/work orders, choose the matching capability.",
+    "- Match the user request against capability.action, target.objectType, plannerHints.whenToUse, and examples.",
+    "- Respect executionMode: direct means BP问问 can run it now; orchestrated means BP问问 will convert your args into internal steps; plan_only means choose it only when it is the right high-level capability.",
+    "- If the user intent matches a capability but requiredInformation is missing, still choose that capability with the args you know; do not invent missing values.",
+    "- Use only a capability name from the list, or toolName: none.",
+    "- For work_order.update, put changed fields directly in args with workOrderNo; do not nest them under patch.",
+    "- For work_order.archive, only workOrderNo is required.",
+    "- Do not invent identifiers or arguments that are not supported by the capability inputSchema.",
+    "- Demo data mutations are allowed when the user asks for a concrete change.",
+    "- If a matching capability needs an identifier like workOrderNo and the user omitted it, still choose the matching capability with partial args so BP问问 can ask for the missing information.",
+    "",
+    `capabilities:\n${JSON.stringify(capabilities, null, 2)}`,
+    "",
+    `rollingSummary:\n${rollingSummary}`,
+    "",
+    `recentMessages:\n${recentMessages}`,
+    "",
+    `memoryFacts:\n${memoryFacts}`,
+    "",
+    `userPrompt:\n${input.prompt}`,
+  ].join("\n");
+}
+
+function buildAiCapabilityStepPlannerPrompt(input: ModelAiCapabilityPlannerInput) {
+  const rollingSummary = input.rollingSummary?.trim() || "(none)";
+  const recentMessages = safeSlice(input.recentMessages, 8).join("\n") || "(none)";
+  const memoryFacts = safeSlice(input.memoryFacts, 6).join("\n") || "(none)";
+  const capabilities = input.capabilities.map((capability) => ({
+    name: capability.name,
+    displayName: capability.displayName,
+    domain: capability.domain,
+    action: capability.action,
+    sourceKind: capability.sourceKind,
+    riskLevel: capability.riskLevel,
+    executionMode: capability.executionMode,
+    description: capability.description,
+    target: capability.target,
+    inputSchema: capability.inputSchema,
+    requiredContext: capability.requiredContext,
+    plannerHints: capability.plannerHints,
+    failureModes: capability.failureModes,
+    mutatesDemoData: capability.mutatesDemoData,
+    requiresConfirmationDefault: capability.requiresConfirmationDefault,
+  }));
+
+  return [
+    "Return one JSON object only. Do not use markdown fences.",
+    "You are BPAI's multi-step capability planner. Decide whether the user is chatting, asking BPAI to do an in-system task, or asking for work that should be delegated to an AI Dorm/Longxia worker.",
+    "Allowed output schema:",
+    '{ "mode": "chat|task|delegate", "taskTitle": "short title", "steps": [{ "stepId": "step-1", "toolName": "capability.name", "args": { ... }, "purpose": "why this step runs", "requiresPreviousResult": false }], "missingInformation": ["field or condition"], "followupQuestion": "question to ask user", "delegateTarget": "worker id or empty", "delegateReason": "short reason", "confidence": 0-100, "reason": "short reason" }',
+    "Rules:",
+    "- Use mode: chat when the user is just chatting, asking who you are, or asking a general question that does not require execution.",
+    "- Default to mode: task whenever the user is asking BP问问 to do something inside BPAI and the request can be partially or fully grounded in the provided capabilities, even if some fields are still missing.",
+    "- Use mode: task when the user asks BP问问 to read, create, update, archive, list, search, or create documents/work orders using the provided capabilities.",
+    "- When the request includes an explicit workflow/process cue and the available capabilities are not enough to complete the flow end-to-end, prefer mode: delegate over returning mode: chat.",
+    "- Use mode: delegate only when the request is clearly a task but cannot be completed with the provided capabilities after reasonable in-system planning; prefer delegateTarget: work-order-longxia for complex work-order execution/planning.",
+    "- Prefer a short sequence of provided capabilities over keyword routing. Use only capability names from the list.",
+    "- When the user asks to inspect, summarize,整理, compare, or update a known business object, prefer a task plan that starts from in-system read/search capabilities instead of mode: delegate.",
+    "- First version should plan simple linear steps. Do not create loops or branches.",
+    "- For read-then-change requests, return work_order.read before work_order.update when both are useful.",
+    "- If the user describes a document by natural language instead of a clear documentId, use document.search first, then use the matched documentId in later steps if available.",
+    "- For document.search, put the user's natural document description in args.query.",
+    "- For document.write_content, put the target documentId in args along with the concrete content to write.",
+    "- For read-then-update document requests, return document.read before document.write_content when both are useful.",
+    "- For work_order.search, put the user's natural object description in args.query.",
+    "- For work_order.update, put changed fields directly in args with workOrderNo; do not nest under patch.",
+    "- If required information is missing, still return mode: task and the partial steps you can infer, then fill missingInformation and followupQuestion.",
+    "- Do not invent identifiers. You may use explicit IDs from the prompt or recent messages.",
+    "- Demo data mutations are allowed when the user asks for a concrete change.",
+    "- Keep steps to at most 4.",
+    "",
+    `capabilities:\n${JSON.stringify(capabilities, null, 2)}`,
+    "",
+    `rollingSummary:\n${rollingSummary}`,
+    "",
+    `recentMessages:\n${recentMessages}`,
+    "",
+    `memoryFacts:\n${memoryFacts}`,
+    "",
+    `userPrompt:\n${input.prompt}`,
+  ].join("\n");
+}
+
 function buildWorkOrderToolPlannerPrompt(input: ModelWorkOrderToolPlannerInput) {
   const rollingSummary = input.rollingSummary?.trim() || "(none)";
   const recentMessages = safeSlice(input.recentMessages, 8).join("\n") || "(none)";
@@ -352,6 +522,115 @@ function parseClassification(rawText: string): ModelDispatchClassification | nul
 
 function isModelWorkOrderToolName(value: string): value is ModelWorkOrderToolName {
   return (WORK_ORDER_TOOL_NAMES as readonly string[]).includes(value);
+}
+
+function parseAiCapabilityPlan(
+  rawText: string,
+  capabilities: AiCapabilityDescriptor[],
+): ModelAiCapabilityPlan | null {
+  if (!rawText.trim()) {
+    return null;
+  }
+
+  const payload = JSON.parse(stripMarkdownFence(rawText)) as {
+    toolName?: unknown;
+    args?: unknown;
+    confidence?: unknown;
+    reason?: unknown;
+  };
+  const toolName = typeof payload.toolName === "string" ? payload.toolName.trim() : "";
+
+  if (toolName === "none" || !capabilities.some((capability) => capability.name === toolName)) {
+    return null;
+  }
+
+  return {
+    toolName,
+    args: isRecord(payload.args) ? payload.args : {},
+    confidence: clampConfidence(payload.confidence ?? 72),
+    reason:
+      typeof payload.reason === "string" && payload.reason.trim()
+        ? payload.reason.trim()
+        : `${resolveModelConfig().provider} capability planner`,
+  };
+}
+
+function isModelAiCapabilityStepPlanMode(value: string): value is ModelAiCapabilityStepPlanMode {
+  return value === "chat" || value === "task" || value === "delegate";
+}
+
+function parseAiCapabilityStepPlan(
+  rawText: string,
+  capabilities: AiCapabilityDescriptor[],
+): ModelAiCapabilityStepPlan | null {
+  if (!rawText.trim()) {
+    return null;
+  }
+
+  const payload = JSON.parse(stripMarkdownFence(rawText)) as {
+    mode?: unknown;
+    taskTitle?: unknown;
+    steps?: unknown;
+    missingInformation?: unknown;
+    followupQuestion?: unknown;
+    delegateTarget?: unknown;
+    delegateReason?: unknown;
+    confidence?: unknown;
+    reason?: unknown;
+  };
+  const mode = typeof payload.mode === "string" ? payload.mode.trim() : "";
+
+  if (!isModelAiCapabilityStepPlanMode(mode)) {
+    return null;
+  }
+
+  const allowedToolNames = new Set(capabilities.map((capability) => capability.name));
+  const steps = Array.isArray(payload.steps)
+    ? payload.steps
+        .map((step, index): ModelAiCapabilityStep | null => {
+          if (!isRecord(step)) {
+            return null;
+          }
+
+          const toolName = readString(step, "toolName");
+
+          if (!allowedToolNames.has(toolName)) {
+            return null;
+          }
+
+          return {
+            stepId: readString(step, "stepId") || `step-${index + 1}`,
+            toolName,
+            args: isRecord(step.args) ? step.args : {},
+            purpose: readString(step, "purpose"),
+            requiresPreviousResult: Boolean(step.requiresPreviousResult),
+          };
+        })
+        .filter((step): step is ModelAiCapabilityStep => Boolean(step))
+        .slice(0, 4)
+    : [];
+
+  if (mode === "task" && steps.length === 0) {
+    return null;
+  }
+
+  return {
+    mode,
+    taskTitle: typeof payload.taskTitle === "string" ? payload.taskTitle.trim() : "",
+    steps,
+    missingInformation: Array.isArray(payload.missingInformation)
+      ? payload.missingInformation.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim())
+      : [],
+    followupQuestion:
+      typeof payload.followupQuestion === "string" ? payload.followupQuestion.trim() : "",
+    delegateTarget: typeof payload.delegateTarget === "string" ? payload.delegateTarget.trim() : "",
+    delegateReason: typeof payload.delegateReason === "string" ? payload.delegateReason.trim() : "",
+    confidence: clampConfidence(payload.confidence ?? 72),
+    reason:
+      typeof payload.reason === "string" && payload.reason.trim()
+        ? payload.reason.trim()
+        : `${resolveModelConfig().provider} multi-step capability planner`,
+  };
 }
 
 function parseWorkOrderToolPlan(
@@ -508,7 +787,7 @@ function buildRequestBody(
 async function postChatCompletion(
   config: ModelConfig,
   body: ReturnType<typeof buildRequestBody>,
-  purpose: "CHAT" | "DISPATCH" | "TOOL_PLAN",
+  purpose: "CHAT" | "DISPATCH" | "TOOL_PLAN" | "CAPABILITY_PLAN" | "CAPABILITY_STEP_PLAN",
 ) {
   const response = await fetch(`${trimTrailingSlash(config.baseUrl)}/chat/completions`, {
     method: "POST",
@@ -602,6 +881,124 @@ export async function classifyWithModel(
 
   try {
     return parseClassification(rawText);
+  } catch {
+    return null;
+  }
+}
+
+export async function planAiCapabilityWithModel(
+  input: ModelAiCapabilityPlannerInput,
+): Promise<ModelAiCapabilityPlan | null> {
+  const config = resolveModelConfig();
+
+  if (!config.apiKey || input.capabilities.length === 0) {
+    return null;
+  }
+
+  const payload = await postChatCompletion(
+    config,
+    buildRequestBody(
+      config,
+      [
+        {
+          role: "system",
+          content:
+            "You are a BPAI capability planner. Return JSON only and use only provided capability names.",
+        },
+        {
+          role: "user",
+          content: buildAiCapabilityPlannerPrompt(input),
+        },
+      ],
+      480,
+      true,
+    ),
+    "CAPABILITY_PLAN",
+  );
+  const rawText = normalizeMessageContent(payload.choices?.[0]?.message?.content);
+
+  try {
+    return parseAiCapabilityPlan(rawText, input.capabilities);
+  } catch {
+    return null;
+  }
+}
+
+export async function planAiCapabilityStepsWithModel(
+  input: ModelAiCapabilityPlannerInput,
+): Promise<ModelAiCapabilityStepPlan | null> {
+  const config = resolveModelConfig();
+
+  if (!config.apiKey || input.capabilities.length === 0) {
+    return null;
+  }
+
+  const payload = await postChatCompletion(
+    config,
+    buildRequestBody(
+      config,
+      [
+        {
+          role: "system",
+          content:
+            "You are a BPAI multi-step capability planner. Return JSON only and use only provided capability names.",
+        },
+        {
+          role: "user",
+          content: buildAiCapabilityStepPlannerPrompt(input),
+        },
+      ],
+      900,
+      true,
+    ),
+    "CAPABILITY_STEP_PLAN",
+  );
+  const rawText = normalizeMessageContent(payload.choices?.[0]?.message?.content);
+
+  try {
+    return parseAiCapabilityStepPlan(rawText, input.capabilities);
+  } catch {
+    return null;
+  }
+}
+
+export async function refineWorkOrderPatchWithModel(
+  input: ModelWorkOrderPatchRefineInput,
+): Promise<Record<string, unknown> | null> {
+  const config = resolveModelConfig();
+
+  if (!config.apiKey) {
+    return null;
+  }
+
+  const payload = await postChatCompletion(
+    config,
+    buildRequestBody(
+      config,
+      [
+        {
+          role: "system",
+          content:
+            "You are a BPAI work-order patch refiner. Return JSON only and fill only clear update args.",
+        },
+        {
+          role: "user",
+          content: buildWorkOrderPatchRefinePrompt(input),
+        },
+      ],
+      420,
+      true,
+    ),
+    "CAPABILITY_STEP_PLAN",
+  );
+  const rawText = normalizeMessageContent(payload.choices?.[0]?.message?.content);
+
+  try {
+    const payloadJson = JSON.parse(stripMarkdownFence(rawText)) as {
+      args?: unknown;
+    };
+
+    return isRecord(payloadJson.args) ? payloadJson.args : null;
   } catch {
     return null;
   }
