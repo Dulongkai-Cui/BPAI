@@ -12,13 +12,25 @@ import {
   type TargetDomain,
 } from "@/lib/bp-ask/intents";
 import type { AuthenticatedUser } from "@/lib/auth/types";
+import { getBrowserStateForUser } from "@/lib/content/browser-state";
+import { listAssetsForUser } from "@/lib/content/server";
 import { getDb } from "@/lib/db/client";
 import {
   conversationThreads,
   executionResults,
   executionTasks,
 } from "@/lib/db/schema";
+import { documentFolders } from "@/lib/docs/mock-data";
 import { getOpenClawConsoleEntryForAgent } from "@/lib/ai-dorm/openclaw";
+import {
+  getAiProductionApiKeyRecords,
+  getAiProductionCommandPresets,
+  getAiProductionSkillPackages,
+  type AiProductionApiKeyRecord,
+  type AiProductionCommandPreset,
+  type AiProductionSkillPackage,
+} from "@/lib/ai-dorm/production-assets";
+import { getSpacesForUser } from "@/lib/workspace/server";
 
 type JsonRecord = Record<string, unknown> | null;
 type WorkflowNodeKind =
@@ -173,6 +185,18 @@ export type AiDormPaletteGroup = {
   }>;
 };
 
+export type AiDormDepartmentScopeOption = {
+  id: string;
+  label: string;
+  description: string;
+  visibleAgents: string[];
+};
+
+export type AiDormDocumentScopeCatalog = {
+  mySpaceFolders: AiDormDepartmentScopeOption[];
+  collaborationSpaces: AiDormDepartmentScopeOption[];
+};
+
 export type AiDormLandingData = {
   counts: {
     totalTasks: number;
@@ -203,11 +227,15 @@ export type AiDormWorkflowStudioData = {
   selectedWorkflow: AiDormWorkflowCard;
   paletteGroups: AiDormPaletteGroup[];
   taskInboxPreview: AiDormTaskRecord[];
+  documentScopes: AiDormDocumentScopeCatalog;
 };
 
 export type AiDormSkillRepositoryData = {
   skills: AiDormSkillCard[];
   selectedSkill: AiDormSkillCard;
+  apiKeys: AiProductionApiKeyRecord[];
+  localSkillPackages: AiProductionSkillPackage[];
+  commandPresets: AiProductionCommandPreset[];
   entryPoints: Array<{
     id: string;
     title: string;
@@ -559,9 +587,9 @@ const WORKFLOW_PALETTE: AiDormPaletteGroup[] = [
     nodes: [
       {
         id: "node-input",
-        label: "输入节点",
+        label: "BP问问入口",
         kind: "input",
-        description: "接收 BP问问 dispatch 产出的任务上下文。",
+        description: "作为工作协议的前台入口，接收用户自然语言和任务上下文。",
       },
       {
         id: "node-output",
@@ -837,9 +865,9 @@ export async function getAiDormLandingData(userId: string): Promise<AiDormLandin
         id: "workflows",
         href: "/ai-dorm/workflows",
         eyebrow: "怎么干活",
-        title: "工作流工坊",
-        summary: "流程列表、节点骨架、配置",
-        metricLabel: "工作流模板",
+        title: "工作协议网关",
+        summary: "协议列表、节点骨架、配置",
+        metricLabel: "工作协议模板",
         metricValue: WORKFLOW_BLUEPRINTS.length,
         note: "",
       },
@@ -847,9 +875,9 @@ export async function getAiDormLandingData(userId: string): Promise<AiDormLandin
         id: "skills",
         href: "/ai-dorm/skills",
         eyebrow: "能力资产层",
-        title: "Skill 仓库",
+        title: "AI生产资料仓",
         summary: "上传、模板、草案",
-        metricLabel: "Skill 资产",
+        metricLabel: "生产资料",
         metricValue: SKILL_BLUEPRINTS.length,
         note: "",
       },
@@ -872,31 +900,171 @@ export async function getAiDormLandingData(userId: string): Promise<AiDormLandin
   };
 }
 
+const spreadsheetFolderScope = {
+  id: "sheet-workbooks",
+  name: "表格归档",
+  description: "台账、清单与跟踪表都统一放在这里。",
+};
+
+function getVisibleAgentsForDocumentScope(label: string) {
+  if (/表格|台账|清单|报表|周报|xlsx|sheet/i.test(label)) {
+    return ["文档龙虾", "报表龙虾"];
+  }
+
+  if (/异常|预警|跟踪|反馈/.test(label)) {
+    return ["文档龙虾", "预警龙虾"];
+  }
+
+  if (/图纸|CAD|设计|联审/.test(label)) {
+    return ["文档龙虾", "图纸龙虾"];
+  }
+
+  return ["文档龙虾"];
+}
+
+function mapDocumentFolderScope(folder: {
+  id: string;
+  name: string;
+  description: string;
+}): AiDormDepartmentScopeOption {
+  return {
+    id: `docs-folder-${folder.id}`,
+    label: folder.name,
+    description: folder.description || `${folder.name} 下的顶层文件。`,
+    visibleAgents: getVisibleAgentsForDocumentScope(folder.name),
+  };
+}
+
+async function getDefaultDocumentScopeCatalog(): Promise<AiDormDocumentScopeCatalog> {
+  return {
+    mySpaceFolders: [
+      {
+        id: "docs-folder-all",
+        label: "全部文件",
+        description: "我的文档空间下全部顶层文件。",
+        visibleAgents: ["文档龙虾", "报表龙虾"],
+      },
+      ...documentFolders.map(mapDocumentFolderScope),
+      mapDocumentFolderScope(spreadsheetFolderScope),
+    ],
+    collaborationSpaces: [],
+  };
+}
+
+async function getDocumentScopeCatalogForUser(
+  user: AuthenticatedUser,
+): Promise<AiDormDocumentScopeCatalog> {
+  const personalWorkspaceId = user.workspaceId;
+  const [
+    uploadedDocuments,
+    uploadedSheets,
+    uploadedSlides,
+    browserState,
+    userSpaces,
+  ] = await Promise.all([
+    listAssetsForUser(user, "document", { workspaceId: personalWorkspaceId }),
+    listAssetsForUser(user, "sheet", { workspaceId: personalWorkspaceId }),
+    listAssetsForUser(user, "slide", { workspaceId: personalWorkspaceId }),
+    getBrowserStateForUser(user, "document", {
+      workspaceId: personalWorkspaceId,
+    }),
+    getSpacesForUser(user.email),
+  ]);
+  const hiddenFolderIds = new Set(browserState.deletedFolderIds);
+  const uploadedAssets = [
+    ...uploadedDocuments,
+    ...uploadedSheets,
+    ...uploadedSlides,
+  ];
+  const baseFolders = [
+    ...(uploadedAssets.length > 0
+      ? [
+          {
+            id: "recent-uploads",
+            name: "最近上传",
+            description: "你真实上传到个人工作区的文件。",
+          },
+        ]
+      : []),
+    ...documentFolders,
+    spreadsheetFolderScope,
+  ];
+  const baseFolderIds = new Set(baseFolders.map((folder) => folder.id));
+  const folderOverrides = new Map(
+    browserState.customFolders.map((folder) => [folder.id, folder]),
+  );
+  const extraCustomFolders = browserState.customFolders.filter(
+    (folder) => !baseFolderIds.has(folder.id),
+  );
+  const resolvedFolders = [
+    ...extraCustomFolders,
+    ...baseFolders.map((folder) => {
+      const override = folderOverrides.get(folder.id);
+      return override ? { ...folder, ...override } : folder;
+    }),
+  ].filter((folder) => !hiddenFolderIds.has(folder.id));
+  const spaces = [...userSpaces.createdSpaces, ...userSpaces.joinedSpaces];
+
+  return {
+    mySpaceFolders: [
+      {
+        id: "docs-folder-all",
+        label: "全部文件",
+        description: "我的文档空间下全部顶层文件。",
+        visibleAgents: ["文档龙虾", "报表龙虾"],
+      },
+      ...resolvedFolders.map(mapDocumentFolderScope),
+    ],
+    collaborationSpaces: spaces.map((space) => ({
+      id: `docs-collaboration-${space.id}`,
+      label: space.name,
+      description: space.summary || `${space.name} 的顶层资料范围。`,
+      visibleAgents: getVisibleAgentsForDocumentScope(
+        `${space.name} ${space.summary}`,
+      ),
+    })),
+  };
+}
+
 export async function getAiDormWorkflowStudioData(
-  userId: string,
+  user: AuthenticatedUser | string,
   selectedWorkflowId?: string,
 ): Promise<AiDormWorkflowStudioData> {
+  const userId = typeof user === "string" ? user : user.id;
   const workflows = WORKFLOW_BLUEPRINTS.map(mapWorkflowBlueprint);
   const selectedWorkflow = pickByIdOrFirst(workflows, selectedWorkflowId);
-  const tasks = await getAiDormTaskFeedForUser(userId);
+  const [tasks, documentScopes] = await Promise.all([
+    getAiDormTaskFeedForUser(userId),
+    typeof user === "string"
+      ? getDefaultDocumentScopeCatalog()
+      : getDocumentScopeCatalogForUser(user),
+  ]);
 
   return {
     workflows,
     selectedWorkflow,
     paletteGroups: WORKFLOW_PALETTE,
     taskInboxPreview: tasks.slice(0, 5),
+    documentScopes,
   };
 }
 
 export async function getAiDormSkillRepositoryData(
   selectedSkillId?: string,
 ): Promise<AiDormSkillRepositoryData> {
-  const skills = await getAiDormSkills();
+  const [skills, apiKeys, localSkillPackages] = await Promise.all([
+    getAiDormSkills(),
+    getAiProductionApiKeyRecords(),
+    getAiProductionSkillPackages(),
+  ]);
   const selectedSkill = pickByIdOrFirst(skills, selectedSkillId);
 
   return {
     skills,
     selectedSkill,
+    apiKeys,
+    localSkillPackages,
+    commandPresets: getAiProductionCommandPresets(),
     entryPoints: [
       {
         id: "skill-upload",

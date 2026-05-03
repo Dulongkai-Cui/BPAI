@@ -56,19 +56,19 @@ export function AiDormOverviewPanel({ overview }: AiDormOverviewProps) {
           <h1 className="mt-3 text-[2rem] font-black tracking-tight">
             AI宿舍
           </h1>
-          <p className="mt-3 max-w-4xl text-sm leading-7 text-blue-50/90">工作流、Skill、AI员工</p>
+          <p className="mt-3 max-w-4xl text-sm leading-7 text-blue-50/90">工作协议、AI生产资料、AI员工</p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               href="/ai-dorm/workflows"
               className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
             >
-              进入工作流工坊
+              进入工作协议网关
             </Link>
             <Link
               href="/ai-dorm/skills"
               className="rounded-full border border-white/30 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
             >
-              查看 Skill 仓库
+              查看 AI生产资料仓
             </Link>
           </div>
         </div>

@@ -16,7 +16,7 @@ export default async function AiDormWorkflowsPage({
   const selectedWorkflowId = Array.isArray(resolvedSearchParams?.workflow)
     ? resolvedSearchParams.workflow[0]
     : resolvedSearchParams?.workflow;
-  const studio = await getAiDormWorkflowStudioData(user.id, selectedWorkflowId);
+  const studio = await getAiDormWorkflowStudioData(user, selectedWorkflowId);
 
   return <AiDormWorkflows studio={studio} />;
 }

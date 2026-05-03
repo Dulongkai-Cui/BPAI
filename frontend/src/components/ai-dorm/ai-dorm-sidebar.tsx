@@ -49,8 +49,8 @@ function SidebarIcon({ children }: { children: ReactNode }) {
 const coreItems: SidebarItem[] = [
   {
     href: "/ai-dorm/workflows",
-    label: "工作流工坊",
-    description: "查看流程、节点与配置",
+    label: "工作协议网关",
+    description: "查看协议、节点与配置",
     countKey: "workflows" as const,
     icon: (
       <SidebarIcon>
@@ -65,7 +65,7 @@ const coreItems: SidebarItem[] = [
   },
   {
     href: "/ai-dorm/skills",
-    label: "Skill 仓库",
+    label: "AI生产资料仓",
     description: "查看上传、模板与草案",
     countKey: "skills" as const,
     icon: (
@@ -191,7 +191,7 @@ export function AiDormSidebar({ user, counts }: AiDormSidebarProps) {
             Three Core Boards
           </div>
           <h2 className="mt-3 text-lg font-black text-blue-600">AI宿舍</h2>
-          <p className="mt-1 text-xs leading-5 text-slate-500">工作流、Skill、AI员工</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">工作协议、Skill、AI员工</p>
         </Link>
       </div>
 

@@ -109,7 +109,7 @@ BP问问作为大总管
 - 缺 input/output schema。
 - 缺与 Tool Gateway 的绑定。
 
-### 7.4 工作流工坊
+### 7.4 工作协议网关
 
 - 缺工作流匹配规则。
 - 缺工作流 runner。
