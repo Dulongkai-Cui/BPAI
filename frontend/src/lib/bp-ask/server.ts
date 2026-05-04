@@ -11,6 +11,8 @@ import {
   type AiLongxiaRunRecord,
 } from "@/lib/ai-dorm/longxia-adapter";
 import { matchAiWorkflow } from "@/lib/ai-dorm/workflow-matcher";
+import { matchEnabledWorkProtocols } from "@/lib/work-protocol/matcher";
+import { createWorkProtocolExecutionPlan } from "@/lib/work-protocol/runtime";
 import {
   runAiWorkflow,
   type AiWorkflowRunRecord,
@@ -5675,6 +5677,14 @@ function updateAssistantMessageMetadata(params: {
     insight: params.updatedPayload.insight,
     executionPreview: params.updatedPayload.executionPreview,
     workflowRuns: params.updatedPayload.workflowRuns,
+    workProtocolMatches:
+      params.updatedPayload.workProtocolMatches ?? params.metadata.workProtocolMatches,
+    workProtocolExecutionId:
+      params.updatedPayload.workProtocolExecutionId ??
+      params.metadata.workProtocolExecutionId,
+    workProtocolExecutionPlan:
+      params.updatedPayload.workProtocolExecutionPlan ??
+      params.metadata.workProtocolExecutionPlan,
     confirmationEvaluation: params.updatedPayload.confirmationEvaluation,
     confirmationDecisions: params.updatedPayload.confirmationDecisions,
     postConfirmationRun: params.updatedPayload.postConfirmationRun,
@@ -7446,13 +7456,22 @@ export async function previewDispatchForUser(
     }));
   }
 
-  return dispatchBpAskPrompt({
+  const dispatch = await dispatchBpAskPrompt({
     user,
     prompt: normalizedPrompt,
     rollingSummary,
     recentMessages,
     memoryFacts: recentFacts,
   });
+  const workProtocolMatches = await matchEnabledWorkProtocols({
+    prompt: normalizedPrompt,
+    decision: dispatch.decision,
+  });
+
+  return {
+    ...dispatch,
+    workProtocolMatches,
+  };
 }
 
 export async function appendMessageToThreadForUser(
@@ -7541,6 +7560,10 @@ export async function appendMessageToThreadForUser(
     rollingSummary,
     recentMessages: recentDispatchMessages,
     memoryFacts: recentDispatchFacts,
+  });
+  const workProtocolMatches = await matchEnabledWorkProtocols({
+    prompt: normalizedPrompt,
+    decision: dispatch.decision,
   });
 
   let modelCapabilityPlan: ModelAiCapabilityPlan | null =
@@ -7685,6 +7708,15 @@ export async function appendMessageToThreadForUser(
 
   const executionTaskId = buildId("exec-task");
   const executionResultId = buildId("exec-result");
+  const workProtocolExecutionPlan = await createWorkProtocolExecutionPlan({
+    match: workProtocolMatches[0],
+    userId: user.id,
+    threadId: thread.id,
+    sourceMessageId: userMessageId,
+    executionTaskId,
+    userPrompt: normalizedPrompt,
+    dispatchDecision: dispatch.decision,
+  });
 
   await db.insert(executionTasks).values({
     id: executionTaskId,
@@ -7731,6 +7763,9 @@ export async function appendMessageToThreadForUser(
       skillStatus: skillRun?.status ?? null,
       workflowId: workflowRun?.workflowId ?? executionPlan.workflowId ?? null,
       workflowStatus: workflowRun?.status ?? null,
+      workProtocolMatches,
+      workProtocolExecutionPlan,
+      workProtocolExecutionId: workProtocolExecutionPlan?.id ?? null,
       modelCapabilityPlannerAttempted,
       modelCapabilityPlanUsed,
       modelCapabilityPlannerError,
@@ -7768,6 +7803,9 @@ export async function appendMessageToThreadForUser(
     terminalState,
     slotFillContinuation,
     stepSlotFillContinuation,
+    workProtocolMatches,
+    workProtocolExecutionId: workProtocolExecutionPlan?.id ?? null,
+    workProtocolExecutionPlan,
     modelCapabilityPlanner: {
       attempted: modelCapabilityPlannerAttempted,
       used: modelCapabilityPlanUsed,
@@ -7990,6 +8028,9 @@ export async function appendMessageToThreadForUser(
         modelToolPlan: resultStructuredPayload.modelToolPlan,
         stepPlannerPlan: resultStructuredPayload.stepPlannerPlan,
         workflowRuns: resultStructuredPayload.workflowRuns,
+        workProtocolMatches: resultStructuredPayload.workProtocolMatches,
+        workProtocolExecutionId: resultStructuredPayload.workProtocolExecutionId,
+        workProtocolExecutionPlan: resultStructuredPayload.workProtocolExecutionPlan,
         skillRuns: resultStructuredPayload.skillRuns,
         agentRuns: resultStructuredPayload.agentRuns,
         toolRuns: resultStructuredPayload.toolRuns,

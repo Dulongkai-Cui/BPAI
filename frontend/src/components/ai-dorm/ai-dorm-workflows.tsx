@@ -1,7 +1,7 @@
 "use client";
 
 import type { PointerEvent as ReactPointerEvent, WheelEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Link from "next/link";
 
@@ -11,6 +11,32 @@ import type {
   AiDormWorkflowCard,
   AiDormWorkflowStudioData,
 } from "@/lib/ai-dorm/server";
+import type {
+  ProtocolIssue as GatewayProtocolIssue,
+  ProtocolNodeKind as GatewayProtocolNodeKind,
+  ProtocolReferenceKind,
+  WorkProtocolDraft as GatewayWorkProtocolDraft,
+} from "@/lib/work-protocol/types";
+import type {
+  WorkProtocolGroomingAudit,
+  WorkProtocolGroomingAuditEvent,
+  WorkProtocolGroomingAuditSeverity,
+  WorkProtocolGroomingAuditStatus,
+} from "@/lib/work-protocol/grooming-audit";
+import type { WorkProtocolExecutorAdapterRegistrySummary } from "@/lib/work-protocol/executor-adapters";
+import {
+  WorkProtocolAdapterRegistryPanel,
+  buildAdapterRegistryCompileIssues,
+} from "@/components/ai-dorm/work-protocol-adapter-diagnostics";
+import {
+  PendingParameterPatchApplyPanel,
+  WorkProtocolParameterPatchAuditPanel,
+} from "@/components/ai-dorm/work-protocol-parameter-patch-panels";
+import {
+  ParameterCodeDetails,
+  TargetProtocolDetails,
+  type ParameterPatchCandidatePreview,
+} from "@/components/ai-dorm/work-protocol-parameter-code-details";
 
 type AiDormWorkflowsProps = {
   studio: AiDormWorkflowStudioData;
@@ -38,6 +64,8 @@ type CompileStatus =
   | "valid_with_warnings"
   | "invalid"
   | "dirty_after_compile";
+type RegistryActionStatus = "idle" | "registering" | "toggling";
+type ExecutionActionStatus = "idle" | "loading" | "creating";
 
 type CanvasNodeDraft = {
   id: string;
@@ -106,6 +134,253 @@ type CompileIssue = {
   code: string;
   message: string;
   suggestion: string;
+};
+
+type ProtocolParameterCodeBlock = {
+  id: string;
+  target: "protocol" | "node" | "edge";
+  targetId: string;
+  label: string;
+  status: "fresh" | "invalid";
+  language: "json";
+  code: Record<string, unknown>;
+};
+
+type GatewayCompileApiResponse = {
+  result?: {
+    status: "compiled" | "compiled_with_warnings" | "invalid";
+    validation: {
+      issues: GatewayProtocolIssue[];
+    };
+    parameterCodeBlocks: ProtocolParameterCodeBlock[];
+  };
+  message?: string;
+};
+
+type GatewayGroomingAnnotationStatus = "ok" | "warning" | "error";
+type GatewayGroomingStatus = "groomed" | "groomed_with_issues" | "invalid";
+
+type GatewayGroomingTargetAnnotation = {
+  targetId: string;
+  label: string;
+  status: GatewayGroomingAnnotationStatus;
+  issues: GatewayProtocolIssue[];
+  parameterCodeBlock?: ProtocolParameterCodeBlock;
+};
+
+type GatewayGroomingProtocolSummary = {
+  status: GatewayGroomingAnnotationStatus;
+  groomingStatus: GatewayGroomingStatus;
+  errors: number;
+  warnings: number;
+  info: number;
+  canRegister: boolean;
+  message: string;
+  suggestions: string[];
+  issues: GatewayProtocolIssue[];
+  parameterCodeBlock?: ProtocolParameterCodeBlock;
+};
+
+type GatewayGroomApiResponse = {
+  result?: {
+    schemaVersion: "work-protocol-grooming.v0";
+    strategy: "deterministic_catalog";
+    status: GatewayGroomingStatus;
+    groomedDraft: GatewayWorkProtocolDraft;
+    compileResult: NonNullable<GatewayCompileApiResponse["result"]>;
+    parameterCodeBlocks: ProtocolParameterCodeBlock[];
+    protocolSummary: GatewayGroomingProtocolSummary;
+    departmentAnnotations: Record<string, GatewayGroomingTargetAnnotation>;
+    nodeAnnotations: Record<string, GatewayGroomingTargetAnnotation>;
+    edgeAnnotations: Record<string, GatewayGroomingTargetAnnotation>;
+    audit?: WorkProtocolGroomingAudit;
+    summary: {
+      errors: number;
+      warnings: number;
+      info: number;
+      nodes: number;
+      edges: number;
+      departments: number;
+      compiledNodes: number;
+      compiledEdges: number;
+      parameterCodeBlocks: number;
+      canRegister: boolean;
+    };
+  };
+  catalogHash?: string;
+  message?: string;
+};
+
+type GatewayGroomingResult = NonNullable<GatewayGroomApiResponse["result"]>;
+
+type GatewayDraftRecordSummary = {
+  id: string;
+  draftId: string;
+  kind: "source" | "groomed";
+  name?: string;
+  draft?: GatewayWorkProtocolDraft;
+  sourceRecordId?: string;
+  grooming?: {
+    status: GatewayGroomingStatus;
+    catalogHash?: string;
+    summary: GatewayGroomingResult["summary"];
+    parameterCodeBlocks: ProtocolParameterCodeBlock[];
+  };
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type GatewayDraftsApiResponse = {
+  record?: GatewayDraftRecordSummary;
+  records?: GatewayDraftRecordSummary[];
+  message?: string;
+};
+
+type RegisteredProtocolSummary = {
+  id: string;
+  draftId: string;
+  name: string;
+  enabled: boolean;
+  runtimeMode?: "plan_only";
+  priority?: number;
+  activeVersionId: string;
+  versions?: Array<{
+    versionId: string;
+    versionNumber: number;
+    draftSnapshot?: GatewayWorkProtocolDraft;
+    draftRecordId?: string;
+    draftKind?: "source" | "groomed";
+    capabilityCatalogHash?: string;
+    registeredAt: string;
+  }>;
+  updatedAt: string;
+};
+
+type WorkProtocolTrace = {
+  sourceRecord?: GatewayDraftRecordSummary;
+  groomedRecord?: GatewayDraftRecordSummary;
+  catalogHash?: string;
+  canRegister: boolean;
+  blockingIssues: number;
+  warnings: number;
+  parameterCodeBlocks: number;
+  stale: boolean;
+};
+
+type GatewayRegistryApiResponse = {
+  result?: GatewayCompileApiResponse["result"];
+  registered?: RegisteredProtocolSummary;
+  protocols?: RegisteredProtocolSummary[];
+  message?: string;
+};
+
+type WorkProtocolExecutionPlanSummary = {
+  id: string;
+  protocolId: string;
+  protocolName: string;
+  draftId: string;
+  versionId: string;
+  versionNumber: number;
+  status: "queued" | "running" | "waiting_confirmation" | "completed" | "failed" | "cancelled";
+  mode: "plan_only";
+  startedAt: string;
+  matchedConfidence: number;
+  matchedReason: string;
+  nodePlan: Array<{
+    sequence: number;
+    nodeId: string;
+    title: string;
+    kind: GatewayProtocolNodeKind;
+    executorKind: string;
+    status: "queued" | "running" | "waiting_confirmation" | "completed" | "skipped" | "failed";
+    approvalPolicy: "none" | "recommended" | "required";
+    riskLevel: "none" | "low" | "medium" | "high" | "critical";
+    adapterId?: string;
+    adapterLabel?: string;
+    adapterAvailable?: boolean;
+    requiredInputNames?: string[];
+    optionalInputNames?: string[];
+    plannedOutputNames?: string[];
+    requiredPermissions?: string[];
+    mutatesData?: boolean;
+    externalCallPlanned?: boolean;
+  }>;
+  edgePlan: Array<{
+    edgeId: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    transferMode: string;
+  }>;
+  permissionSummary: Array<{
+    kind: string;
+    id: string;
+    label?: string;
+  }>;
+  confirmationNodeIds: string[];
+};
+
+type GatewayExecutionsApiResponse = {
+  executions?: WorkProtocolExecutionPlanSummary[];
+  execution?: WorkProtocolExecutionPlanSummary;
+  message?: string;
+};
+
+type WorkProtocolParameterPatchAuditSummary = {
+  schemaVersion: "work-protocol-parameter-patch-audit.v1";
+  id: string;
+  draftId: string;
+  draftName: string;
+  mode: "dry_run" | "apply";
+  status: "validated" | "applied" | "rejected" | "no_effect";
+  operationCount: number;
+  appliedChangeCount: number;
+  rejectedChangeCount: number;
+  preflightIssueCount: number;
+  catalogHash?: string;
+  commitRequested?: boolean;
+  commitStatus?: "not_requested" | "skipped" | "committed";
+  baseDraftRecordId?: string;
+  sourceRecordId?: string;
+  committedDraftRecordId?: string;
+  createdAt: string;
+  result?: {
+    rejectedChanges?: Array<{
+      code: string;
+      message: string;
+      path: string;
+      operationId?: string;
+    }>;
+    appliedChanges?: Array<{
+      path: string;
+      operationId?: string;
+    }>;
+  };
+};
+
+type GatewayParameterPatchAuditsApiResponse = {
+  records?: WorkProtocolParameterPatchAuditSummary[];
+  message?: string;
+};
+
+type GatewayParameterPatchApiResponse = {
+  result?: {
+    status: WorkProtocolParameterPatchAuditSummary["status"];
+    parameterCodeBlocks?: ProtocolParameterCodeBlock[];
+    rejectedChanges?: NonNullable<
+      WorkProtocolParameterPatchAuditSummary["result"]
+    >["rejectedChanges"];
+    appliedChanges?: NonNullable<
+      WorkProtocolParameterPatchAuditSummary["result"]
+    >["appliedChanges"];
+  };
+  auditRecord?: WorkProtocolParameterPatchAuditSummary;
+  committedDraftRecord?: GatewayDraftRecordSummary;
+  message?: string;
+};
+
+type GatewayCapabilitiesApiResponse = {
+  adapterRegistry?: WorkProtocolExecutorAdapterRegistrySummary;
+  message?: string;
 };
 
 type PaletteNode = {
@@ -647,6 +922,538 @@ function createInitialEdges(): CanvasEdgeDraft[] {
   return [];
 }
 
+const AGENT_NAME_TO_PROTOCOL_ID: Record<string, string> = {
+  工单龙虾: "work-order-longxia",
+  文档龙虾: "document-longxia",
+  图纸龙虾: "drawing-longxia",
+  预警龙虾: "alert-longxia",
+  报表龙虾: "report-longxia",
+};
+
+const NODE_KIND_TO_PROTOCOL_KIND: Record<ProtocolNodeKind, GatewayProtocolNodeKind> = {
+  input: "bp_ask_entry",
+  tool: "tool_call",
+  skill: "skill_call",
+  rag: "rag_search",
+  agent: "agent_task",
+  dispatch: "task_dispatch",
+  aggregate: "result_aggregate",
+  condition: "condition",
+  human: "human_confirm",
+  bp_question: "bp_ask_followup",
+  writeback: "write_object",
+  bp_report: "bp_ask_report",
+  output: "bp_ask_report",
+};
+
+const DEPARTMENT_ID_TO_PROTOCOL_ID: Record<TopDepartmentId, string> = {
+  overview: "overview",
+  engineering: "engineering_team",
+  work_orders: "work_orders",
+  documents: "documents",
+  ai_dorm: "ai_dorm",
+};
+
+function getProtocolScopeId(department: CanvasDepartmentDraft) {
+  if (department.departmentId === "overview") {
+    const scopeMap: Record<string, string> = {
+      [ALL_SCOPE_ID]: "overview:map",
+      "overview-map": "overview:map",
+      "overview-engineering": "overview:team_status",
+      "overview-alerts": "overview:alerts",
+      "overview-settings": "overview:settings",
+    };
+
+    return scopeMap[department.scopeId] ?? "overview:map";
+  }
+
+  if (department.departmentId === "engineering") {
+    return "engineering_team:all";
+  }
+
+  if (department.departmentId === "work_orders") {
+    const scopeMap: Record<string, string> = {
+      [ALL_SCOPE_ID]: "work_orders:all",
+      "work-orders-board": "work_orders:list",
+      "work-orders-detail": "work_orders:list",
+      "work-orders-missing": "work_orders:list",
+    };
+
+    return scopeMap[department.scopeId] ?? "work_orders:list";
+  }
+
+  if (department.departmentId === "documents") {
+    if (department.scopeId === DOC_MY_SPACE_SCOPE_ID) {
+      return department.secondaryScopeId
+        ? `documents:my_space:${department.secondaryScopeId}`
+        : "documents:my_space";
+    }
+
+    if (department.scopeId === DOC_COLLAB_SCOPE_ID) {
+      return department.secondaryScopeId
+        ? `documents:collaboration:${department.secondaryScopeId}`
+        : "documents:collaboration";
+    }
+
+    return "documents:all";
+  }
+
+  const aiDormScopeMap: Record<string, string> = {
+    [ALL_SCOPE_ID]: "ai_dorm:work_protocol_gateway",
+    "ai-dorm-protocols": "ai_dorm:work_protocol_gateway",
+    "ai-dorm-skills": "ai_dorm:production_assets",
+    "ai-dorm-agents": "ai_dorm:agents",
+    "ai-dorm-tasks": "ai_dorm:work_protocol_gateway",
+  };
+
+  return aiDormScopeMap[department.scopeId] ?? "ai_dorm:work_protocol_gateway";
+}
+
+function getWritableObjectKindForNode(
+  node: CanvasNodeDraft,
+  department?: CanvasDepartmentDraft,
+): ProtocolReferenceKind | undefined {
+  if (node.kind !== "writeback") {
+    return undefined;
+  }
+
+  if (department?.departmentId === "work_orders") {
+    return "work_order";
+  }
+
+  if (department?.departmentId === "documents") {
+    return "document";
+  }
+
+  return "execution_result";
+}
+
+function buildProtocolDraftFromCanvas(params: {
+  selectedWorkflow: AiDormWorkflowCard;
+  departments: CanvasDepartmentDraft[];
+  nodes: CanvasNodeDraft[];
+  edges: CanvasEdgeDraft[];
+  documentScopes: AiDormDocumentScopeCatalog;
+}): GatewayWorkProtocolDraft {
+  const { selectedWorkflow, departments, nodes, edges, documentScopes } = params;
+  const departmentsById = new Map(
+    departments.map((department) => [department.id, department]),
+  );
+  const now = new Date().toISOString();
+
+  return {
+    id: `ui-${selectedWorkflow.id}`,
+    name: selectedWorkflow.name,
+    description: selectedWorkflow.description,
+    departments: departments.map((department) => {
+      const definition = getDepartmentDefinition(department.departmentId);
+      const scope = getDepartmentScope(department);
+      const secondaryScope = getDocumentSecondaryScope(department, documentScopes);
+      const protocolScopeId = getProtocolScopeId(department);
+      const visibleAgentIds = (department.agents ?? [])
+        .map((agent) => AGENT_NAME_TO_PROTOCOL_ID[agent.name])
+        .filter((agentId): agentId is string => Boolean(agentId));
+
+      return {
+        id: department.id,
+        departmentId: DEPARTMENT_ID_TO_PROTOCOL_ID[department.departmentId],
+        departmentLabel: definition.label,
+        primaryScopeId: protocolScopeId,
+        primaryScopeLabel:
+          secondaryScope?.label ??
+          (scope.id === ALL_SCOPE_ID ? definition.label : scope.label),
+        secondaryScopeId: secondaryScope?.id,
+        secondaryScopeLabel: secondaryScope?.label,
+        resourceRefs: [
+          {
+            kind: "department_scope",
+            id: protocolScopeId,
+            label: secondaryScope?.label ?? scope.label,
+          },
+        ],
+        visibleAgentIds,
+        position: { x: department.x, y: department.y },
+        size: { width: department.width, height: department.height },
+        collapsed: Boolean(department.collapsed),
+      };
+    }),
+    nodes: nodes.map((node) => {
+      const department = departmentsById.get(node.departmentId);
+      const protocolKind = NODE_KIND_TO_PROTOCOL_KIND[node.kind];
+      const agentId =
+        node.kind === "agent" ? AGENT_NAME_TO_PROTOCOL_ID[node.title] : undefined;
+      const writableObjectKind = getWritableObjectKindForNode(node, department);
+
+      return {
+        id: node.id,
+        kind: protocolKind,
+        title: node.title,
+        userIntent: node.userIntent,
+        departmentDraftId: department ? department.id : undefined,
+        agentId,
+        writableObjectKind,
+        position: { x: node.x, y: node.y },
+        compiledSpecStatus: "empty",
+      };
+    }),
+    edges: edges.map((edge) => ({
+      id: edge.id,
+      sourceNodeId: edge.fromNodeId,
+      targetNodeId: edge.toNodeId,
+      transferIntent: edge.transferIntent,
+      compiledSpecStatus: "empty",
+    })),
+    triggerDrafts: [
+      {
+        id: "manual-trigger",
+        label: "手动触发",
+        description: "从 BP问问 判断需要执行该工作协议时触发。",
+        matchMode: "manual",
+        enabled: true,
+      },
+    ],
+    compileStatus: "draft",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function mapGatewayIssue(issue: GatewayProtocolIssue): CompileIssue {
+  return {
+    id: issue.id,
+    severity: issue.severity,
+    targetKind: issue.target.kind === "protocol" ? "canvas" : issue.target.kind,
+    targetId: issue.target.id,
+    code: issue.code,
+    message: issue.message,
+    suggestion: issue.suggestion ?? "请检查该节点、连线或部门范围配置。",
+  };
+}
+
+function mapAuditEventTargetKind(
+  event: WorkProtocolGroomingAuditEvent,
+): CompileIssue["targetKind"] {
+  return event.target.kind === "protocol" ? "canvas" : event.target.kind;
+}
+
+function mapAuditEventToIssue(
+  event: WorkProtocolGroomingAuditEvent,
+): CompileIssue | null {
+  if (event.severity !== "error" && event.severity !== "warning") {
+    return null;
+  }
+
+  return {
+    id: `audit-${event.id}`,
+    severity: event.severity,
+    targetKind: mapAuditEventTargetKind(event),
+    targetId: event.target.id,
+    code: event.code,
+    message: event.message,
+    suggestion:
+      event.suggestion ??
+      (event.path ? `检查参数路径：${event.path}` : "请检查协议梳理审计里的对应阶段。"),
+  };
+}
+
+function compileIssueKey(issue: CompileIssue) {
+  return [
+    issue.severity,
+    issue.targetKind,
+    issue.targetId ?? "root",
+    issue.code,
+    issue.message,
+  ].join(":");
+}
+
+function dedupeCompileIssues(issues: CompileIssue[]) {
+  return Array.from(
+    new Map(issues.map((issue) => [compileIssueKey(issue), issue])).values(),
+  );
+}
+
+function collectAuditIssues(audit?: WorkProtocolGroomingAudit | null) {
+  if (!audit) {
+    return [];
+  }
+
+  return audit.sections
+    .flatMap((section) => section.events)
+    .map(mapAuditEventToIssue)
+    .filter((issue): issue is CompileIssue => Boolean(issue));
+}
+
+function auditTargetKey(kind: "department" | "node" | "edge", id: string) {
+  return `${kind}:${id}`;
+}
+
+function getLocalAuditEvents(
+  eventsByTarget: Record<string, WorkProtocolGroomingAuditEvent[]>,
+  kind: "department" | "node" | "edge",
+  id: string,
+) {
+  return eventsByTarget[auditTargetKey(kind, id)] ?? [];
+}
+
+function mapGatewayCompileStatus(
+  status: "compiled" | "compiled_with_warnings" | "invalid",
+): CompileStatus {
+  if (status === "compiled") {
+    return "valid";
+  }
+
+  if (status === "compiled_with_warnings") {
+    return "valid_with_warnings";
+  }
+
+  return "invalid";
+}
+
+function mapGatewayGroomStatus(result: GatewayGroomingResult): CompileStatus {
+  if (result.status === "invalid" || result.protocolSummary.errors > 0) {
+    return "invalid";
+  }
+
+  if (
+    result.status === "groomed_with_issues" ||
+    result.protocolSummary.warnings > 0
+  ) {
+    return "valid_with_warnings";
+  }
+
+  return "valid";
+}
+
+function collectGroomingIssues(result: GatewayGroomingResult): CompileIssue[] {
+  const issueMap = new Map<string, GatewayProtocolIssue>();
+  const addIssue = (issue: GatewayProtocolIssue) => {
+    issueMap.set(issue.id, issue);
+  };
+
+  for (const issue of result.protocolSummary.issues) {
+    addIssue(issue);
+  }
+
+  for (const annotation of Object.values(result.departmentAnnotations)) {
+    for (const issue of annotation.issues) {
+      addIssue(issue);
+    }
+  }
+
+  for (const annotation of Object.values(result.nodeAnnotations)) {
+    for (const issue of annotation.issues) {
+      addIssue(issue);
+    }
+  }
+
+  for (const annotation of Object.values(result.edgeAnnotations)) {
+    for (const issue of annotation.issues) {
+      addIssue(issue);
+    }
+  }
+
+  for (const issue of result.compileResult.validation.issues) {
+    addIssue(issue);
+  }
+
+  return dedupeCompileIssues([
+    ...collectAuditIssues(result.audit),
+    ...Array.from(issueMap.values()).map(mapGatewayIssue),
+  ]);
+}
+
+async function saveGatewayDraftRecord(params: {
+  draft: GatewayWorkProtocolDraft;
+  kind: GatewayDraftRecordSummary["kind"];
+  sourceRecordId?: string;
+  groomingResult?: GatewayGroomingResult;
+  catalogHash?: string;
+}) {
+  const response = await fetch("/api/ai-dorm/work-protocol-gateway/drafts", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | GatewayDraftsApiResponse
+    | null;
+
+  if (!response.ok || !payload?.record) {
+    throw new Error(payload?.message ?? "Work protocol draft save failed.");
+  }
+
+  return payload.record;
+}
+
+function normalizeDraftForTrace(draft?: GatewayWorkProtocolDraft) {
+  if (!draft) {
+    return null;
+  }
+
+  return {
+    id: draft.id,
+    name: draft.name,
+    description: draft.description,
+    departments: draft.departments,
+    nodes: draft.nodes.map((node) => ({
+      ...node,
+      compiledSpecStatus: undefined,
+      compiledSpec: undefined,
+    })),
+    edges: draft.edges.map((edge) => ({
+      ...edge,
+      compiledSpecStatus: undefined,
+      compiledSpec: undefined,
+    })),
+    triggerDrafts: draft.triggerDrafts,
+  };
+}
+
+function draftMatchesForTrace(
+  currentDraft: GatewayWorkProtocolDraft,
+  savedDraft?: GatewayWorkProtocolDraft,
+) {
+  if (!savedDraft) {
+    return false;
+  }
+
+  return (
+    JSON.stringify(normalizeDraftForTrace(currentDraft)) ===
+    JSON.stringify(normalizeDraftForTrace(savedDraft))
+  );
+}
+
+function pickLatestDraftRecord(
+  records: GatewayDraftRecordSummary[],
+  kind: GatewayDraftRecordSummary["kind"],
+) {
+  return records.find((record) => record.kind === kind);
+}
+
+function pickRegisteredProtocol(
+  protocols: RegisteredProtocolSummary[] | undefined,
+  draftId: string,
+) {
+  return protocols?.find((protocol) => protocol.draftId === draftId) ?? null;
+}
+
+function compileStatusFromStoredTrace(params: {
+  groomedRecord?: GatewayDraftRecordSummary;
+  stale: boolean;
+}): CompileStatus {
+  const summary = params.groomedRecord?.grooming?.summary;
+
+  if (params.stale) {
+    return "dirty_after_compile";
+  }
+
+  if (!summary) {
+    return "draft";
+  }
+
+  if (summary.errors > 0) {
+    return "invalid";
+  }
+
+  if (summary.warnings > 0) {
+    return "valid_with_warnings";
+  }
+
+  return "valid";
+}
+
+type PendingParameterPatchApply = ParameterPatchCandidatePreview & {
+  operationId: string;
+  auditRecord?: WorkProtocolParameterPatchAuditSummary;
+};
+
+type RegisteredVersionDiffItem = {
+  id: string;
+  targetLabel: string;
+  parameterLabel: string;
+  before: string;
+  after: string;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+const GATEWAY_NODE_KIND_LABELS: Record<GatewayProtocolNodeKind, string> = {
+  bp_ask_entry: "入口",
+  tool_call: "Tool",
+  skill_call: "Skill",
+  rag_search: "RAG",
+  agent_task: "AI员工",
+  task_dispatch: "分派",
+  result_aggregate: "汇总",
+  condition: "条件",
+  human_confirm: "人工确认",
+  bp_ask_followup: "追问",
+  write_object: "写入",
+  bp_ask_report: "汇报",
+};
+
+function executionStatusLabel(status: WorkProtocolExecutionPlanSummary["status"]) {
+  const labels: Record<WorkProtocolExecutionPlanSummary["status"], string> = {
+    queued: "已排队",
+    running: "运行中",
+    waiting_confirmation: "等确认",
+    completed: "已完成",
+    failed: "失败",
+    cancelled: "已取消",
+  };
+
+  return labels[status] ?? status;
+}
+
+function nodeRunStatusLabel(
+  status: WorkProtocolExecutionPlanSummary["nodePlan"][number]["status"],
+) {
+  const labels: Record<
+    WorkProtocolExecutionPlanSummary["nodePlan"][number]["status"],
+    string
+  > = {
+    queued: "待跑",
+    running: "运行中",
+    waiting_confirmation: "等确认",
+    completed: "完成",
+    skipped: "跳过",
+    failed: "失败",
+  };
+
+  return labels[status] ?? status;
+}
+
+function formatExecutionTime(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function riskTone(riskLevel: string) {
+  if (riskLevel === "critical" || riskLevel === "high") {
+    return "bg-rose-50 text-rose-700";
+  }
+
+  if (riskLevel === "medium") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
 function edgePath(from: CanvasNodeDraft, to: CanvasNodeDraft) {
   const startX = from.x + NODE_WIDTH;
   const startY = from.y + NODE_HEIGHT / 2;
@@ -921,20 +1728,30 @@ function CanvasNode({
   warning,
   dragging,
   connecting,
+  parameterCodeBlock,
+  auditEvents,
+  codeStale,
+  parameterPatchPreviewBusy,
   onStartDrag,
   onConnectorClick,
   onDelete,
   onChangeIntent,
+  onPreviewCandidate,
 }: {
   node: CanvasNodeDraft;
   error: boolean;
   warning: boolean;
   dragging: boolean;
   connecting: boolean;
+  parameterCodeBlock?: ProtocolParameterCodeBlock;
+  auditEvents?: WorkProtocolGroomingAuditEvent[];
+  codeStale: boolean;
+  parameterPatchPreviewBusy: boolean;
   onStartDrag: (event: ReactPointerEvent<HTMLElement>) => void;
   onConnectorClick: () => void;
   onDelete: () => void;
   onChangeIntent: (value: string) => void;
+  onPreviewCandidate: (preview: ParameterPatchCandidatePreview) => void;
 }) {
   const tone = error
     ? "border-rose-300 bg-rose-50/95 shadow-[0_18px_45px_-32px_rgba(244,63,94,0.8)]"
@@ -1024,6 +1841,14 @@ function CanvasNode({
           className="mt-1 w-full resize-none rounded-[0.9rem] border border-slate-200 bg-white/90 px-3 py-2 text-[11px] leading-5 text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
       </label>
+
+      <TargetProtocolDetails
+        block={parameterCodeBlock}
+        auditEvents={auditEvents}
+        stale={codeStale}
+        previewBusy={parameterPatchPreviewBusy}
+        onPreviewCandidate={onPreviewCandidate}
+      />
     </article>
   );
 }
@@ -1032,10 +1857,15 @@ function DepartmentBlock({
   department,
   documentScopes,
   error,
+  warning,
   dragging,
   activeAgentId,
   connectingFromId,
   issues,
+  auditEventsByTarget,
+  parameterCodeBlocksByTargetId,
+  codeStale,
+  parameterPatchPreviewBusy,
   onStartDrag,
   onStartAgentDrag,
   onAgentConnectorClick,
@@ -1044,14 +1874,20 @@ function DepartmentBlock({
   onRemoveAgent,
   onDelete,
   onChangeAgentIntent,
+  onPreviewCandidate,
 }: {
   department: CanvasDepartmentDraft;
   documentScopes: AiDormDocumentScopeCatalog;
   error: boolean;
+  warning: boolean;
   dragging: boolean;
   activeAgentId?: string;
   connectingFromId: string | null;
   issues: CompileIssue[];
+  auditEventsByTarget: Record<string, WorkProtocolGroomingAuditEvent[]>;
+  parameterCodeBlocksByTargetId: Map<string, ProtocolParameterCodeBlock>;
+  codeStale: boolean;
+  parameterPatchPreviewBusy: boolean;
   onStartDrag: (event: ReactPointerEvent<HTMLElement>) => void;
   onStartAgentDrag: (
     agent: CanvasDepartmentAgentDraft,
@@ -1063,6 +1899,7 @@ function DepartmentBlock({
   onRemoveAgent: (agentId: string) => void;
   onDelete: () => void;
   onChangeAgentIntent: (agentId: string, value: string) => void;
+  onPreviewCandidate: (preview: ParameterPatchCandidatePreview) => void;
 }) {
   const definition = getDepartmentDefinition(department.departmentId);
   const scope = getDepartmentScope(department);
@@ -1072,6 +1909,11 @@ function DepartmentBlock({
   const visibleAgents = detail.visibleAgents;
   const placedAgents = department.agents ?? [];
   const renderFrame = getDepartmentRenderFrame(department);
+  const departmentAuditEvents = getLocalAuditEvents(
+    auditEventsByTarget,
+    "department",
+    department.id,
+  );
   const showDocumentSecondary =
     department.departmentId === "documents" &&
     (department.scopeId === DOC_MY_SPACE_SCOPE_ID || department.scopeId === DOC_COLLAB_SCOPE_ID);
@@ -1082,6 +1924,8 @@ function DepartmentBlock({
       className={`absolute z-0 overflow-visible rounded-[1.6rem] border-2 border-dashed p-4 ${
         error
           ? "border-rose-300 bg-rose-50/45"
+          : warning
+            ? "border-amber-300 bg-amber-50/40"
           : "border-blue-200 bg-blue-50/35"
       } ${dragging ? "ring-2 ring-blue-200" : ""}`}
       style={{
@@ -1237,6 +2081,11 @@ function DepartmentBlock({
         <div className="rounded-[0.8rem] border border-slate-200 bg-slate-50/70 px-3 py-2 text-[10px] leading-4 text-slate-500">
           {detail.description}
         </div>
+        <TargetProtocolDetails
+          auditEvents={departmentAuditEvents}
+          stale={codeStale}
+          compact
+        />
         <div className="rounded-[0.8rem] border border-slate-200 bg-white px-3 py-2">
           <div className="text-[10px] font-black text-slate-400">可见AI员工</div>
           {visibleAgents.length > 0 ? (
@@ -1281,6 +2130,11 @@ function DepartmentBlock({
       {placedAgents.map((agent) => {
         const agentError = hasBlockingIssue(issues, "node", agent.id);
         const agentWarning = hasWarningIssue(issues, "node", agent.id);
+        const agentAuditEvents = getLocalAuditEvents(
+          auditEventsByTarget,
+          "node",
+          agent.id,
+        );
         const connecting = connectingFromId === agent.id;
         const tone = agentError
           ? "border-rose-300 bg-rose-50/95 shadow-[0_18px_45px_-32px_rgba(244,63,94,0.8)]"
@@ -1373,6 +2227,15 @@ function DepartmentBlock({
                 className="mt-1 w-full resize-none rounded-[0.9rem] border border-slate-200 bg-white/90 px-3 py-2 text-[11px] leading-5 text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
               />
             </label>
+
+            <TargetProtocolDetails
+              block={parameterCodeBlocksByTargetId.get(agent.id)}
+              auditEvents={agentAuditEvents}
+              stale={codeStale}
+              compact
+              previewBusy={parameterPatchPreviewBusy}
+              onPreviewCandidate={onPreviewCandidate}
+            />
           </article>
         );
       })}
@@ -1387,8 +2250,13 @@ function EdgeIntentCard({
   error,
   warning,
   open,
+  parameterCodeBlock,
+  auditEvents,
+  codeStale,
+  parameterPatchPreviewBusy,
   onToggle,
   onChange,
+  onPreviewCandidate,
 }: {
   edge: CanvasEdgeDraft;
   from: CanvasNodeDraft;
@@ -1396,8 +2264,13 @@ function EdgeIntentCard({
   error: boolean;
   warning: boolean;
   open: boolean;
+  parameterCodeBlock?: ProtocolParameterCodeBlock;
+  auditEvents?: WorkProtocolGroomingAuditEvent[];
+  codeStale: boolean;
+  parameterPatchPreviewBusy: boolean;
   onToggle: () => void;
   onChange: (value: string) => void;
+  onPreviewCandidate: (preview: ParameterPatchCandidatePreview) => void;
 }) {
   const x = (from.x + to.x) / 2 + NODE_WIDTH / 2 - (open ? 92 : 8);
   const y = (from.y + to.y) / 2 + NODE_HEIGHT / 2 - (open ? 42 : 8);
@@ -1449,24 +2322,646 @@ function EdgeIntentCard({
           className="mt-1 w-full resize-none rounded-[0.75rem] border border-slate-200 bg-slate-50/80 px-2.5 py-2 text-[10px] leading-4 text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
       </label>
+      <TargetProtocolDetails
+        block={parameterCodeBlock}
+        auditEvents={auditEvents}
+        stale={codeStale}
+        compact
+        previewBusy={parameterPatchPreviewBusy}
+        onPreviewCandidate={onPreviewCandidate}
+      />
     </div>
+  );
+}
+
+function shortTraceId(value?: string) {
+  if (!value) {
+    return "未生成";
+  }
+
+  if (value.length <= 22) {
+    return value;
+  }
+
+  return `${value.slice(0, 13)}...${value.slice(-6)}`;
+}
+
+function getActiveRegisteredVersion(protocol?: RegisteredProtocolSummary | null) {
+  if (!protocol?.versions?.length) {
+    return undefined;
+  }
+
+  return protocol.versions.find(
+    (version) => version.versionId === protocol.activeVersionId,
+  );
+}
+
+function isRegisteredProtocolBehindTrace(
+  trace?: WorkProtocolTrace | null,
+  protocol?: RegisteredProtocolSummary | null,
+) {
+  if (!trace?.groomedRecord?.id || !protocol || trace.stale || !trace.canRegister) {
+    return false;
+  }
+
+  const activeVersion = getActiveRegisteredVersion(protocol);
+  return activeVersion?.draftRecordId !== trace.groomedRecord.id;
+}
+
+function sameRegisteredDiffValue(left: unknown, right: unknown) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function formatRegisteredDiffValue(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "未设置";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.length === 0 ? "空数组" : `${value.length} 项`;
+  }
+
+  if (isPlainRecord(value)) {
+    const mode = value.mode;
+
+    if (typeof mode === "string") {
+      return mode;
+    }
+
+    const json = JSON.stringify(value);
+    return json.length > 48 ? `${json.slice(0, 45)}...` : json;
+  }
+
+  return String(value);
+}
+
+function getCompiledSpecRecord(value: unknown) {
+  if (!isPlainRecord(value)) {
+    return {};
+  }
+
+  return isPlainRecord(value.compiledSpec) ? value.compiledSpec : {};
+}
+
+function getNestedDiffValue(value: unknown, path: string) {
+  return path.split(".").reduce<unknown>((current, key) => {
+    if (!isPlainRecord(current)) {
+      return undefined;
+    }
+
+    return current[key];
+  }, value);
+}
+
+function pushRegisteredDiff(params: {
+  diffs: RegisteredVersionDiffItem[];
+  id: string;
+  targetLabel: string;
+  parameterLabel: string;
+  before: unknown;
+  after: unknown;
+}) {
+  if (sameRegisteredDiffValue(params.before, params.after)) {
+    return;
+  }
+
+  params.diffs.push({
+    id: params.id,
+    targetLabel: params.targetLabel,
+    parameterLabel: params.parameterLabel,
+    before: formatRegisteredDiffValue(params.before),
+    after: formatRegisteredDiffValue(params.after),
+  });
+}
+
+function buildRegisteredVersionDiff(
+  trace?: WorkProtocolTrace | null,
+  protocol?: RegisteredProtocolSummary | null,
+) {
+  const currentDraft = trace?.groomedRecord?.draft;
+  const activeDraft = getActiveRegisteredVersion(protocol)?.draftSnapshot;
+  const diffs: RegisteredVersionDiffItem[] = [];
+
+  if (!currentDraft || !activeDraft) {
+    return diffs;
+  }
+
+  pushRegisteredDiff({
+    diffs,
+    id: "protocol:name",
+    targetLabel: "协议整体",
+    parameterLabel: "名称",
+    before: activeDraft.name,
+    after: currentDraft.name,
+  });
+  pushRegisteredDiff({
+    diffs,
+    id: "protocol:description",
+    targetLabel: "协议整体",
+    parameterLabel: "说明",
+    before: activeDraft.description,
+    after: currentDraft.description,
+  });
+
+  const previousNodes = new Map(activeDraft.nodes.map((node) => [node.id, node]));
+  const currentNodes = new Map(currentDraft.nodes.map((node) => [node.id, node]));
+
+  for (const node of currentDraft.nodes) {
+    const previousNode = previousNodes.get(node.id);
+
+    if (!previousNode) {
+      diffs.push({
+        id: `node:${node.id}:added`,
+        targetLabel: node.title,
+        parameterLabel: "方块",
+        before: "未注册",
+        after: "新增",
+      });
+      continue;
+    }
+
+    const beforeSpec = getCompiledSpecRecord(previousNode);
+    const afterSpec = getCompiledSpecRecord(node);
+    const nodeFields = [
+      ["执行对象", "callableId"],
+      ["AI员工", "agentId"],
+      ["写入对象", "writableObjectKind"],
+      ["部门范围", "departmentScopeId"],
+      ["风险等级", "riskLevel"],
+      ["确认策略", "approvalPolicy"],
+      ["失败策略", "failurePolicy.mode"],
+      ["超时", "timeoutMs"],
+    ] as const;
+
+    for (const [label, path] of nodeFields) {
+      pushRegisteredDiff({
+        diffs,
+        id: `node:${node.id}:${path}`,
+        targetLabel: node.title,
+        parameterLabel: label,
+        before: getNestedDiffValue(beforeSpec, path),
+        after: getNestedDiffValue(afterSpec, path),
+      });
+    }
+  }
+
+  for (const node of activeDraft.nodes) {
+    if (!currentNodes.has(node.id)) {
+      diffs.push({
+        id: `node:${node.id}:removed`,
+        targetLabel: node.title,
+        parameterLabel: "方块",
+        before: "已注册",
+        after: "已移除",
+      });
+    }
+  }
+
+  const previousEdges = new Map(activeDraft.edges.map((edge) => [edge.id, edge]));
+  const currentEdges = new Map(currentDraft.edges.map((edge) => [edge.id, edge]));
+
+  for (const edge of currentDraft.edges) {
+    const previousEdge = previousEdges.get(edge.id);
+
+    if (!previousEdge) {
+      diffs.push({
+        id: `edge:${edge.id}:added`,
+        targetLabel: edge.id,
+        parameterLabel: "连线",
+        before: "未注册",
+        after: "新增",
+      });
+      continue;
+    }
+
+    const beforeSpec = getCompiledSpecRecord(previousEdge);
+    const afterSpec = getCompiledSpecRecord(edge);
+    const edgeFields = [
+      ["传输模式", "transferMode"],
+      ["通讯提示词", "prompt"],
+      ["必需字段", "requiredFields"],
+      ["字段映射", "fieldMappings"],
+    ] as const;
+
+    for (const [label, path] of edgeFields) {
+      pushRegisteredDiff({
+        diffs,
+        id: `edge:${edge.id}:${path}`,
+        targetLabel: edge.id,
+        parameterLabel: label,
+        before: getNestedDiffValue(beforeSpec, path),
+        after: getNestedDiffValue(afterSpec, path),
+      });
+    }
+  }
+
+  for (const edge of activeDraft.edges) {
+    if (!currentEdges.has(edge.id)) {
+      diffs.push({
+        id: `edge:${edge.id}:removed`,
+        targetLabel: edge.id,
+        parameterLabel: "连线",
+        before: "已注册",
+        after: "已移除",
+      });
+    }
+  }
+
+  return diffs;
+}
+
+function WorkProtocolTracePanel({
+  trace,
+  registeredProtocol,
+}: {
+  trace?: WorkProtocolTrace | null;
+  registeredProtocol?: RegisteredProtocolSummary | null;
+}) {
+  const activeVersion = getActiveRegisteredVersion(registeredProtocol);
+  const sourceReady = Boolean(trace?.sourceRecord);
+  const groomedReady = Boolean(trace?.groomedRecord);
+  const registeredReady = Boolean(registeredProtocol);
+  const canRegister = Boolean(trace?.canRegister && groomedReady && !trace.stale);
+  const registrationNeedsUpdate = isRegisteredProtocolBehindTrace(
+    trace,
+    registeredProtocol,
+  );
+  const registeredVersionDiffs = buildRegisteredVersionDiff(
+    trace,
+    registeredProtocol,
+  );
+  const registeredVersionDiffPreview = registeredVersionDiffs.slice(0, 5);
+  const statusText = trace?.stale
+    ? "已过期"
+    : canRegister
+      ? "可注册"
+      : registeredProtocol?.enabled
+        ? "已启用"
+        : "待梳理";
+  const statusTone = trace?.stale
+    ? "bg-amber-50 text-amber-700"
+    : canRegister || registeredProtocol?.enabled
+      ? "bg-emerald-50 text-emerald-700"
+      : "bg-slate-100 text-slate-600";
+
+  return (
+    <details
+      className="mt-3 overflow-hidden rounded-[1.1rem] border border-slate-200 bg-white"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+            链路检查
+          </div>
+          <div className="mt-0.5 text-[11px] font-semibold text-slate-600">
+            source / groomed / registered
+          </div>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${statusTone}`}>
+          {statusText}
+        </span>
+      </summary>
+
+      <div className="space-y-2 border-t border-slate-100 bg-slate-50/70 px-2.5 py-2.5">
+        <div className="grid gap-1.5">
+          <div className="rounded-[0.8rem] bg-white px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black text-slate-800">
+                Source 草稿
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  sourceReady ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {sourceReady ? "已保存" : "未生成"}
+              </span>
+            </div>
+            <div className="mt-1 truncate font-mono text-[10px] text-slate-500">
+              {shortTraceId(trace?.sourceRecord?.id)}
+            </div>
+          </div>
+
+          <div className="rounded-[0.8rem] bg-white px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black text-slate-800">
+                Groomed 草稿
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  canRegister
+                    ? "bg-emerald-50 text-emerald-700"
+                    : groomedReady
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {canRegister ? "可注册" : groomedReady ? "需处理" : "未生成"}
+              </span>
+            </div>
+            <div className="mt-1 truncate font-mono text-[10px] text-slate-500">
+              {shortTraceId(trace?.groomedRecord?.id)}
+            </div>
+          </div>
+
+          <div className="rounded-[0.8rem] bg-white px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-black text-slate-800">
+                注册版本
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  registrationNeedsUpdate
+                    ? "bg-amber-50 text-amber-700"
+                    : registeredProtocol?.enabled
+                      ? "bg-emerald-50 text-emerald-700"
+                      : registeredReady
+                        ? "bg-slate-100 text-slate-600"
+                        : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {registeredProtocol?.enabled
+                  ? "已启用"
+                  : registeredReady
+                    ? "已注册"
+                    : "未注册"}
+              </span>
+            </div>
+            <div className="mt-1 truncate font-mono text-[10px] text-slate-500">
+              {shortTraceId(activeVersion?.versionId ?? registeredProtocol?.activeVersionId)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 text-[10px] font-semibold text-slate-500">
+          <div className="rounded-[0.7rem] bg-white px-2 py-1.5">
+            参数块 <span className="font-black text-slate-900">{trace?.parameterCodeBlocks ?? 0}</span>
+          </div>
+          <div className="rounded-[0.7rem] bg-white px-2 py-1.5">
+            阻塞 <span className="font-black text-slate-900">{trace?.blockingIssues ?? 0}</span>
+          </div>
+          <div className="rounded-[0.7rem] bg-white px-2 py-1.5">
+            警告 <span className="font-black text-slate-900">{trace?.warnings ?? 0}</span>
+          </div>
+          <div className="rounded-[0.7rem] bg-white px-2 py-1.5">
+            目录 <span className="font-mono text-slate-700">{shortTraceId(trace?.catalogHash)}</span>
+          </div>
+        </div>
+
+        {trace?.stale ? (
+          <div className="rounded-[0.85rem] bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
+            画布已经变更，当前 groomed 草稿只作为历史参考。注册前需要重新协议梳理。
+          </div>
+        ) : null}
+
+        {registrationNeedsUpdate ? (
+          <div className="rounded-[0.85rem] bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-700">
+            当前 groomed 协议已更新，但 BP问问实际运行的注册版本仍指向旧记录。请点击“更新注册”后再试运行。
+            {registeredVersionDiffPreview.length > 0 ? (
+              <div className="mt-2 rounded-[0.8rem] bg-white p-2">
+                <div className="flex items-center justify-between gap-2 text-[10px] font-black text-amber-800">
+                  <span>注册差异</span>
+                  <span>{registeredVersionDiffs.length} 项</span>
+                </div>
+                <div className="mt-1.5 space-y-1">
+                  {registeredVersionDiffPreview.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-[0.65rem] bg-amber-50/80 px-2 py-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[10px]">
+                        <span className="truncate font-black text-slate-900">
+                          {item.targetLabel}
+                        </span>
+                        <span className="shrink-0 font-semibold text-amber-700">
+                          {item.parameterLabel}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 font-mono text-[9px] leading-4">
+                        <span className="truncate text-slate-500">
+                          {item.before}
+                        </span>
+                        <span className="text-amber-500">→</span>
+                        <span className="truncate text-slate-900">
+                          {item.after}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {registeredVersionDiffs.length > registeredVersionDiffPreview.length ? (
+                  <div className="mt-1.5 text-[10px] font-semibold text-amber-700">
+                    还有 {registeredVersionDiffs.length - registeredVersionDiffPreview.length} 项差异未展开。
+                  </div>
+                ) : null}
+              </div>
+            ) : !activeVersion?.draftSnapshot ? (
+              <div className="mt-2 rounded-[0.8rem] bg-white px-2 py-1.5 text-[10px] font-semibold text-amber-700">
+                注册版本缺少 draftSnapshot，只能确认版本记录不同。
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function auditStatusLabel(status: WorkProtocolGroomingAuditStatus) {
+  if (status === "blocked") {
+    return "阻塞";
+  }
+
+  if (status === "warning") {
+    return "需确认";
+  }
+
+  return "通过";
+}
+
+function auditStatusTone(status: WorkProtocolGroomingAuditStatus) {
+  if (status === "blocked") {
+    return "bg-rose-50 text-rose-700";
+  }
+
+  if (status === "warning") {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-emerald-50 text-emerald-700";
+}
+
+function auditSeverityTone(severity: WorkProtocolGroomingAuditSeverity) {
+  if (severity === "error") {
+    return "border-rose-100 bg-rose-50 text-rose-800";
+  }
+
+  if (severity === "warning") {
+    return "border-amber-100 bg-amber-50 text-amber-800";
+  }
+
+  if (severity === "success") {
+    return "border-emerald-100 bg-emerald-50 text-emerald-800";
+  }
+
+  return "border-slate-100 bg-white text-slate-600";
+}
+
+function auditTargetLabel(event: WorkProtocolGroomingAuditEvent) {
+  if (event.target.label) {
+    return event.target.label;
+  }
+
+  if (event.target.kind === "protocol") {
+    return "协议整体";
+  }
+
+  return `${event.target.kind}:${event.target.id ?? "未定位"}`;
+}
+
+function WorkProtocolAuditPanel({
+  audit,
+}: {
+  audit?: WorkProtocolGroomingAudit | null;
+}) {
+  if (!audit) {
+    return null;
+  }
+
+  const targetCount = Object.keys(audit.eventsByTarget).length;
+
+  return (
+    <details
+      open={audit.status !== "pass"}
+      className="mt-3 overflow-hidden rounded-[1.1rem] border border-slate-200 bg-white"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+            协议审计
+          </div>
+          <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-600">
+            {audit.summary.sections} 阶段 · {targetCount} 目标 · {audit.summary.appliedChanges} 改写
+          </div>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${auditStatusTone(
+            audit.status,
+          )}`}
+        >
+          {auditStatusLabel(audit.status)}
+        </span>
+      </summary>
+
+      <div className="max-h-48 space-y-2 overflow-y-auto border-t border-slate-100 bg-slate-50/70 px-2.5 py-2.5 pr-1">
+        {audit.sections.map((section) => (
+          <details
+            key={section.id}
+            open={section.status !== "pass"}
+            className="overflow-hidden rounded-[0.9rem] border border-slate-200 bg-white"
+          >
+            <summary className="flex cursor-pointer list-none items-start justify-between gap-2 px-2.5 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-[11px] font-black text-slate-900">
+                  {section.title}
+                </div>
+                <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-slate-500">
+                  {section.message}
+                </div>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${auditStatusTone(
+                  section.status,
+                )}`}
+              >
+                {section.counts.errors} / {section.counts.warnings}
+              </span>
+            </summary>
+            <div className="space-y-1.5 border-t border-slate-100 px-2.5 py-2">
+              {section.events.slice(0, 5).map((event) => (
+                <div
+                  key={event.id}
+                  className={`rounded-[0.75rem] border px-2.5 py-2 text-[10px] leading-4 ${auditSeverityTone(
+                    event.severity,
+                  )}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-black">{event.title}</div>
+                    <div className="shrink-0 font-semibold opacity-70">
+                      {auditTargetLabel(event)}
+                    </div>
+                  </div>
+                  <div className="mt-1 text-current/80">{event.message}</div>
+                  {event.path ? (
+                    <div className="mt-1 font-mono text-[9px] text-current/60">
+                      {event.path}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+              {section.events.length > 5 ? (
+                <div className="px-2 text-[10px] font-semibold text-slate-400">
+                  还有 {section.events.length - 5} 条审计事件
+                </div>
+              ) : null}
+            </div>
+          </details>
+        ))}
+      </div>
+    </details>
   );
 }
 
 function IssuePanel({
   status,
   issues,
+  groomingSummary,
+  audit,
+  pendingParameterPatchApply,
+  parameterPatchApplyStatus,
+  parameterPatchAudits,
+  trace,
+  registeredProtocol,
+  protocolCodeBlock,
+  adapterRegistry,
+  parameterCodeBlocks,
+  executionPlans,
+  executionStatus,
+  onApplyPendingParameterPatch,
+  onCancelPendingParameterPatch,
+  onRefreshExecutions,
 }: {
   status: CompileStatus;
   issues: CompileIssue[];
+  groomingSummary?: GatewayGroomingProtocolSummary | null;
+  audit?: WorkProtocolGroomingAudit | null;
+  pendingParameterPatchApply?: PendingParameterPatchApply | null;
+  parameterPatchApplyStatus: "idle" | "applying";
+  parameterPatchAudits: WorkProtocolParameterPatchAuditSummary[];
+  trace?: WorkProtocolTrace | null;
+  registeredProtocol?: RegisteredProtocolSummary | null;
+  protocolCodeBlock?: ProtocolParameterCodeBlock;
+  adapterRegistry?: WorkProtocolExecutorAdapterRegistrySummary | null;
+  parameterCodeBlocks: ProtocolParameterCodeBlock[];
+  executionPlans: WorkProtocolExecutionPlanSummary[];
+  executionStatus: ExecutionActionStatus;
+  onApplyPendingParameterPatch: () => void;
+  onCancelPendingParameterPatch: () => void;
+  onRefreshExecutions: () => void;
 }) {
   const errors = issues.filter((issue) => issue.severity === "error").length;
   const warnings = issues.filter((issue) => issue.severity === "warning").length;
+  const codeStale = status === "dirty_after_compile";
+  const latestPlans = executionPlans.slice(0, 3);
 
   return (
     <aside
       data-fixed-control="true"
-      className="absolute right-5 bottom-24 z-40 w-[22rem] rounded-[1.4rem] border border-slate-200 bg-white/95 p-4 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.55)] backdrop-blur"
+      className="absolute right-5 bottom-24 z-40 max-h-[68vh] w-[23rem] overflow-y-auto overscroll-contain rounded-[1.4rem] border border-slate-200 bg-white/95 p-3.5 shadow-[0_30px_80px_-45px_rgba(15,23,42,0.55)] backdrop-blur"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -1487,7 +2982,151 @@ function IssuePanel({
         </div>
       </div>
 
-      <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
+      <ParameterCodeDetails block={protocolCodeBlock} stale={codeStale} compact />
+
+      <WorkProtocolTracePanel
+        trace={trace}
+        registeredProtocol={registeredProtocol}
+      />
+
+      <WorkProtocolAdapterRegistryPanel
+        adapterRegistry={adapterRegistry}
+        parameterCodeBlocks={parameterCodeBlocks}
+        executionPlans={executionPlans}
+      />
+
+      <WorkProtocolAuditPanel audit={audit} />
+
+      <PendingParameterPatchApplyPanel
+        pending={pendingParameterPatchApply}
+        applying={parameterPatchApplyStatus === "applying"}
+        onApply={onApplyPendingParameterPatch}
+        onCancel={onCancelPendingParameterPatch}
+      />
+
+      <WorkProtocolParameterPatchAuditPanel records={parameterPatchAudits} />
+
+      <div className="mt-2.5 rounded-[1.1rem] border border-slate-200 bg-slate-50/80 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+              执行计划
+            </div>
+            <div className="mt-0.5 text-xs font-semibold text-slate-600">
+              plan-only dry-run
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onRefreshExecutions}
+            disabled={executionStatus === "loading" || executionStatus === "creating"}
+            className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            {executionStatus === "loading" ? "读取中" : "刷新"}
+          </button>
+        </div>
+
+        <div className="mt-2 max-h-36 space-y-2 overflow-auto pr-1">
+          {latestPlans.length === 0 ? (
+            <div className="rounded-[0.9rem] border border-dashed border-slate-200 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
+              暂无协议执行计划。BP问问命中已启用协议，或点击“试运行”后会出现在这里。
+            </div>
+          ) : (
+            latestPlans.map((plan) => (
+              <details
+                key={plan.id}
+                className="overflow-hidden rounded-[0.95rem] border border-slate-200 bg-white"
+              >
+                <summary className="cursor-pointer list-none px-3 py-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-black text-slate-950">
+                        {plan.protocolName}
+                      </div>
+                      <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                        {formatExecutionTime(plan.startedAt)} · {plan.nodePlan.length} 节点 · {plan.edgePlan.length} 连线
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                      {executionStatusLabel(plan.status)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      置信 {plan.matchedConfidence}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                      确认点 {plan.confirmationNodeIds.length}
+                    </span>
+                  </div>
+                </summary>
+
+                <div className="border-t border-slate-100 px-3 py-2">
+                  <div className="text-[11px] leading-5 text-slate-500">
+                    {plan.matchedReason}
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {plan.nodePlan.slice(0, 5).map((node) => (
+                      <div
+                        key={`${plan.id}-${node.nodeId}`}
+                        className="flex items-center justify-between gap-2 rounded-[0.75rem] bg-slate-50 px-2.5 py-2 text-[11px]"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate font-black text-slate-800">
+                            {node.sequence}. {node.title}
+                          </div>
+                          <div className="mt-0.5 text-slate-500">
+                            {GATEWAY_NODE_KIND_LABELS[node.kind] ?? node.kind} · {nodeRunStatusLabel(node.status)}
+                          </div>
+                          {node.adapterLabel ? (
+                            <div className="mt-0.5 truncate text-[10px] font-semibold text-slate-400">
+                              {node.adapterLabel}
+                            </div>
+                          ) : null}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${riskTone(
+                            node.riskLevel,
+                          )}`}
+                        >
+                          {node.riskLevel}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <Link
+                    href={`/ai-dorm/workflows/executions/${plan.id}`}
+                    className="mt-3 inline-flex rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    打开详情
+                  </Link>
+                </div>
+              </details>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
+        {groomingSummary ? (
+          <div
+            className={`rounded-[1rem] border px-3 py-3 text-xs leading-5 ${
+              groomingSummary.status === "error"
+                ? "border-rose-200 bg-rose-50 text-rose-800"
+                : groomingSummary.status === "warning"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            }`}
+          >
+            <div className="font-black">{groomingSummary.message}</div>
+            {groomingSummary.suggestions.length > 0 ? (
+              <div className="mt-1 text-current/75">
+                {groomingSummary.suggestions.slice(0, 2).join(" / ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {issues.length === 0 ? (
           <div className="rounded-[1rem] bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-700">
             暂无阻塞问题。点击“协议梳理”后，这里会显示方块和连线的校验结果。
@@ -1529,7 +3168,38 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
   const [issues, setIssues] = useState<CompileIssue[]>([]);
+  const [parameterCodeBlocks, setParameterCodeBlocks] = useState<
+    ProtocolParameterCodeBlock[]
+  >([]);
   const [compileStatus, setCompileStatus] = useState<CompileStatus>("draft");
+  const [groomingSummary, setGroomingSummary] =
+    useState<GatewayGroomingProtocolSummary | null>(null);
+  const [groomingAudit, setGroomingAudit] =
+    useState<WorkProtocolGroomingAudit | null>(null);
+  const [groomedDraftRecordId, setGroomedDraftRecordId] = useState<string | null>(
+    null,
+  );
+  const [draftTrace, setDraftTrace] = useState<WorkProtocolTrace | null>(null);
+  const [registeredProtocol, setRegisteredProtocol] =
+    useState<RegisteredProtocolSummary | null>(null);
+  const [registryActionStatus, setRegistryActionStatus] =
+    useState<RegistryActionStatus>("idle");
+  const [executionPlans, setExecutionPlans] = useState<
+    WorkProtocolExecutionPlanSummary[]
+  >([]);
+  const [parameterPatchAudits, setParameterPatchAudits] = useState<
+    WorkProtocolParameterPatchAuditSummary[]
+  >([]);
+  const [adapterRegistry, setAdapterRegistry] =
+    useState<WorkProtocolExecutorAdapterRegistrySummary | null>(null);
+  const [parameterPatchPreviewStatus, setParameterPatchPreviewStatus] =
+    useState<"idle" | "running">("idle");
+  const [pendingParameterPatchApply, setPendingParameterPatchApply] =
+    useState<PendingParameterPatchApply | null>(null);
+  const [parameterPatchApplyStatus, setParameterPatchApplyStatus] =
+    useState<"idle" | "applying">("idle");
+  const [executionActionStatus, setExecutionActionStatus] =
+    useState<ExecutionActionStatus>("idle");
   const [nextNodeNumber, setNextNodeNumber] = useState(initialNodes.length + 1);
   const [nextDepartmentNumber, setNextDepartmentNumber] = useState(
     initialDepartments.length + 1,
@@ -1553,8 +3223,441 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
     () => new Map(protocolNodes.map((node) => [node.id, node])),
     [protocolNodes],
   );
+  const parameterCodeBlocksByTargetId = useMemo(
+    () =>
+      new Map(
+        parameterCodeBlocks.map((block) => [block.targetId, block] as const),
+      ),
+    [parameterCodeBlocks],
+  );
+  const protocolCodeBlock = parameterCodeBlocks.find(
+    (block) => block.target === "protocol",
+  );
+  const auditEventsByTarget = groomingAudit?.eventsByTarget ?? {};
+  const codeStale = compileStatus === "dirty_after_compile";
+  const registryBusy = registryActionStatus !== "idle";
+  const registrationNeedsUpdate = isRegisteredProtocolBehindTrace(
+    draftTrace,
+    registeredProtocol,
+  );
+  const adapterDiagnosticIssues = useMemo(
+    () =>
+      buildAdapterRegistryCompileIssues({
+        adapterRegistry,
+        parameterCodeBlocks,
+      }),
+    [adapterRegistry, parameterCodeBlocks],
+  );
+  const visibleIssues = useMemo(
+    () => dedupeCompileIssues([...issues, ...adapterDiagnosticIssues]),
+    [adapterDiagnosticIssues, issues],
+  );
+  const displayCompileStatus =
+    adapterDiagnosticIssues.length > 0 && compileStatus === "valid"
+      ? "valid_with_warnings"
+      : compileStatus;
+
+  const fetchExecutionPlans = async (silent = false) => {
+    if (!silent) {
+      setExecutionActionStatus("loading");
+    }
+
+    try {
+      const response = await fetch(
+        "/api/ai-dorm/work-protocol-gateway/executions",
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayExecutionsApiResponse
+        | null;
+
+      if (response.ok && payload?.executions) {
+        setExecutionPlans(payload.executions);
+      }
+    } catch {
+      // Execution plan polling is diagnostic. Ignore transient restart/network gaps.
+    } finally {
+      if (!silent) {
+        setExecutionActionStatus("idle");
+      }
+    }
+  };
+
+  const fetchProtocolTrace = async () => {
+    const currentDraft = buildProtocolDraftFromCanvas({
+      selectedWorkflow,
+      departments,
+      nodes: protocolNodes,
+      edges,
+      documentScopes,
+    });
+
+    try {
+      const [
+        draftsResponse,
+        registryResponse,
+        patchAuditResponse,
+        capabilitiesResponse,
+      ] = await Promise.all([
+        fetch(
+          `/api/ai-dorm/work-protocol-gateway/drafts?draftId=${encodeURIComponent(
+            currentDraft.id,
+          )}`,
+        ),
+        fetch("/api/ai-dorm/work-protocol-gateway/registry"),
+        fetch(
+          `/api/ai-dorm/work-protocol-gateway/parameter-patch?draftId=${encodeURIComponent(
+            currentDraft.id,
+          )}&limit=8`,
+        ),
+        fetch("/api/ai-dorm/work-protocol-gateway/capabilities"),
+      ]);
+      const draftsPayload = (await draftsResponse.json().catch(() => null)) as
+        | GatewayDraftsApiResponse
+        | null;
+      const registryPayload = (await registryResponse.json().catch(() => null)) as
+        | GatewayRegistryApiResponse
+        | null;
+      const patchAuditPayload = (await patchAuditResponse.json().catch(() => null)) as
+        | GatewayParameterPatchAuditsApiResponse
+        | null;
+      const capabilitiesPayload = (await capabilitiesResponse.json().catch(() => null)) as
+        | GatewayCapabilitiesApiResponse
+        | null;
+
+      const records = draftsResponse.ok ? draftsPayload?.records ?? [] : [];
+      if (capabilitiesResponse.ok && capabilitiesPayload?.adapterRegistry) {
+        setAdapterRegistry(capabilitiesPayload.adapterRegistry);
+      }
+      setParameterPatchAudits(
+        patchAuditResponse.ok ? patchAuditPayload?.records ?? [] : [],
+      );
+      const sourceRecord = pickLatestDraftRecord(records, "source");
+      const groomedRecord = pickLatestDraftRecord(records, "groomed");
+      const registered = registryResponse.ok
+        ? pickRegisteredProtocol(registryPayload?.protocols, currentDraft.id)
+        : null;
+      const stale = Boolean(
+        groomedRecord &&
+          sourceRecord &&
+          !draftMatchesForTrace(currentDraft, sourceRecord.draft),
+      );
+      const canRegister = Boolean(
+        groomedRecord?.grooming?.summary.canRegister && !stale,
+      );
+
+      setRegisteredProtocol(registered);
+      setGroomedDraftRecordId(canRegister ? groomedRecord?.id ?? null : null);
+      setDraftTrace(
+        sourceRecord || groomedRecord
+          ? {
+              sourceRecord,
+              groomedRecord,
+              catalogHash:
+                groomedRecord?.grooming?.catalogHash ??
+                getActiveRegisteredVersion(registered)?.capabilityCatalogHash,
+              canRegister,
+              blockingIssues: groomedRecord?.grooming?.summary.errors ?? 0,
+              warnings: groomedRecord?.grooming?.summary.warnings ?? 0,
+              parameterCodeBlocks:
+                groomedRecord?.grooming?.parameterCodeBlocks.length ?? 0,
+              stale,
+            }
+          : null,
+      );
+
+      if (groomedRecord?.grooming?.parameterCodeBlocks.length) {
+        setParameterCodeBlocks(groomedRecord.grooming.parameterCodeBlocks);
+      }
+
+      setCompileStatus(
+        compileStatusFromStoredTrace({
+          groomedRecord,
+          stale,
+        }),
+      );
+    } catch {
+      setParameterPatchAudits([]);
+      // Trace hydration is diagnostic only. Core editing and grooming stay usable.
+    }
+  };
+
+  const previewParameterPatchCandidate = async (
+    preview: ParameterPatchCandidatePreview,
+  ) => {
+    if (parameterPatchPreviewStatus === "running") {
+      return;
+    }
+
+    const groomedDraft = draftTrace?.groomedRecord?.draft;
+
+    if (!groomedDraft || draftTrace?.stale) {
+      setIssues((current) => [
+        {
+          id: `parameter-patch-needs-groomed-draft-${Date.now()}`,
+          severity: "warning",
+          targetKind: "canvas",
+          code: "PARAMETER_PATCH_NEEDS_GROOMED_DRAFT",
+          message: "需要先完成协议梳理，才能预览参数 Patch。",
+          suggestion: "请先点击“协议梳理”，生成 fresh 参数代码后再点击候选参数。",
+        },
+        ...current,
+      ]);
+      return;
+    }
+
+    setParameterPatchPreviewStatus("running");
+
+    try {
+      const operationId = `candidate-preview-${Date.now()}`;
+      const response = await fetch(
+        "/api/ai-dorm/work-protocol-gateway/parameter-patch",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            draft: groomedDraft,
+            mode: "dry_run",
+            validationMode: "register",
+            allowMockCapabilities: true,
+            persistAudit: true,
+            operations: [
+              {
+                operationId,
+                target: preview.payload.target,
+                path: preview.payload.path,
+                value: preview.payload.value,
+                reason: `Preview candidate ${preview.slot.label}: ${preview.option.value}`,
+              },
+            ],
+          }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayParameterPatchApiResponse
+        | null;
+
+      if (!response.ok || !payload?.result) {
+        throw new Error(payload?.message ?? "Parameter patch preview failed.");
+      }
+
+      if (payload.auditRecord) {
+        setParameterPatchAudits((current) => [
+          payload.auditRecord as WorkProtocolParameterPatchAuditSummary,
+          ...current.filter((record) => record.id !== payload.auditRecord?.id),
+        ].slice(0, 8));
+      }
+
+      if (payload.result.status === "validated") {
+        setPendingParameterPatchApply({
+          ...preview,
+          operationId,
+          auditRecord: payload.auditRecord,
+        });
+      }
+
+      if (payload.result.status === "no_effect") {
+        setPendingParameterPatchApply(null);
+      }
+
+      if (payload.result.status === "rejected") {
+        setPendingParameterPatchApply(null);
+        const rejected = payload.result.rejectedChanges?.[0];
+        setIssues((current) => [
+          {
+            id: `parameter-patch-preview-rejected-${Date.now()}`,
+            severity: "warning",
+            targetKind: preview.block.target === "edge" ? "edge" : "node",
+            targetId: preview.block.targetId,
+            code: rejected?.code ?? "PARAMETER_PATCH_PREVIEW_REJECTED",
+            message: rejected?.message ?? "候选参数 dry-run 被拒绝。",
+            suggestion:
+              "右侧“参数 Patch”面板已经记录本次预览。请检查候选值、能力契约和 runtime preflight。",
+          },
+          ...current,
+        ]);
+      }
+    } catch (error) {
+      setIssues((current) => [
+        {
+          id: `parameter-patch-preview-failed-${Date.now()}`,
+          severity: "warning",
+          targetKind: "canvas",
+          code: "PARAMETER_PATCH_PREVIEW_FAILED",
+          message: "候选参数 dry-run 请求失败。",
+          suggestion:
+            error instanceof Error
+              ? error.message
+              : "请确认工作协议网关 parameter-patch API 正常运行。",
+        },
+        ...current,
+      ]);
+    } finally {
+      setParameterPatchPreviewStatus("idle");
+    }
+  };
+
+  const applyPendingParameterPatch = async () => {
+    if (!pendingParameterPatchApply || parameterPatchApplyStatus === "applying") {
+      return;
+    }
+
+    const groomedRecord = draftTrace?.groomedRecord;
+    const groomedDraft = groomedRecord?.draft;
+
+    if (!groomedRecord?.id || !groomedDraft || draftTrace?.stale) {
+      setIssues((current) => [
+        {
+          id: `parameter-patch-apply-needs-groomed-draft-${Date.now()}`,
+          severity: "warning",
+          targetKind: "canvas",
+          code: "PARAMETER_PATCH_APPLY_NEEDS_GROOMED_DRAFT",
+          message: "需要 fresh 的 groomed 协议版本，才能应用参数 Patch。",
+          suggestion: "请先重新点击“协议梳理”，确认右侧链路检查不是过期状态。",
+        },
+        ...current,
+      ]);
+      return;
+    }
+
+    setParameterPatchApplyStatus("applying");
+
+    try {
+      const operationId = `${pendingParameterPatchApply.operationId}-apply`;
+      const response = await fetch(
+        "/api/ai-dorm/work-protocol-gateway/parameter-patch",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            draft: groomedDraft,
+            mode: "apply",
+            validationMode: "register",
+            allowMockCapabilities: true,
+            persistAudit: true,
+            commitDraft: true,
+            baseGroomedRecordId: groomedRecord.id,
+            sourceRecordId:
+              draftTrace?.sourceRecord?.id ?? groomedRecord.sourceRecordId,
+            operations: [
+              {
+                operationId,
+                target: pendingParameterPatchApply.payload.target,
+                path: pendingParameterPatchApply.payload.path,
+                value: pendingParameterPatchApply.payload.value,
+                reason: `Apply candidate ${pendingParameterPatchApply.slot.label}: ${pendingParameterPatchApply.option.value}`,
+              },
+            ],
+          }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayParameterPatchApiResponse
+        | null;
+
+      if (!response.ok || !payload?.result) {
+        throw new Error(payload?.message ?? "Parameter patch apply failed.");
+      }
+
+      if (payload.auditRecord) {
+        setParameterPatchAudits((current) => [
+          payload.auditRecord as WorkProtocolParameterPatchAuditSummary,
+          ...current.filter((record) => record.id !== payload.auditRecord?.id),
+        ].slice(0, 8));
+      }
+
+      if (payload.result.status !== "applied" || !payload.committedDraftRecord) {
+        const rejected = payload.result.rejectedChanges?.[0];
+        throw new Error(
+          rejected?.message ??
+            "Parameter patch did not produce a committed groomed draft record.",
+        );
+      }
+
+      const committedRecord = payload.committedDraftRecord;
+      const summary = committedRecord.grooming?.summary;
+      const nextParameterBlocks =
+        committedRecord.grooming?.parameterCodeBlocks ??
+        payload.result.parameterCodeBlocks ??
+        [];
+
+      setGroomedDraftRecordId(committedRecord.id);
+      setParameterCodeBlocks(nextParameterBlocks);
+      setDraftTrace((current) => ({
+        sourceRecord: current?.sourceRecord ?? draftTrace?.sourceRecord,
+        groomedRecord: committedRecord,
+        catalogHash:
+          committedRecord.grooming?.catalogHash ??
+          payload.auditRecord?.catalogHash ??
+          current?.catalogHash,
+        canRegister: Boolean(summary?.canRegister),
+        blockingIssues: summary?.errors ?? 0,
+        warnings: summary?.warnings ?? 0,
+        parameterCodeBlocks: nextParameterBlocks.length,
+        stale: false,
+      }));
+      setCompileStatus(
+        compileStatusFromStoredTrace({
+          groomedRecord: committedRecord,
+          stale: false,
+        }),
+      );
+      setPendingParameterPatchApply(null);
+      setIssues((current) => [
+        {
+          id: `parameter-patch-applied-${Date.now()}`,
+          severity: "info",
+          targetKind:
+            pendingParameterPatchApply.block.target === "edge" ? "edge" : "node",
+          targetId: pendingParameterPatchApply.block.targetId,
+          code: "PARAMETER_PATCH_APPLIED",
+          message: "参数 Patch 已应用，并保存为新的 groomed 协议版本。",
+          suggestion: "如需让 BP问问走这个新版本，请继续点击“注册协议”更新注册版本。",
+        },
+        ...current,
+      ]);
+    } catch (error) {
+      setIssues((current) => [
+        {
+          id: `parameter-patch-apply-failed-${Date.now()}`,
+          severity: "warning",
+          targetKind: "canvas",
+          code: "PARAMETER_PATCH_APPLY_FAILED",
+          message: "参数 Patch 应用失败。",
+          suggestion:
+            error instanceof Error
+              ? error.message
+              : "请检查参数 Patch API、base groomed record 和协议校验结果。",
+        },
+        ...current,
+      ]);
+    } finally {
+      setParameterPatchApplyStatus("idle");
+    }
+  };
+
+  useEffect(() => {
+    void fetchExecutionPlans();
+    void fetchProtocolTrace();
+
+    const timer = window.setInterval(() => {
+      void fetchExecutionPlans(true);
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const markDirty = () => {
+    setGroomingSummary(null);
+    setGroomingAudit(null);
+    setGroomedDraftRecordId(null);
+    setPendingParameterPatchApply(null);
+    setDraftTrace((current) =>
+      current ? { ...current, stale: true, canRegister: false } : current,
+    );
     setCompileStatus((current) =>
       current === "valid" || current === "valid_with_warnings" || current === "invalid"
         ? "dirty_after_compile"
@@ -2026,11 +4129,319 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
     markDirty();
   };
 
-  const compileProtocol = () => {
+  const compileProtocol = async () => {
     setCompileStatus("compiling");
-    const result = runMockCompile({ nodes: protocolNodes, edges, departments });
-    setIssues(result.issues);
-    setCompileStatus(result.status);
+    setGroomingSummary(null);
+    setGroomingAudit(null);
+    setGroomedDraftRecordId(null);
+
+    try {
+      const draft = buildProtocolDraftFromCanvas({
+        selectedWorkflow,
+        departments,
+        nodes: protocolNodes,
+        edges,
+        documentScopes,
+      });
+      const response = await fetch("/api/ai-dorm/work-protocol-gateway/groom", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          draft,
+          mode: "register",
+          allowMockCapabilities: true,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayGroomApiResponse
+        | null;
+
+      if (!response.ok || !payload?.result) {
+        throw new Error(payload?.message ?? "Protocol grooming request failed.");
+      }
+
+      const nextIssues = collectGroomingIssues(payload.result);
+      let nextGroomedDraftRecordId: string | null = null;
+      let nextSourceRecord: GatewayDraftRecordSummary | undefined;
+      let nextGroomedRecord: GatewayDraftRecordSummary | undefined;
+
+      try {
+        const sourceRecord = await saveGatewayDraftRecord({
+          draft,
+          kind: "source",
+        });
+        nextSourceRecord = sourceRecord;
+        const groomedRecord = await saveGatewayDraftRecord({
+          draft: payload.result.groomedDraft,
+          kind: "groomed",
+          sourceRecordId: sourceRecord.id,
+          groomingResult: payload.result,
+          catalogHash: payload.catalogHash,
+        });
+        nextGroomedRecord = groomedRecord;
+        nextGroomedDraftRecordId = groomedRecord.id;
+      } catch (saveError) {
+        nextIssues.push({
+          id: `draft-save-failed-${Date.now()}`,
+          severity: "error",
+          targetKind: "canvas",
+          code: "DRAFT_SAVE_FAILED",
+          message: "协议梳理完成，但草稿记录保存失败，暂时不能注册。",
+          suggestion:
+            saveError instanceof Error
+              ? saveError.message
+              : "请重新点击协议梳理，确认草稿仓库 API 正常。",
+        });
+      }
+
+      setIssues(nextIssues);
+      setParameterCodeBlocks(payload.result.parameterCodeBlocks);
+      setGroomingSummary(payload.result.protocolSummary);
+      setGroomingAudit(payload.result.audit ?? null);
+      setGroomedDraftRecordId(nextGroomedDraftRecordId);
+      setDraftTrace({
+        sourceRecord: nextSourceRecord,
+        groomedRecord: nextGroomedRecord,
+        catalogHash: payload.catalogHash,
+        canRegister: Boolean(
+          nextGroomedDraftRecordId && payload.result.protocolSummary.canRegister,
+        ),
+        blockingIssues: payload.result.protocolSummary.errors,
+        warnings: payload.result.protocolSummary.warnings,
+        parameterCodeBlocks: payload.result.parameterCodeBlocks.length,
+        stale: false,
+      });
+      setCompileStatus(
+        nextGroomedDraftRecordId ? mapGatewayGroomStatus(payload.result) : "invalid",
+      );
+    } catch (error) {
+      setParameterCodeBlocks([]);
+      setGroomingSummary(null);
+      setGroomingAudit(null);
+      setGroomedDraftRecordId(null);
+      setDraftTrace(null);
+      setIssues([
+        {
+          id: "compile-request-failed",
+          severity: "error",
+          targetKind: "canvas",
+          code: "COMPILE_REQUEST_FAILED",
+          message: "协议梳理请求失败，暂时没有拿到后端编译结果。",
+          suggestion:
+            error instanceof Error
+              ? error.message
+              : "请确认前端服务和工作协议网关 API 正常运行。",
+        },
+      ]);
+      setCompileStatus("invalid");
+    }
+  };
+
+  const registerProtocol = async () => {
+    if (registryBusy) {
+      return;
+    }
+
+    if (
+      !groomedDraftRecordId ||
+      !groomingSummary?.canRegister ||
+      compileStatus === "draft" ||
+      compileStatus === "invalid" ||
+      compileStatus === "dirty_after_compile"
+    ) {
+      setIssues((current) => [
+        {
+          id: `register-needs-groomed-draft-${Date.now()}`,
+          severity: "error",
+          targetKind: "canvas",
+          code: "REGISTER_NEEDS_GROOMED_DRAFT",
+          message: "注册前必须先完成可通过的协议梳理。",
+          suggestion:
+            compileStatus === "dirty_after_compile"
+              ? "画布已经变更，请重新点击协议梳理。"
+              : "请先点击协议梳理，修正红色问题后再注册协议。",
+        },
+        ...current,
+      ]);
+      return;
+    }
+
+    setRegistryActionStatus("registering");
+
+    try {
+      const response = await fetch("/api/ai-dorm/work-protocol-gateway/registry", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          draftRecordId: groomedDraftRecordId,
+          enabled: true,
+          priority: 1,
+          allowMockCapabilities: true,
+          runtimeMode: "plan_only",
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayRegistryApiResponse
+        | null;
+
+      if (!response.ok || !payload?.registered || !payload.result) {
+        const nextIssues = payload?.result?.validation.issues.map(mapGatewayIssue) ?? [
+          {
+            id: "protocol-register-failed",
+            severity: "error" as const,
+            targetKind: "canvas" as const,
+            code: "PROTOCOL_REGISTER_FAILED",
+            message: "协议注册失败，注册表没有写入新版本。",
+            suggestion: payload?.message ?? "请先完成协议梳理并修正阻塞问题。",
+          },
+        ];
+
+        setIssues(nextIssues);
+        setCompileStatus("invalid");
+        throw new Error(payload?.message ?? "Protocol registry request failed.");
+      }
+
+      setIssues(payload.result.validation.issues.map(mapGatewayIssue));
+      setParameterCodeBlocks(payload.result.parameterCodeBlocks);
+      setCompileStatus(mapGatewayCompileStatus(payload.result.status));
+      setRegisteredProtocol(payload.registered);
+    } catch {
+      // The issue panel above carries the user-facing failure reason.
+    } finally {
+      setRegistryActionStatus("idle");
+    }
+  };
+
+  const toggleRegisteredProtocol = async () => {
+    if (!registeredProtocol || registryBusy) {
+      return;
+    }
+
+    setRegistryActionStatus("toggling");
+
+    try {
+      const response = await fetch("/api/ai-dorm/work-protocol-gateway/registry", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          protocolId: registeredProtocol.id,
+          enabled: !registeredProtocol.enabled,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayRegistryApiResponse
+        | null;
+
+      if (!response.ok || !payload?.registered) {
+        throw new Error(payload?.message ?? "Protocol toggle request failed.");
+      }
+
+      setRegisteredProtocol(payload.registered);
+    } catch (error) {
+      setIssues((current) => [
+        ...current,
+        {
+          id: `protocol-toggle-failed-${Date.now()}`,
+          severity: "error",
+          targetKind: "canvas",
+          code: "PROTOCOL_TOGGLE_FAILED",
+          message: "协议启用状态切换失败。",
+          suggestion:
+            error instanceof Error
+              ? error.message
+              : "请确认工作协议网关注册表 API 正常运行。",
+        },
+      ]);
+    } finally {
+      setRegistryActionStatus("idle");
+    }
+  };
+
+  const createPlanOnlyExecution = async () => {
+    if (!registeredProtocol?.enabled || executionActionStatus === "creating") {
+      return;
+    }
+
+    if (registrationNeedsUpdate) {
+      setIssues((current) => [
+        {
+          id: `protocol-run-needs-register-update-${Date.now()}`,
+          severity: "warning",
+          targetKind: "canvas",
+          code: "PROTOCOL_RUN_NEEDS_REGISTER_UPDATE",
+          message: "当前 groomed 协议比注册版本更新，试运行已暂停。",
+          suggestion: "请先点击“更新注册”，让 BP问问实际运行的 active version 指向最新 groomed 记录。",
+        },
+        ...current,
+      ]);
+      return;
+    }
+
+    setExecutionActionStatus("creating");
+
+    try {
+      const response = await fetch(
+        "/api/ai-dorm/work-protocol-gateway/executions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            match: {
+              protocolId: registeredProtocol.id,
+              draftId: registeredProtocol.draftId,
+              protocolName: registeredProtocol.name,
+              activeVersionId: registeredProtocol.activeVersionId,
+              confidence: 99,
+              reason: "工作协议网关手动试运行",
+              matchedTriggerRuleIds: ["manual-run"],
+              entryNodeIds: [],
+              reportNodeIds: [],
+              enabled: registeredProtocol.enabled,
+              runtimeMode: "plan_only",
+            },
+            prompt: `手动试运行工作协议：${registeredProtocol.name}`,
+            minConfidence: 1,
+          }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as
+        | GatewayExecutionsApiResponse
+        | null;
+
+      if (!response.ok || !payload?.execution) {
+        throw new Error(payload?.message ?? "Protocol execution plan request failed.");
+      }
+
+      setExecutionPlans((current) => [
+        payload.execution as WorkProtocolExecutionPlanSummary,
+        ...current.filter((plan) => plan.id !== payload.execution?.id),
+      ]);
+    } catch (error) {
+      setIssues((current) => [
+        ...current,
+        {
+          id: `protocol-execution-plan-failed-${Date.now()}`,
+          severity: "error",
+          targetKind: "canvas",
+          code: "PROTOCOL_EXECUTION_PLAN_FAILED",
+          message: "协议试运行计划生成失败。",
+          suggestion:
+            error instanceof Error
+              ? error.message
+              : "请确认协议已经注册并处于启用状态。",
+        },
+      ]);
+    } finally {
+      setExecutionActionStatus("idle");
+    }
   };
 
   const createBlankGateway = () => {
@@ -2038,6 +4449,13 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
     setNodes([]);
     setEdges([]);
     setIssues([]);
+    setParameterCodeBlocks([]);
+    setGroomingSummary(null);
+    setGroomingAudit(null);
+    setGroomedDraftRecordId(null);
+    setDraftTrace(null);
+    setRegisteredProtocol(null);
+    setRegistryActionStatus("idle");
     setCompileStatus("draft");
     setConnectingFromId(null);
     setOpenEdgeId(null);
@@ -2129,7 +4547,7 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                       : "rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500"
               }
             >
-              {statusLabel(compileStatus)}
+              {statusLabel(displayCompileStatus)}
             </span>
             <Link
               href="/ai-dorm/tasks"
@@ -2179,7 +4597,8 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                 key={department.id}
                 department={department}
                 documentScopes={documentScopes}
-                error={hasBlockingIssue(issues, "department", department.id)}
+                error={hasBlockingIssue(visibleIssues, "department", department.id)}
+                warning={hasWarningIssue(visibleIssues, "department", department.id)}
                 dragging={
                   activeDrag?.kind === "department" && activeDrag.id === department.id
                 }
@@ -2187,7 +4606,11 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                   activeDrag?.kind === "departmentAgent" ? activeDrag.id : undefined
                 }
                 connectingFromId={connectingFromId}
-                issues={issues}
+                issues={visibleIssues}
+                auditEventsByTarget={auditEventsByTarget}
+                parameterCodeBlocksByTargetId={parameterCodeBlocksByTargetId}
+                codeStale={codeStale}
+                parameterPatchPreviewBusy={parameterPatchPreviewStatus === "running"}
                 onStartDrag={(event) => startDepartmentDrag(department, event)}
                 onStartAgentDrag={(agent, event) =>
                   startDepartmentAgentDrag(department, agent, event)
@@ -2200,6 +4623,7 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                 onChangeAgentIntent={(agentId, value) =>
                   updateDepartmentAgentIntent(department.id, agentId, value)
                 }
+                onPreviewCandidate={previewParameterPatchCandidate}
               />
             ))}
 
@@ -2215,8 +4639,8 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                   return null;
                 }
 
-                const error = hasBlockingIssue(issues, "edge", edge.id);
-                const warning = hasWarningIssue(issues, "edge", edge.id);
+                const error = hasBlockingIssue(visibleIssues, "edge", edge.id);
+                const warning = hasWarningIssue(visibleIssues, "edge", edge.id);
                 const pathId = `path-${edge.id}`;
 
                 return (
@@ -2258,13 +4682,18 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
                   edge={edge}
                   from={from}
                   to={to}
-                  error={hasBlockingIssue(issues, "edge", edge.id)}
-                  warning={hasWarningIssue(issues, "edge", edge.id)}
+                  error={hasBlockingIssue(visibleIssues, "edge", edge.id)}
+                  warning={hasWarningIssue(visibleIssues, "edge", edge.id)}
                   open={openEdgeId === edge.id}
+                  parameterCodeBlock={parameterCodeBlocksByTargetId.get(edge.id)}
+                  auditEvents={getLocalAuditEvents(auditEventsByTarget, "edge", edge.id)}
+                  codeStale={codeStale}
+                  parameterPatchPreviewBusy={parameterPatchPreviewStatus === "running"}
                   onToggle={() =>
                     setOpenEdgeId((current) => (current === edge.id ? null : edge.id))
                   }
                   onChange={(value) => updateEdgeIntent(edge.id, value)}
+                  onPreviewCandidate={previewParameterPatchCandidate}
                 />
               );
             })}
@@ -2273,20 +4702,43 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
               <CanvasNode
                 key={node.id}
                 node={node}
-                error={hasBlockingIssue(issues, "node", node.id)}
-                warning={hasWarningIssue(issues, "node", node.id)}
+                error={hasBlockingIssue(visibleIssues, "node", node.id)}
+                warning={hasWarningIssue(visibleIssues, "node", node.id)}
                 connecting={connectingFromId === node.id}
                 dragging={activeDrag?.kind === "node" && activeDrag.id === node.id}
+                parameterCodeBlock={parameterCodeBlocksByTargetId.get(node.id)}
+                auditEvents={getLocalAuditEvents(auditEventsByTarget, "node", node.id)}
+                codeStale={codeStale}
+                parameterPatchPreviewBusy={parameterPatchPreviewStatus === "running"}
                 onStartDrag={(event) => startNodeDrag(node, event)}
                 onConnectorClick={() => connectNodeByHandle(node.id)}
                 onDelete={() => deleteNode(node.id)}
                 onChangeIntent={(value) => updateNodeIntent(node.id, value)}
+                onPreviewCandidate={previewParameterPatchCandidate}
               />
             ))}
           </div>
         </div>
 
-        <IssuePanel status={compileStatus} issues={issues} />
+        <IssuePanel
+          status={displayCompileStatus}
+          issues={visibleIssues}
+          groomingSummary={groomingSummary}
+          audit={groomingAudit}
+          pendingParameterPatchApply={pendingParameterPatchApply}
+          parameterPatchApplyStatus={parameterPatchApplyStatus}
+          parameterPatchAudits={parameterPatchAudits}
+          trace={draftTrace}
+          registeredProtocol={registeredProtocol}
+          protocolCodeBlock={protocolCodeBlock}
+          adapterRegistry={adapterRegistry}
+          parameterCodeBlocks={parameterCodeBlocks}
+          executionPlans={executionPlans}
+          executionStatus={executionActionStatus}
+          onApplyPendingParameterPatch={() => void applyPendingParameterPatch()}
+          onCancelPendingParameterPatch={() => setPendingParameterPatchApply(null)}
+          onRefreshExecutions={() => void fetchExecutionPlans()}
+        />
 
         <div
           data-fixed-control="true"
@@ -2376,17 +4828,61 @@ export function AiDormWorkflows({ studio }: AiDormWorkflowsProps) {
             <button
               type="button"
               onClick={compileProtocol}
-              className="rounded-[1rem] bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+              disabled={compileStatus === "compiling"}
+              className="rounded-[1rem] bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              协议梳理
+              {compileStatus === "compiling" ? "梳理中" : "协议梳理"}
             </button>
 
             <button
               type="button"
-              disabled={compileStatus === "invalid" || compileStatus === "dirty_after_compile"}
+              onClick={registerProtocol}
+              disabled={registryBusy || compileStatus === "compiling"}
+              className={`rounded-[1rem] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                registrationNeedsUpdate
+                  ? "bg-amber-500 hover:bg-amber-600"
+                  : "bg-indigo-600 hover:bg-indigo-700"
+              }`}
+            >
+              {registryActionStatus === "registering"
+                ? "注册中"
+                : registeredProtocol
+                  ? "更新注册"
+                  : "注册协议"}
+            </button>
+
+            {registeredProtocol ? (
+              <button
+                type="button"
+                onClick={toggleRegisteredProtocol}
+                disabled={registryBusy}
+                className={`rounded-[1rem] px-4 py-2.5 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white ${
+                  registeredProtocol.enabled
+                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {registryActionStatus === "toggling"
+                  ? "切换中"
+                  : registeredProtocol.enabled
+                    ? "已启用"
+                    : "已关闭"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={createPlanOnlyExecution}
+              disabled={
+                compileStatus === "invalid" ||
+                compileStatus === "dirty_after_compile" ||
+                registrationNeedsUpdate ||
+                !registeredProtocol?.enabled ||
+                executionActionStatus === "creating"
+              }
               className="rounded-[1rem] bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              试运行
+              {executionActionStatus === "creating" ? "生成计划中" : "试运行"}
             </button>
           </div>
         </div>

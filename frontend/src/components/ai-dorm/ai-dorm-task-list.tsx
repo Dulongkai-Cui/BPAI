@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { AiDormTaskRecord } from "@/lib/ai-dorm/server";
 
 type AiDormTaskListProps = {
@@ -41,6 +43,20 @@ function flagTone(enabled: boolean) {
   return enabled
     ? "bg-rose-100 text-rose-700"
     : "bg-slate-100 text-slate-500";
+}
+
+function readString(value: Record<string, unknown> | null, key: string) {
+  const nextValue = value?.[key];
+  return typeof nextValue === "string" && nextValue.trim()
+    ? nextValue.trim()
+    : null;
+}
+
+function getProtocolExecutionId(task: AiDormTaskRecord) {
+  return (
+    readString(task.metadata, "workProtocolExecutionId") ??
+    readString(task.result?.structuredPayload ?? null, "workProtocolExecutionId")
+  );
 }
 
 function Field({
@@ -106,7 +122,10 @@ export function AiDormTaskList({
 
       <div className="mt-6 space-y-4">
         {tasks.length > 0 ? (
-          tasks.map((task, index) => (
+          tasks.map((task, index) => {
+            const protocolExecutionId = getProtocolExecutionId(task);
+
+            return (
             <details
               key={task.taskId}
               className="group rounded-[1.6rem] border border-slate-200 bg-slate-50/70 open:bg-white open:shadow-sm"
@@ -183,6 +202,14 @@ export function AiDormTaskList({
                       result：{task.resultStatus}
                     </span>
                   ) : null}
+                  {protocolExecutionId ? (
+                    <Link
+                      href={`/ai-dorm/workflows/executions/${protocolExecutionId}`}
+                      className="rounded-full bg-indigo-600 px-3 py-1 font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      打开协议计划
+                    </Link>
+                  ) : null}
                 </div>
               </summary>
 
@@ -232,7 +259,8 @@ export function AiDormTaskList({
                 )}
               </div>
             </details>
-          ))
+            );
+          })
         ) : (
           <div className="rounded-[1.6rem] border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm leading-7 text-slate-500">
             当前还没有可展示的执行任务。
